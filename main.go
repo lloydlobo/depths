@@ -8,18 +8,24 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
+// Checklist
+//   - Ensure on fullscreen toggle, the proportion stays same, and the world is
+//     scaled by Raylib 3d camera mode
 func main() {
+	fps := int32(60)
 	screenWidth := int32(800)
 	screenHeight := int32(450)
 
-	const fps = 60
+	screenWidth = int32(rl.GetScreenWidth())
+	screenHeight = int32(rl.GetScreenHeight())
+
 	rl.InitWindow(screenWidth, screenHeight, "raylib [models] example - box collisions")
+	rl.ToggleFullscreen()
 
 	const arenaWidth = float32(20)  // X
 	const arenaLength = float32(20) // Z
 
 	camera := rl.Camera{}
-	// camera.Position = rl.NewVector3(0.0, arenaWidth, (arenaLength*math.Phi+arenaWidth)/2)
 	camera.Position = rl.NewVector3(0.0, arenaWidth, arenaLength)
 	camera.Target = rl.NewVector3(0.0, -1.0, 0.0)
 	camera.Up = rl.NewVector3(0.0, 1.0, 0.0)
@@ -53,8 +59,8 @@ func main() {
 	isOOBCollision := false
 
 	isMartianManhunter := false
-	martianManhunterFramesCounter := 0
-	const martianManhunterMaxFrames = 4 * fps
+	martianManhunterFramesCounter := int32(0)
+	martianManhunterMaxFrames := int32(4 * fps)
 
 	framesCounter := 0
 
@@ -224,7 +230,7 @@ func main() {
 
 		// Draw player
 		if martianManhunterFramesCounter > 0 {
-			alpha := 1 - float32(martianManhunterFramesCounter)/martianManhunterMaxFrames
+			alpha := 1 - float32(martianManhunterFramesCounter/martianManhunterMaxFrames)
 			rl.DrawCubeV(playerPosition, playerSize, rl.Fade(playerColor, alpha))
 			rl.DrawCubeWiresV(playerPosition, playerSize, rl.ColorBrightness(playerColor, 1-alpha))
 		} else {
