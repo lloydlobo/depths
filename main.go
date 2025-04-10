@@ -50,8 +50,8 @@ func run() {
 	fps := int32(60)
 	screenWidth := int32(800)
 	screenHeight := int32(450)
-	arenaWorldWidth := float32(20)      // X
-	arenaWorldLength := float32(20) * 3 // Z
+	arenaWorldWidth := float32(20)          // X
+	arenaWorldLength := float32(20) * 3 * 2 // Z
 
 	rl.SetConfigFlags(rl.FlagMsaa4xHint) // Enable Multi Sampling Anti Aliasing 4x (if available)
 
@@ -205,6 +205,7 @@ func run() {
 		// Focus camera on the player
 		camera.Target.Z = rl.Lerp(camera.Target.Z, playerPosition.Z, 0.5)
 		var pullFactor float32
+		const defaultPullFactor = 0.5
 		if true {
 			pullFactor = float32(math.Sin(0.5 * float64(framesCounter) * 1.0 / float64(fps)))
 			if isStatic := rl.Vector3Equals(movement, rl.Vector3Zero()); isStatic {
@@ -216,11 +217,14 @@ func run() {
 				pullFactor *= k
 				pullFactor = rl.Normalize(pullFactor, -k, k)
 			}
-			pullFactor *= 0.3
+			pullFactor *= defaultPullFactor
 		} else {
-			pullFactor = 0.3
+			pullFactor = defaultPullFactor
 		}
 		camera.Position.Z = rl.Lerp(camera.Position.Z, playerPosition.Z+defaultCameraPosition.Z, pullFactor)
+		if AbsF(camera.Target.Z-playerPosition.Z) > 1.5 { // Tolerance of 3
+			panic("camera should target player along z axis depth")
+		}
 
 		// Apply Gravity
 		playerPosition.Y -= magnitude * (math.Phi / 2)
@@ -230,6 +234,7 @@ func run() {
 			playerPosition.Y = playerSize.Y / 2
 		}
 
+		log.Println(playerPosition, camera.Position, camera.Target)
 		// Reset collision flags
 		isCollision = false
 		isOOBCollision = false
