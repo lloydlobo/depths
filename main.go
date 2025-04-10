@@ -50,8 +50,8 @@ func run() {
 	fps := int32(60)
 	screenWidth := int32(800)
 	screenHeight := int32(450)
-	arenaWorldWidth := float32(20)  // X
-	arenaWorldLength := float32(20) // Z
+	arenaWorldWidth := float32(20)      // X
+	arenaWorldLength := float32(20) * 3 // Z
 
 	rl.SetConfigFlags(rl.FlagMsaa4xHint) // Enable Multi Sampling Anti Aliasing 4x (if available)
 
@@ -86,9 +86,11 @@ func run() {
 	// Create a RenderTexture2D to be used for render to texture
 	targetRenderTexture := rl.LoadRenderTexture(screenWidth, screenHeight)
 
+	defaultCameraPosition := rl.NewVector3(0.0, arenaWorldWidth, arenaWorldLength/math.Phi)
+
 	const defaultCameraFovy = 45.0
 	camera := rl.Camera{}
-	camera.Position = rl.NewVector3(0.0, arenaWorldWidth, arenaWorldLength)
+	camera.Position = defaultCameraPosition
 	camera.Target = rl.NewVector3(0.0, -1.0, 0.0)
 	camera.Up = rl.NewVector3(0.0, 1.0, 0.0)
 	camera.Fovy = defaultCameraFovy
@@ -127,7 +129,7 @@ func run() {
 
 	framesCounter := 0
 
-	rl.DisableCursor()
+	rl.DisableCursor() // Limit cursor to relative movement inside the window
 	rl.SetTargetFPS(fps)
 
 	for !rl.WindowShouldClose() {
@@ -199,6 +201,26 @@ func run() {
 		playerPosition.X += movement.X * currMagnitude
 		playerPosition.Y += movement.Y * currMagnitude
 		playerPosition.Z += movement.Z * currMagnitude
+
+		// Focus camera on the player
+		camera.Target.Z = rl.Lerp(camera.Target.Z, playerPosition.Z, 0.5)
+		var pullFactor float32
+		if true {
+			pullFactor = float32(math.Sin(0.5 * float64(framesCounter) * 1.0 / float64(fps)))
+			if isStatic := rl.Vector3Equals(movement, rl.Vector3Zero()); isStatic {
+				const k = math.Phi
+				pullFactor *= k
+				pullFactor = rl.Normalize(pullFactor, -k, k)
+			} else {
+				const k = 4 // attack time factor [1,2,4,8,16]
+				pullFactor *= k
+				pullFactor = rl.Normalize(pullFactor, -k, k)
+			}
+			pullFactor *= 0.3
+		} else {
+			pullFactor = 0.3
+		}
+		camera.Position.Z = rl.Lerp(camera.Position.Z, playerPosition.Z+defaultCameraPosition.Z, pullFactor)
 
 		// Apply Gravity
 		playerPosition.Y -= magnitude * (math.Phi / 2)
@@ -295,14 +317,14 @@ func run() {
 		   // NOTE: Add here your custom variables
 		   uniform vec2 resolution = vec2(800, 450);
 		*/
-		{
+		if currentShader == FxSobel {
 			const uniformName = "resolution" // locIndex == 2
 			locIndex := rl.GetShaderLocation(shaders[currentShader], uniformName)
 			if camera.Fovy != defaultCameraFovy {
 				value := []float32{float32(screenWidth), float32(screenHeight)}
 				value[0] += (playerPosition.X - camera.Position.X) / arenaWorldWidth
 				value[1] += (playerPosition.Z - camera.Position.Z) / arenaWorldLength
-				alpha1 := ((defaultCameraFovy - camera.Fovy) / defaultCameraFovy)
+				alpha1 := (defaultCameraFovy - camera.Fovy) / defaultCameraFovy
 				value[0] *= arenaWorldWidth * alpha1
 				value[1] *= arenaWorldLength * alpha1
 				value[0] += (defaultCameraFovy - camera.Fovy)
