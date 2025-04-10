@@ -12,7 +12,7 @@ tmp_dir = "tmp"
   exclude_regex = ["_test.go"]
   exclude_unchanged = false
   follow_symlink = false
-  full_bin = ""
+  full_bin = "PLATFORM_DESKTOP=1 ./tmp/main" # PLATFORM_DESKTOP=1 for GLSL_VERSION 300
   include_dir = []
   include_ext = ["go", "tpl", "tmpl", "html"]
   include_file = []
@@ -25,7 +25,7 @@ tmp_dir = "tmp"
   rerun = false
   rerun_delay = 500
   send_interrupt = false
-  stop_on_error = false
+  stop_on_error = true
 
 [color]
   app = ""
