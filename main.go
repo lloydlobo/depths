@@ -24,6 +24,7 @@ func main() {
 
 	const arenaWidth = float32(10) * 3  // X
 	const arenaLength = float32(10) * 3 // Z
+	const arenaHeight = 3
 
 	camera := rl.Camera{}
 	camera.Position = rl.NewVector3(0.0, arenaWidth, arenaLength)
@@ -71,8 +72,25 @@ func main() {
 		enemySphereSize = float32(2.5)
 	}
 
+	// anticlockwise: 0 -> 1 -> 2 -> 3 TLBR
+	walls := [4]rl.BoundingBox{}
+	{
+		w := arenaWidth / 2
+		l := arenaLength / 2
+		const thick = 1.5
+		walls = [4]rl.BoundingBox{
+			rl.NewBoundingBox(rl.NewVector3(-w, 0, -l), rl.NewVector3(w, arenaHeight, -l+thick)),
+			rl.NewBoundingBox(rl.NewVector3(-w, 0, -l), rl.NewVector3(-w+thick, arenaHeight, l)),
+			rl.NewBoundingBox(rl.NewVector3(-w, 0, l-thick), rl.NewVector3(w, arenaHeight, l)),
+			rl.NewBoundingBox(rl.NewVector3(w-thick, 0, -l), rl.NewVector3(w, arenaHeight, l)),
+		}
+	}
+
 	isCollision := false
 	isOOBCollision := false
+
+	martianManhunterTriggerFactor := float32(0.0)
+	const maxMartianManhunterTriggerFactor = 45.0
 
 	isMartianManhunter := false
 	martianManhunterFramesCounter := int32(0)
@@ -224,10 +242,11 @@ func main() {
 		isOOBCollision = false
 
 		// Check collisions player vs enemy-box
+		playerBox := rl.NewBoundingBox(
+			rl.NewVector3(playerPosition.X-playerSize.X/2, playerPosition.Y-playerSize.Y/2, playerPosition.Z-playerSize.Z/2),
+			rl.NewVector3(playerPosition.X+playerSize.X/2, playerPosition.Y+playerSize.Y/2, playerPosition.Z+playerSize.Z/2))
 		if rl.CheckCollisionBoxes(
-			rl.NewBoundingBox(
-				rl.NewVector3(playerPosition.X-playerSize.X/2, playerPosition.Y-playerSize.Y/2, playerPosition.Z-playerSize.Z/2),
-				rl.NewVector3(playerPosition.X+playerSize.X/2, playerPosition.Y+playerSize.Y/2, playerPosition.Z+playerSize.Z/2)),
+			playerBox,
 			rl.NewBoundingBox(
 				rl.NewVector3(enemyBoxPos.X-enemyBoxSize.X/2, enemyBoxPos.Y-enemyBoxSize.Y/2, enemyBoxPos.Z-enemyBoxSize.Z/2),
 				rl.NewVector3(enemyBoxPos.X+enemyBoxSize.X/2, enemyBoxPos.Y+enemyBoxSize.Y/2, enemyBoxPos.Z+enemyBoxSize.Z/2)),
@@ -236,41 +255,43 @@ func main() {
 		}
 
 		// Check collisions player vs enemy-sphere
-		if rl.CheckCollisionBoxSphere(
-			rl.NewBoundingBox(
-				rl.NewVector3(playerPosition.X-playerSize.X/2, playerPosition.Y-playerSize.Y/2, playerPosition.Z-playerSize.Z/2),
-				rl.NewVector3(playerPosition.X+playerSize.X/2, playerPosition.Y+playerSize.Y/2, playerPosition.Z+playerSize.Z/2)),
-			enemySpherePos,
-			enemySphereSize,
-		) {
+		if rl.CheckCollisionBoxSphere(playerBox, enemySpherePos, enemySphereSize) {
 			isCollision = true
 		}
 
-		// Check collisions player vs arena bounds
+		// Check collisions player vs wall-box
+		for i := range walls {
+			if rl.CheckCollisionBoxes(playerBox, walls[i]) {
+				isCollision = true
+			}
+		}
+
+		// Check collisions player vs arena outer bounds (security check)
 		if playerPosition.X-playerSize.X/2 <= -arenaWidth/2 || playerPosition.X+playerSize.X/2 >= arenaWidth/2 {
 			isOOBCollision = true
 		}
 		if playerPosition.Z-playerSize.Z/2 <= -arenaLength/2 || playerPosition.Z+playerSize.Z/2 >= arenaLength/2 {
 			isOOBCollision = true
 		}
+		const offsetTrigger = 2.0
 		if isCollision || isOOBCollision {
 			playerColor = rl.DarkGray
-			camera.Fovy += (float32(rl.GetRandomValue(-10, 10)) / 20) / (2 * math.Pi) // Screenshake
+			martianManhunterTriggerFactor += (float32(rl.GetRandomValue(-offsetTrigger, offsetTrigger)) / offsetTrigger * 2) / (2 * math.Pi) // Screenshake
 		} else {
 			playerColor = rl.Black
-			camera.Fovy = 45.0
+			martianManhunterTriggerFactor = maxMartianManhunterTriggerFactor
 		}
 		if isCollision {
-			deltaFovy := 45 - camera.Fovy
+			deltaFovy := 45 - martianManhunterTriggerFactor
 			deltaFovy = float32(math.Abs(float64(deltaFovy)))
 			alpha := deltaFovy * deltaFovy
-			if deltaFovy != 0 && alpha < 0.001 {
+			if deltaFovy != 0 && alpha < 0.0001*offsetTrigger {
 				isMartianManhunter = true
 			}
 			if isMartianManhunter {
 				playerPosition = rl.Vector3Lerp(playerPosition, oldPlayerPos, 0.8)
 			} else {
-				if isStuck := !isMartianManhunter && camera.Fovy != 45.0; isStuck {
+				if isStuck := !isMartianManhunter && martianManhunterTriggerFactor != maxMartianManhunterTriggerFactor; isStuck {
 					playerPosition = rl.Vector3Lerp(playerPosition, oldPlayerPos, 1-alpha)
 				} else {
 					playerPosition = oldPlayerPos
@@ -302,9 +323,25 @@ func main() {
 
 		rl.BeginMode3D(camera)
 
+		rl.BeginBlendMode(rl.BlendAlpha)
+
+		for i := range walls {
+			vecMin := walls[i].Min
+			vecMax := walls[i].Max
+			const amount = 0.5 // Lerp(min, max, 0.5)
+			size := rl.Vector3{X: vecMax.X - vecMin.X, Y: vecMax.Y - vecMin.Y, Z: vecMax.Z - vecMin.Z}
+			origin := rl.Vector3{
+				X: vecMin.X + amount*(vecMax.X-vecMin.X),
+				Y: vecMin.Y + amount*(vecMax.Y-vecMin.Y),
+				Z: vecMin.Z + amount*(vecMax.Z-vecMin.Z),
+			}
+			rl.DrawCubeV(origin, size, rl.Fade(rl.White, 0.8))
+			rl.DrawBoundingBox(walls[i], rl.LightGray)
+		}
+
 		// Draw floor
-		rl.DrawCubeV(rl.NewVector3(0, -1, 0), rl.NewVector3(arenaWidth, 2.0, arenaLength), rl.White)
-		rl.DrawCubeWiresV(rl.NewVector3(0, -1, 0), rl.NewVector3(arenaWidth, 2.0, arenaLength), rl.RayWhite)
+		rl.DrawCubeV(rl.NewVector3(0, -1, 0), rl.NewVector3(arenaWidth, 2.0, arenaLength), rl.Fade(rl.White, 0.65))
+		rl.DrawCubeWiresV(rl.NewVector3(0, -1, 0), rl.NewVector3(arenaWidth, 2.0, arenaLength), rl.Fade(rl.LightGray, 0.7))
 
 		// Draw enemy-box
 		rl.DrawCube(enemyBoxPos, enemyBoxSize.X, enemyBoxSize.Y, enemyBoxSize.Z, rl.Black)
@@ -324,13 +361,15 @@ func main() {
 			rl.DrawCubeWiresV(playerPosition, playerSize, rl.ColorBrightness(playerColor, 0.382))
 		}
 
+		rl.EndBlendMode()
+
 		// Draw prop shpere
 		if false {
 			rl.DrawSphere(rl.NewVector3(0, -sphereModelRadius, -sphereModelRadius*2), sphereModelRadius-0.02, rl.Fade(rl.LightGray, 0.5))
 			rl.DrawModelEx(sphereModel, rl.NewVector3(0, -sphereModelRadius, -sphereModelRadius*2), rl.NewVector3(0, -1, 0), float32(framesCounter), rl.NewVector3(1, 1, 1), rl.White)
 		}
 
-		// rl.DrawGrid(int32(arenaWidth), 1.0)
+		// rl.DrawGrid(4*int32(MaxF(arenaWidth, arenaLength)), 1/4.0)
 
 		rl.EndMode3D()
 
