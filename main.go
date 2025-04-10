@@ -24,8 +24,9 @@ func main() {
 	// rl.ToggleFullscreen()
 
 	const arenaWidth = float32(10) * 3  // X
-	const arenaLength = float32(10) * 3 // Z
-	const arenaHeight = 2
+	const arenaLength = float32(10) * 2 // Z
+
+	const arenaWallHeight = 2
 
 	camera := rl.Camera{}
 	camera.Position = rl.NewVector3(0.0, arenaWidth, arenaLength)
@@ -80,10 +81,10 @@ func main() {
 		w := arenaWidth / 2
 		l := arenaLength / 2
 		walls = [4]rl.BoundingBox{
-			rl.NewBoundingBox(rl.NewVector3(-w, 0, -l), rl.NewVector3(w, arenaHeight, -l+wallThick)),
-			rl.NewBoundingBox(rl.NewVector3(-w, 0, -l), rl.NewVector3(-w+wallThick, arenaHeight, l)),
-			rl.NewBoundingBox(rl.NewVector3(-w, 0, l-wallThick), rl.NewVector3(w, arenaHeight, l)),
-			rl.NewBoundingBox(rl.NewVector3(w-wallThick, 0, -l), rl.NewVector3(w, arenaHeight, l)),
+			rl.NewBoundingBox(rl.NewVector3(-w, 0, -l), rl.NewVector3(w, arenaWallHeight, -l+wallThick)),
+			rl.NewBoundingBox(rl.NewVector3(-w, 0, -l), rl.NewVector3(-w+wallThick, arenaWallHeight, l)),
+			rl.NewBoundingBox(rl.NewVector3(-w, 0, l-wallThick), rl.NewVector3(w, arenaWallHeight, l)),
+			rl.NewBoundingBox(rl.NewVector3(w-wallThick, 0, -l), rl.NewVector3(w, arenaWallHeight, l)),
 		}
 	}
 
@@ -266,7 +267,7 @@ func main() {
 			playerColor = rl.DarkGray
 			martianManhunterTriggerFactor += (float32(rl.GetRandomValue(-offsetTrigger, offsetTrigger)) / offsetTrigger * 2) / (2 * math.Pi) // Screenshake
 		} else {
-			playerColor = rl.Black
+			playerColor = rl.Fade(rl.Black, 0.9)
 			martianManhunterTriggerFactor = maxMartianManhunterTriggerFactor
 		}
 		if isCollision {
@@ -309,7 +310,7 @@ func main() {
 
 		rl.BeginDrawing()
 
-		rl.ClearBackground(rl.Black)
+		rl.ClearBackground(rl.RayWhite)
 
 		rl.BeginMode3D(camera)
 
@@ -326,34 +327,39 @@ func main() {
 			_ = size
 			_ = origin
 			rl.DrawCubeV(origin, size, rl.Fade(rl.White, 0.125/2))
-			rl.DrawBoundingBox(walls[i], rl.LightGray)
+			rl.DrawBoundingBox(walls[i], rl.Fade(rl.LightGray, 0.4))
 		}
 
 		// Draw floor
-		rl.DrawCubeV(rl.Vector3{X: floorOrigin.X, Y: floorOrigin.Y - 0.125, Z: floorOrigin.Z}, rl.NewVector3(arenaWidth, 2.0, arenaLength), rl.Fade(rl.White, 0.8))
-		rl.DrawModel(floorModel, rl.NewVector3(floorOrigin.X, floorOrigin.Y+1, floorOrigin.Z), 1.0, rl.Fade(rl.White, 0.8))
-		rl.DrawBoundingBox(floorBoundingBox, rl.LightGray)
+		rl.DrawCubeV(rl.Vector3{X: floorOrigin.X, Y: floorOrigin.Y - 0.125, Z: floorOrigin.Z}, rl.NewVector3(arenaWidth, 2.0, arenaLength), rl.Fade(rl.White, 0.125/2))
+		rl.DrawCubeWiresV(floorOrigin, rl.NewVector3(arenaWidth, 2.0, arenaLength), rl.Fade(rl.LightGray, 0.7))
+		rl.DrawBoundingBox(floorBoundingBox, rl.Fade(rl.LightGray, 0.7))
+		rl.DrawModel(floorModel, rl.NewVector3(floorOrigin.X, floorOrigin.Y+1, floorOrigin.Z), 1.0, rl.Fade(rl.White, 0.9))
 		if false {
-			rl.DrawCubeWiresV(floorOrigin, rl.NewVector3(arenaWidth, 2.0, arenaLength), rl.Fade(rl.LightGray, 0.7))
 			rl.DrawPlane(rl.NewVector3(floorOrigin.X, floorOrigin.Y, floorOrigin.Z), rl.NewVector2(arenaWidth, arenaLength), rl.Fade(rl.White, 0.3))
 		}
 
 		// Draw enemy-box
 		rl.DrawCube(enemyBoxPos, enemyBoxSize.X, enemyBoxSize.Y, enemyBoxSize.Z, rl.Black)
-		rl.DrawCubeWires(enemyBoxPos, enemyBoxSize.X, enemyBoxSize.Y, enemyBoxSize.Z, rl.DarkGray)
+		rl.DrawCubeWires(enemyBoxPos, enemyBoxSize.X, enemyBoxSize.Y, enemyBoxSize.Z, rl.Black)
 
 		// Draw enemy-sphere
 		rl.DrawSphere(enemySpherePos, enemySphereSize, rl.Black)
-		rl.DrawSphereWires(enemySpherePos, enemySphereSize, 16/4, 16/2, rl.DarkGray)
+		rl.DrawSphereWires(enemySpherePos, enemySphereSize, 16/4, 16/2, rl.Black)
 
 		// Draw player
-		if martianManhunterFramesCounter > 0 {
-			alpha := 1 - float32(martianManhunterFramesCounter/martianManhunterMaxFrames)
-			rl.DrawCubeV(playerPosition, playerSize, rl.Fade(playerColor, alpha))
-			rl.DrawCubeWiresV(playerPosition, playerSize, rl.ColorBrightness(playerColor, 1-alpha))
-		} else {
-			rl.DrawCubeV(playerPosition, playerSize, playerColor)
-			rl.DrawCubeWiresV(playerPosition, playerSize, rl.ColorBrightness(playerColor, 0.382))
+		{
+			playerRadius := playerSize.X / 2
+			startPos := rl.NewVector3(playerPosition.X, playerPosition.Y-playerSize.Y/2+playerRadius, playerPosition.Z)
+			endPos := rl.NewVector3(playerPosition.X, playerPosition.Y+playerSize.Y/2-playerRadius, playerPosition.Z)
+			if martianManhunterFramesCounter > 0 {
+				alpha := float32(martianManhunterFramesCounter / martianManhunterMaxFrames)
+				rl.DrawCubeV(playerPosition, playerSize, rl.Fade(playerColor, 0.5+alpha/4))
+				rl.DrawCapsule(startPos, endPos, playerRadius, 16, 16, rl.Fade(playerColor, 0.5+alpha/4))
+			} else {
+				rl.DrawCapsule(startPos, endPos, playerRadius, 16, 16, rl.Black)
+				rl.DrawCapsuleWires(startPos, endPos, playerRadius, 4, 6, rl.Fade(rl.DarkGray, 0.8))
+			}
 		}
 
 		// Draw prop sphere
@@ -362,7 +368,7 @@ func main() {
 			rl.DrawModelEx(sphereModel, rl.NewVector3(0, -sphereModelRadius, -sphereModelRadius*2), rl.NewVector3(0, -1, 0), float32(framesCounter), rl.NewVector3(1, 1, 1), rl.White)
 		}
 
-		rl.DrawGrid(4*int32(MaxF(arenaWidth, arenaLength)), 1/4.0)
+		// rl.DrawGrid(4*int32(MaxF(arenaWidth, arenaLength)), 1/4.0)
 
 		rl.EndMode3D()
 
