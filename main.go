@@ -77,7 +77,7 @@ func main() {
 	{
 		w := arenaWidth / 2
 		l := arenaLength / 2
-		const thick = 1.5
+		const thick = 1
 		walls = [4]rl.BoundingBox{
 			rl.NewBoundingBox(rl.NewVector3(-w, 0, -l), rl.NewVector3(w, arenaHeight, -l+thick)),
 			rl.NewBoundingBox(rl.NewVector3(-w, 0, -l), rl.NewVector3(-w+thick, arenaHeight, l)),
@@ -85,6 +85,14 @@ func main() {
 			rl.NewBoundingBox(rl.NewVector3(w-thick, 0, -l), rl.NewVector3(w, arenaHeight, l)),
 		}
 	}
+
+	floorOrigin := rl.NewVector3(0, -1, 0)
+	const floorThick = 1
+	floorMesh := rl.GenMeshPlane(arenaWidth, arenaLength, 3, 3)
+	floorModel := rl.LoadModelFromMesh(floorMesh)
+	floorBoundingBox := rl.NewBoundingBox(rl.NewVector3(-arenaWidth/2, floorOrigin.Y, -arenaLength/2), rl.NewVector3(arenaWidth/2, floorOrigin.Y+floorThick, arenaLength/2))
+	_ = floorModel
+	_ = floorBoundingBox
 
 	isCollision := false
 	isOOBCollision := false
@@ -181,10 +189,19 @@ func main() {
 					playerCollisionsThisFrame.Z = 1
 				}
 
-				// HACK: Gravity: Check if player is touching an infinite floor
-				isTouchFloor := playerPosition.Y+playerSize.Y/2 < 2
-				if isTouchFloor {
-					playerCollisionsThisFrame.W = 1
+				if false {
+					// HACK: Gravity: Check if player is touching an infinite floor
+					isTouchFloor := playerPosition.Y+playerSize.Y/2 < 2
+					if isTouchFloor {
+						playerCollisionsThisFrame.W = 1
+					}
+				} else {
+					playerBox := rl.NewBoundingBox(
+						rl.NewVector3(playerPosition.X-playerSize.X/2, playerPosition.Y-playerSize.Y/2, playerPosition.Z-playerSize.Z/2),
+						rl.NewVector3(playerPosition.X+playerSize.X/2, playerPosition.Y+playerSize.Y/2, playerPosition.Z+playerSize.Z/2))
+					if rl.CheckCollisionBoxes(playerBox, floorBoundingBox) {
+						playerCollisionsThisFrame.W = 1
+					}
 				}
 
 				// # Entity: Update velocity
@@ -298,8 +315,10 @@ func main() {
 				}
 			}
 		}
-		if isOOBCollision {
-			playerPosition = oldPlayerPos
+		if false {
+			if isOOBCollision {
+				playerPosition = oldPlayerPos
+			}
 		}
 		if martianManhunterFramesCounter > martianManhunterMaxFrames {
 			isMartianManhunter = false
@@ -335,13 +354,18 @@ func main() {
 				Y: vecMin.Y + amount*(vecMax.Y-vecMin.Y),
 				Z: vecMin.Z + amount*(vecMax.Z-vecMin.Z),
 			}
-			rl.DrawCubeV(origin, size, rl.Fade(rl.White, 0.8))
+			_ = size
+			_ = origin
+			// rl.DrawCubeV(origin, size, rl.Fade(rl.White, 0.125))
 			rl.DrawBoundingBox(walls[i], rl.LightGray)
 		}
 
 		// Draw floor
-		rl.DrawCubeV(rl.NewVector3(0, -1, 0), rl.NewVector3(arenaWidth, 2.0, arenaLength), rl.Fade(rl.White, 0.65))
-		rl.DrawCubeWiresV(rl.NewVector3(0, -1, 0), rl.NewVector3(arenaWidth, 2.0, arenaLength), rl.Fade(rl.LightGray, 0.7))
+		rl.DrawCubeV(floorOrigin, rl.NewVector3(arenaWidth, 2.0, arenaLength), rl.Fade(rl.White, 0.65))
+		rl.DrawCubeWiresV(floorOrigin, rl.NewVector3(arenaWidth, 2.0, arenaLength), rl.Fade(rl.LightGray, 0.7))
+		rl.DrawModel(floorModel, rl.NewVector3(floorOrigin.X, floorOrigin.Y+1, floorOrigin.Z), 1.0, rl.Fade(rl.White, 0.3))
+		rl.DrawPlane(rl.NewVector3(floorOrigin.X, floorOrigin.Y, floorOrigin.Z), rl.NewVector2(arenaWidth, arenaLength), rl.Fade(rl.White, 0.3))
+		rl.DrawBoundingBox(floorBoundingBox, rl.LightGray)
 
 		// Draw enemy-box
 		rl.DrawCube(enemyBoxPos, enemyBoxSize.X, enemyBoxSize.Y, enemyBoxSize.Z, rl.Black)
