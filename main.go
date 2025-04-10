@@ -19,12 +19,13 @@ func main() {
 	screenWidth = int32(rl.GetScreenWidth())
 	screenHeight = int32(rl.GetScreenHeight())
 
+	rl.SetConfigFlags(rl.FlagMsaa4xHint | rl.FlagWindowResizable)
 	rl.InitWindow(screenWidth, screenHeight, "raylib [models] example - box collisions")
-	rl.ToggleFullscreen()
+	// rl.ToggleFullscreen()
 
 	const arenaWidth = float32(10) * 3  // X
 	const arenaLength = float32(10) * 3 // Z
-	const arenaHeight = 3
+	const arenaHeight = 2
 
 	camera := rl.Camera{}
 	camera.Position = rl.NewVector3(0.0, arenaWidth, arenaLength)
@@ -48,7 +49,7 @@ func main() {
 	playerVelocity := rl.Vector3{}
 	playerAirTimer := float32(0)
 
-	maxPlayerAirTime := 5 * float32(fps)
+	maxPlayerAirTime := float32(fps) / 2.0
 	const movementMagnitude = float32(0.2)
 	const playerJumpVelocity = 3
 	const terminalVelocityY = 5
@@ -74,15 +75,15 @@ func main() {
 
 	// anticlockwise: 0 -> 1 -> 2 -> 3 TLBR
 	walls := [4]rl.BoundingBox{}
+	const wallThick = 1 / 2.0
 	{
 		w := arenaWidth / 2
 		l := arenaLength / 2
-		const thick = 1
 		walls = [4]rl.BoundingBox{
-			rl.NewBoundingBox(rl.NewVector3(-w, 0, -l), rl.NewVector3(w, arenaHeight, -l+thick)),
-			rl.NewBoundingBox(rl.NewVector3(-w, 0, -l), rl.NewVector3(-w+thick, arenaHeight, l)),
-			rl.NewBoundingBox(rl.NewVector3(-w, 0, l-thick), rl.NewVector3(w, arenaHeight, l)),
-			rl.NewBoundingBox(rl.NewVector3(w-thick, 0, -l), rl.NewVector3(w, arenaHeight, l)),
+			rl.NewBoundingBox(rl.NewVector3(-w, 0, -l), rl.NewVector3(w, arenaHeight, -l+wallThick)),
+			rl.NewBoundingBox(rl.NewVector3(-w, 0, -l), rl.NewVector3(-w+wallThick, arenaHeight, l)),
+			rl.NewBoundingBox(rl.NewVector3(-w, 0, l-wallThick), rl.NewVector3(w, arenaHeight, l)),
+			rl.NewBoundingBox(rl.NewVector3(w-wallThick, 0, -l), rl.NewVector3(w, arenaHeight, l)),
 		}
 	}
 
@@ -112,6 +113,7 @@ func main() {
 		playerAirTimer = maxPlayerAirTime
 	}
 
+	rl.DisableCursor()
 	rl.SetTargetFPS(fps)
 
 	for !rl.WindowShouldClose() {
@@ -153,30 +155,19 @@ func main() {
 
 		// Update player
 		{
-			playerAirTimer++
-			// currMagnitude := movementMagnitude
+			playerAirTimer += 1.0
 
 			// Normalize input vector to avoid speeding up diagonally
-			if !rl.Vector3Equals(playerMovementThisFrame, rl.Vector3Zero()) { // Vector3Length (XZ): 1.414 --diagonal-> 0.99999994
-				playerMovementThisFrame = rl.Vector3Normalize(playerMovementThisFrame) // See also https://community.monogame.net/t/how-can-i-normalize-my-diagonal-movement/15276
+			// See also https://community.monogame.net/t/how-can-i-normalize-my-diagonal-movement/15276
+			// Vector3Length (XZ): 1.414 --diagonal-> 0.99999994
+			if !rl.Vector3Equals(playerMovementThisFrame, rl.Vector3Zero()) {
+				playerMovementThisFrame = rl.Vector3Normalize(playerMovementThisFrame)
 			}
 
-			// Copied from https://github.com/lloydlobo/tiptoe/blob/master/src/internal/entities.py
-			// """
-			// Update the entity's position based on physics and collisions.
-			// Physics: movement via collision detection 2 part axis method handle one
-			// axis at a time for predictable resolution also pygame-ce allows
-			// calculating floats with Rects
-			// Note: For each X and Y axis movement, we update x and y position as int
-			// as pygame rect don't handle it as of now.
-			// """
-			// # Compute players input based movement with entity velocity
-			// frame_movement: pg.Vector2 = movement + self.velocity
 			frameMovement := rl.Vector3Add(playerMovementThisFrame, playerVelocity)
 			{
 				playerPosition.X += frameMovement.X * movementMagnitude
-				if isTouchXPlaneEdges := playerPosition.X-playerSize.X/2 < -arenaWidth/2 ||
-					playerPosition.X+playerSize.X/2 > arenaWidth/2; isTouchXPlaneEdges {
+				if isTouchXPlaneEdges := playerPosition.X-playerSize.X/2 < -arenaWidth/2 || playerPosition.X+playerSize.X/2 > arenaWidth/2; isTouchXPlaneEdges {
 					playerCollisionsThisFrame.X = 1
 				}
 				playerPosition.Y += frameMovement.Y * movementMagnitude
@@ -184,13 +175,11 @@ func main() {
 					playerCollisionsThisFrame.Y = 1
 				}
 				playerPosition.Z += frameMovement.Z * movementMagnitude
-				if isTouchZPlaneEdges := playerPosition.Z-playerSize.Z/2 < -arenaLength/2 ||
-					playerPosition.Z+playerSize.Z/2 > arenaLength/2; isTouchZPlaneEdges {
+				if isTouchZPlaneEdges := playerPosition.Z-playerSize.Z/2 < -arenaLength/2 || playerPosition.Z+playerSize.Z/2 > arenaLength/2; isTouchZPlaneEdges {
 					playerCollisionsThisFrame.Z = 1
 				}
-
+				// HACK: Gravity: Check if player is touching the infinite floor
 				if false {
-					// HACK: Gravity: Check if player is touching an infinite floor
 					isTouchFloor := playerPosition.Y+playerSize.Y/2 < 2
 					if isTouchFloor {
 						playerCollisionsThisFrame.W = 1
@@ -199,6 +188,7 @@ func main() {
 					playerBox := rl.NewBoundingBox(
 						rl.NewVector3(playerPosition.X-playerSize.X/2, playerPosition.Y-playerSize.Y/2, playerPosition.Z-playerSize.Z/2),
 						rl.NewVector3(playerPosition.X+playerSize.X/2, playerPosition.Y+playerSize.Y/2, playerPosition.Z+playerSize.Z/2))
+
 					if rl.CheckCollisionBoxes(playerBox, floorBoundingBox) {
 						playerCollisionsThisFrame.W = 1
 					}
@@ -206,36 +196,28 @@ func main() {
 
 				// # Entity: Update velocity
 				playerVelocity.Y = MinF(terminalVelocityY, playerVelocity.Y-terminalVelocityLimiterAirFrictionY) // Decelerate if in air
-
 				// # Entity: Handle velocity based on collisions up or down
 				if playerCollisionsThisFrame.Y == 1 || playerCollisionsThisFrame.W == 1 {
 					playerVelocity.Y = 0 // self.Velocity = 0
 				}
-
 				// # Entity:Player: Handle velocity based on collisions
 				if playerCollisionsThisFrame.Y == 1 || playerCollisionsThisFrame.W == 1 {
-					// ... or rl.QuaternionLength(playerCollisionsThisFrame) > 0
+					if playerAirTimer > 0 && playerJumpsLeft == 0 {
+					}
 					playerAirTimer = 0
 					playerPosition.Y = playerSize.Y / 2 // Fix to ground
 					playerJumpsLeft = 1
 				}
-
-				if playerAirTimer > maxPlayerAirTime {
-					// fmt.Printf("playerAirTimer: %v\n", playerAirTimer)
-					// panic(playerAirTimer)
-					// playerVelocity.Y -= terminalVelocityLimiterAirFrictionY
-				}
-
-				if maxAirTimeToGameOver := maxPlayerAirTime * float32(fps); playerAirTimer > maxAirTimeToGameOver {
-					panic("Unimplemented: playerAirTimer > maxAirTimeToGameOver")
+				// Snappy bouncy jumps
+				if playerAirTimer > maxPlayerAirTime*math.Phi && playerAirTimer < maxPlayerAirTime*math.Phi*math.Phi { // Once
+					playerVelocity.Y -= terminalVelocityLimiterAirFrictionY
 				}
 			}
 
 			// Apply Gravity
 			playerVelocity.Y -= terminalVelocityLimiterAirFrictionY
 
-			// Normalize velocity along XZ plane (width and length)
-			// Only for player (remove for other entities)!!!!!
+			// Normalize velocity along XZ plane (width and length) Only for player (remove for other entities)!!!!!
 			if playerVelocity.X > 0 {
 				playerVelocity.X = MaxF(0, playerVelocity.X-terminalVelocityLimiterAirFriction)
 			} else {
@@ -247,12 +229,6 @@ func main() {
 				playerVelocity.Z = MinF(0, playerVelocity.Z+terminalVelocityLimiterAirFriction)
 			}
 		}
-		// camera.Position.Z = rl.Lerp(camera.Position.Z, arenaLength, math.Phi-1)
-		// camera.Position.Z = rl.Lerp(camera.Position.Z, playerPosition.Z, math.Phi-1)
-
-		// camera.Target.X = rl.Lerp(camera.Target.X, playerPosition.X, 0.1)
-		// camera.Target.Y = rl.Lerp(camera.Target.Y, playerPosition.Y, 0.1)
-		// camera.Target.Z = rl.Lerp(camera.Target.Z, playerPosition.Z, 0.1)
 
 		// Reset collision flags
 		isCollision = false
@@ -262,21 +238,16 @@ func main() {
 		playerBox := rl.NewBoundingBox(
 			rl.NewVector3(playerPosition.X-playerSize.X/2, playerPosition.Y-playerSize.Y/2, playerPosition.Z-playerSize.Z/2),
 			rl.NewVector3(playerPosition.X+playerSize.X/2, playerPosition.Y+playerSize.Y/2, playerPosition.Z+playerSize.Z/2))
-		if rl.CheckCollisionBoxes(
-			playerBox,
-			rl.NewBoundingBox(
-				rl.NewVector3(enemyBoxPos.X-enemyBoxSize.X/2, enemyBoxPos.Y-enemyBoxSize.Y/2, enemyBoxPos.Z-enemyBoxSize.Z/2),
-				rl.NewVector3(enemyBoxPos.X+enemyBoxSize.X/2, enemyBoxPos.Y+enemyBoxSize.Y/2, enemyBoxPos.Z+enemyBoxSize.Z/2)),
-		) {
+		enemyBoundingBox := rl.NewBoundingBox(
+			rl.NewVector3(enemyBoxPos.X-enemyBoxSize.X/2, enemyBoxPos.Y-enemyBoxSize.Y/2, enemyBoxPos.Z-enemyBoxSize.Z/2),
+			rl.NewVector3(enemyBoxPos.X+enemyBoxSize.X/2, enemyBoxPos.Y+enemyBoxSize.Y/2, enemyBoxPos.Z+enemyBoxSize.Z/2))
+
+		if rl.CheckCollisionBoxes(playerBox, enemyBoundingBox) {
 			isCollision = true
 		}
-
-		// Check collisions player vs enemy-sphere
 		if rl.CheckCollisionBoxSphere(playerBox, enemySpherePos, enemySphereSize) {
 			isCollision = true
 		}
-
-		// Check collisions player vs wall-box
 		for i := range walls {
 			if rl.CheckCollisionBoxes(playerBox, walls[i]) {
 				isCollision = true
@@ -338,11 +309,9 @@ func main() {
 
 		rl.BeginDrawing()
 
-		rl.ClearBackground(rl.RayWhite)
+		rl.ClearBackground(rl.Black)
 
 		rl.BeginMode3D(camera)
-
-		rl.BeginBlendMode(rl.BlendAlpha)
 
 		for i := range walls {
 			vecMin := walls[i].Min
@@ -356,16 +325,18 @@ func main() {
 			}
 			_ = size
 			_ = origin
-			// rl.DrawCubeV(origin, size, rl.Fade(rl.White, 0.125))
+			rl.DrawCubeV(origin, size, rl.Fade(rl.White, 0.125/2))
 			rl.DrawBoundingBox(walls[i], rl.LightGray)
 		}
 
 		// Draw floor
-		rl.DrawCubeV(floorOrigin, rl.NewVector3(arenaWidth, 2.0, arenaLength), rl.Fade(rl.White, 0.65))
-		rl.DrawCubeWiresV(floorOrigin, rl.NewVector3(arenaWidth, 2.0, arenaLength), rl.Fade(rl.LightGray, 0.7))
-		rl.DrawModel(floorModel, rl.NewVector3(floorOrigin.X, floorOrigin.Y+1, floorOrigin.Z), 1.0, rl.Fade(rl.White, 0.3))
-		rl.DrawPlane(rl.NewVector3(floorOrigin.X, floorOrigin.Y, floorOrigin.Z), rl.NewVector2(arenaWidth, arenaLength), rl.Fade(rl.White, 0.3))
+		rl.DrawCubeV(rl.Vector3{X: floorOrigin.X, Y: floorOrigin.Y - 0.125, Z: floorOrigin.Z}, rl.NewVector3(arenaWidth, 2.0, arenaLength), rl.Fade(rl.White, 0.8))
+		rl.DrawModel(floorModel, rl.NewVector3(floorOrigin.X, floorOrigin.Y+1, floorOrigin.Z), 1.0, rl.Fade(rl.White, 0.8))
 		rl.DrawBoundingBox(floorBoundingBox, rl.LightGray)
+		if false {
+			rl.DrawCubeWiresV(floorOrigin, rl.NewVector3(arenaWidth, 2.0, arenaLength), rl.Fade(rl.LightGray, 0.7))
+			rl.DrawPlane(rl.NewVector3(floorOrigin.X, floorOrigin.Y, floorOrigin.Z), rl.NewVector2(arenaWidth, arenaLength), rl.Fade(rl.White, 0.3))
+		}
 
 		// Draw enemy-box
 		rl.DrawCube(enemyBoxPos, enemyBoxSize.X, enemyBoxSize.Y, enemyBoxSize.Z, rl.Black)
@@ -385,15 +356,13 @@ func main() {
 			rl.DrawCubeWiresV(playerPosition, playerSize, rl.ColorBrightness(playerColor, 0.382))
 		}
 
-		rl.EndBlendMode()
-
-		// Draw prop shpere
+		// Draw prop sphere
 		if false {
 			rl.DrawSphere(rl.NewVector3(0, -sphereModelRadius, -sphereModelRadius*2), sphereModelRadius-0.02, rl.Fade(rl.LightGray, 0.5))
 			rl.DrawModelEx(sphereModel, rl.NewVector3(0, -sphereModelRadius, -sphereModelRadius*2), rl.NewVector3(0, -1, 0), float32(framesCounter), rl.NewVector3(1, 1, 1), rl.White)
 		}
 
-		// rl.DrawGrid(4*int32(MaxF(arenaWidth, arenaLength)), 1/4.0)
+		rl.DrawGrid(4*int32(MaxF(arenaWidth, arenaLength)), 1/4.0)
 
 		rl.EndMode3D()
 
