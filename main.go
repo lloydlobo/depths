@@ -23,7 +23,6 @@ func main() {
 	rl.SetConfigFlags(rl.FlagMsaa4xHint | rl.FlagWindowResizable)                        // Config flags must be set before InitWindow
 	rl.InitWindow(screenWidth, screenHeight, "raylib [models] example - box collisions") // Initialize Window and OpenGL Graphics
 	rl.SetWindowState(rl.FlagVsyncHint | rl.FlagInterlacedHint | rl.FlagWindowHighdpi)   // Window state must be set after InitWindow
-
 	// rl.ToggleFullscreen()
 	rl.SetWindowMinSize(800, 450) // Prevents my window manager shrinking this to 2x1 units window size
 
@@ -54,8 +53,6 @@ func main() {
 
 	isPlayerBoost := false
 	isPlayerStrafe := false
-	_ = isPlayerBoost
-	_ = isPlayerStrafe
 	playerColor := rl.RayWhite
 	playerJumpsLeft := 1
 	playerPosition := rl.NewVector3(0.0, 1.0, 2.0)
@@ -63,15 +60,16 @@ func main() {
 	playerVelocity := rl.Vector3{}
 	playerAirTimer := float32(0)
 
+	_ = isPlayerBoost
+	_ = isPlayerStrafe
+
 	maxPlayerAirTime := float32(fps) / 2.0
 	maxPlayerFreefallAirTime := maxPlayerAirTime * 3
 	const movementMagnitude = float32(0.2)
-	const playerJumpVelocity = 4 // 3
-	const terminalVelocityY = 5
-	// # if max: 0.1333333333.. (makes jumping possible to 3x player height) # else use min for easy floaty feel
-	// self._terminal_limiter_air_friction: Final = max(0.1, ((pre.TILE_SIZE * 0.5) / (pre.FPS_CAP)))
+	const playerJumpVelocity = 4 // 3..5
 	const terminalVelocityLimiterAirFriction = movementMagnitude / math.Phi
 	const terminalVelocityLimiterAirFrictionY = movementMagnitude / 2
+	const terminalVelocityY = 5
 
 	// FEAT: See also https://github.com/Pakz001/Raylib-Examples/blob/master/ai/Example_-_Pattern_Movement.c
 	// Like Arrow shooter crazyggame,,, fruit dispenser
@@ -104,23 +102,9 @@ func main() {
 		unsafeRedSphereCount++
 	}
 
-	// safeOrangeBoxPos := rl.NewVector3(-4.0, 1.0, 0.0)
-	// safeOrangeBoxSize := rl.NewVector3(2.0, 2.0, 2.0)
-	// if true {
-	// 	safeOrangeBoxPos = rl.NewVector3(-4.0, 1.0, 4.0)
-	// 	safeOrangeBoxSize = rl.NewVector3(5, 2.0/2, 5)
-	// }
-
-	// unsafeRedSpherePos := rl.NewVector3(4.0, 0.0, 0.0)
-	// unsafeRedSphereSize := float32(1.5)
-	// if true {
-	// 	unsafeRedSpherePos = rl.NewVector3(-4.0, -0.4, -4.0)
-	// 	unsafeRedSphereSize = float32(2.5)
-	// }
-
 	// anticlockwise: 0 -> 1 -> 2 -> 3 TLBR
-	walls := [4]rl.BoundingBox{}
 	const wallThick = 1 / 2.0
+	walls := [4]rl.BoundingBox{}
 	{
 		w := arenaWidth / 2
 		l := arenaLength / 2
@@ -141,7 +125,6 @@ func main() {
 	var floorMeshes []rl.Mesh
 	{
 		origin := rl.NewVector3(0, (playerPosition.Y-playerSize.Y/2)-(floorThick/2), 0)
-
 		mesh := rl.GenMeshCube(arenaWidth, floorThick, arenaLength)
 		model := rl.LoadModelFromMesh(mesh)
 		box := rl.NewBoundingBox(
@@ -157,7 +140,6 @@ func main() {
 	}
 	{
 		origin := rl.NewVector3(arenaWidth/math.Phi, (playerPosition.Y-playerSize.Y/2)-(floorThick/2)-arenaWidth*1, arenaLength/8)
-
 		mesh := rl.GenMeshCube(arenaWidth, floorThick, arenaLength)
 		model := rl.LoadModelFromMesh(mesh)
 		box := rl.NewBoundingBox(
@@ -173,7 +155,6 @@ func main() {
 	}
 	{
 		origin := rl.NewVector3(-3*arenaWidth/4, (playerPosition.Y-playerSize.Y/2)-(floorThick/2)-(playerSize.Y*1), (arenaLength/1)+(playerSize.Z*2))
-
 		mesh := rl.GenMeshCube(arenaWidth, floorThick, arenaLength)
 		model := rl.LoadModelFromMesh(mesh)
 		box := rl.NewBoundingBox(
@@ -189,7 +170,6 @@ func main() {
 	}
 	{
 		origin := rl.NewVector3(3*arenaWidth/4, (playerPosition.Y-playerSize.Y/2-floorThick/2)-arenaWidth/2, -4*arenaLength/3.5)
-
 		mesh := rl.GenMeshCube(arenaWidth, floorThick, arenaLength)
 		model := rl.LoadModelFromMesh(mesh)
 		box := rl.NewBoundingBox(
@@ -205,7 +185,6 @@ func main() {
 	}
 	{
 		origin := rl.NewVector3(-2*arenaWidth/3, (playerPosition.Y-playerSize.Y/2)-(floorThick/2)-((arenaWidth/2)+(playerSize.Y*4)), (-arenaLength/2)+(playerSize.Z*2))
-
 		mesh := rl.GenMeshCube(arenaWidth, floorThick, arenaLength)
 		model := rl.LoadModelFromMesh(mesh)
 		box := rl.NewBoundingBox(
@@ -220,11 +199,13 @@ func main() {
 		floorCount++
 	}
 
-	isUnsafeCollision := false
-	isSafeSpotCollision := false
-	isFloorCollision := false
-	isOOBCollision := false
-	isWallCollision := false
+	var (
+		isFloorCollision    bool
+		isOOBCollision      bool
+		isSafeSpotCollision bool
+		isUnsafeCollision   bool
+		isWallCollision     bool
+	)
 
 	framesCounter := 0
 
@@ -276,9 +257,11 @@ func main() {
 
 		// Update
 
-		// Store previous position to reuse as next postion on collision
+		// HACK: Store previous position to reuse as next postion on collision (quick position resets)
 		oldPlayerPos := playerPosition
 		oldCamPos := camera.Position
+
+		_ = oldPlayerPos
 		_ = oldCamPos
 
 		// Update player movement
@@ -295,8 +278,8 @@ func main() {
 		}
 		if shieldProgress <= 0 {
 			playerPosition = rl.Vector3Zero() // Gameover
-			playerAirTimer = 0
 			playerVelocity = rl.Vector3Zero()
+			playerAirTimer = 0
 		}
 
 		frameMovement := rl.Vector3Add(playerMovementThisFrame, playerVelocity)
@@ -317,14 +300,11 @@ func main() {
 					playerCollisionsThisFrame.Z = 1
 				}
 			}
-
 			// Check if player is safely standing on the floor
-			playerBox := rl.NewBoundingBox(
-				rl.NewVector3(playerPosition.X-playerSize.X/2, playerPosition.Y-playerSize.Y/2, playerPosition.Z-playerSize.Z/2),
-				rl.NewVector3(playerPosition.X+playerSize.X/2, playerPosition.Y+playerSize.Y/2, playerPosition.Z+playerSize.Z/2))
-
 			for i := range floorCount {
-				if rl.CheckCollisionBoxes(playerBox, floorBoundingBoxes[i]) {
+				if rl.CheckCollisionBoxes(floorBoundingBoxes[i], rl.NewBoundingBox(
+					rl.NewVector3(playerPosition.X-playerSize.X/2, playerPosition.Y-playerSize.Y/2, playerPosition.Z-playerSize.Z/2),
+					rl.NewVector3(playerPosition.X+playerSize.X/2, playerPosition.Y+playerSize.Y/2, playerPosition.Z+playerSize.Z/2))) {
 					isFloorCollision = true
 					playerCollisionsThisFrame.W = 1
 					if isFloorSinking := false; isFloorSinking { // Only push floor down if player just jumped and landed on the floor
@@ -378,12 +358,6 @@ func main() {
 			playerVelocity.Z = MinF(0, playerVelocity.Z+terminalVelocityLimiterAirFriction)
 		}
 
-		// Check collisions player vs enemy-box
-
-		// safeOrangeBoundingBox := rl.NewBoundingBox(
-		// 	rl.NewVector3(safeOrangeBoxPos.X-safeOrangeBoxSize.X/2, safeOrangeBoxPos.Y-safeOrangeBoxSize.Y/2, safeOrangeBoxPos.Z-safeOrangeBoxSize.Z/2),
-		// 	rl.NewVector3(safeOrangeBoxPos.X+safeOrangeBoxSize.X/2, safeOrangeBoxPos.Y+safeOrangeBoxSize.Y/2, safeOrangeBoxPos.Z+safeOrangeBoxSize.Z/2))
-
 		for i := range safeOrangeBoxCount {
 			pos := safeOrangeBoxPositions[i]
 			size := safeOrangeBoxSizes[i]
@@ -428,32 +402,24 @@ func main() {
 			}
 		}
 
-		const offsetTrigger = 2.0
-
+		// Highlight player color on interactions with different world objects
 		switch {
-		case isUnsafeCollision:
-			playerColor = rl.DarkBlue
 		case isOOBCollision:
 			playerColor = rl.DarkGray
 		case isSafeSpotCollision:
 			playerColor = rl.Fade(rl.Green, 0.9)
-		case isWallCollision: // TODO: Figure out how to make player wall slide
-			playerColor = rl.Fade(rl.Brown, 0.9)
-			playerPosition = oldPlayerPos
-			panic("unimplemented")
+		case isUnsafeCollision:
+			playerColor = rl.DarkPurple
+		case isWallCollision:
+			playerColor = rl.Fade(rl.Brown, 0.9) // TODO: Figure out how to make player wall slide
+		case isFloorCollision:
+			playerColor = rl.Black
 		default:
 			playerColor = rl.Fade(rl.Black, 0.9)
 		}
 
-		// Update progress
+		// Update progress on collision, air-time, ...
 		progressRate := 0.1 / float32(fps)
-		if (playerCollisionsThisFrame.X == 1 || playerCollisionsThisFrame.Z == 1) &&
-			(!isOOBCollision && !isSafeSpotCollision && !isFloorCollision) {
-			shieldProgress -= progressRate
-		}
-		if playerAirTimer > maxPlayerFreefallAirTime {
-			shieldProgress -= PowF(progressRate*shieldProgress, maxPlayerFreefallAirTime/playerAirTimer)
-		}
 		if isUnsafeCollision {
 			shieldProgress -= progressRate
 		}
@@ -467,7 +433,16 @@ func main() {
 				fuelProgress = 1.0
 			}
 		}
+		if playerAirTimer > maxPlayerFreefallAirTime {
+			shieldProgress -= PowF(progressRate*shieldProgress, maxPlayerFreefallAirTime/playerAirTimer)
+		}
+		if isDebug := false; isDebug {
+			if (playerCollisionsThisFrame.X == 1 || playerCollisionsThisFrame.Z == 1) && (!isOOBCollision && !isSafeSpotCollision && !isFloorCollision) {
+				shieldProgress -= progressRate
+			}
+		}
 
+		// Increment global frames counter tracker
 		framesCounter++
 
 		// Draw
@@ -498,19 +473,12 @@ func main() {
 			rl.DrawBoundingBox(floorBoundingBoxes[i], rl.Fade(rl.LightGray, 0.7))
 		}
 
-		// Draw enemy-box
-		// rl.DrawCube(safeOrangeBoxPos, safeOrangeBoxSize.X, safeOrangeBoxSize.Y, safeOrangeBoxSize.Z, rl.Fade(rl.Orange, 1.0))
-		// rl.DrawCubeWires(safeOrangeBoxPos, safeOrangeBoxSize.X, safeOrangeBoxSize.Y, safeOrangeBoxSize.Z, rl.Fade(rl.Orange, 1.0))
 		for i := range safeOrangeBoxCount {
 			pos := safeOrangeBoxPositions[i]
 			size := safeOrangeBoxSizes[i]
 			rl.DrawCubeV(pos, size, rl.Fade(rl.Orange, 1.0))
 			rl.DrawCubeWiresV(pos, size, rl.Fade(rl.Gold, 1.0))
 		}
-
-		// Draw enemy-sphere
-		// rl.DrawSphere(unsafeRedSpherePos, unsafeRedSphereSize, rl.Red)
-		// rl.DrawSphereWires(unsafeRedSpherePos, unsafeRedSphereSize, 16/4, 16/2, rl.Red)
 
 		for i := range unsafeRedSphereCount {
 			rl.DrawSphere(unsafeRedSpherePositions[i], unsafeRedSphereSizes[i], rl.Red)
@@ -521,7 +489,9 @@ func main() {
 		playerRadius := playerSize.X / 2
 		playerStartPos := rl.NewVector3(playerPosition.X, playerPosition.Y-playerSize.Y/2+playerRadius, playerPosition.Z)
 		playerEndPos := rl.NewVector3(playerPosition.X, playerPosition.Y+playerSize.Y/2-playerRadius, playerPosition.Z)
-		rl.DrawCubeV(playerPosition, playerSize, playerColor)
+		if isDebug := false; isDebug {
+			rl.DrawCubeV(playerPosition, playerSize, playerColor)
+		}
 		rl.DrawCapsule(playerStartPos, playerEndPos, playerRadius, 16, 16, playerColor)
 		rl.DrawCapsuleWires(playerStartPos, playerEndPos, playerRadius, 4, 6, rl.ColorLerp(playerColor, rl.Fade(rl.DarkGray, 0.8), 0.5))
 
@@ -532,7 +502,7 @@ func main() {
 		}
 
 		if false {
-			rl.DrawGrid(4*int32(MinF(arenaWidth, arenaLength)), 1/4.0)
+			rl.DrawGrid(int32(MinF(arenaWidth, arenaLength)), 1)
 		}
 
 		rl.EndMode3D()
@@ -556,12 +526,9 @@ func main() {
 	rl.CloseWindow()
 }
 
-// From cmp.Ordered
+// Copied from Go's cmp.Ordered
 // Ordered is a constraint that permits any ordered type: any type
 // that supports the operators < <= >= >.
-// If future releases of Go add new ordered types,
-// this constraint will be modified to include them.
-//
 // Note that floating-point types may contain NaN ("not-a-number") values.
 // An operator such as == or < will always report false when
 // comparing a NaN value with any other value, NaN or not.
@@ -575,16 +542,16 @@ type OrderedNumber interface {
 // To avoid casting each time `OrderedNumber` interface it is used
 type NumberType OrderedNumber
 
+func AbsF[T NumberType](x T) float32      { return float32(math.Abs(float64(x))) }
 func MaxF[T NumberType](x T, y T) float32 { return float32(max(float64(x), float64(y))) }
 func MinF[T NumberType](x T, y T) float32 { return float32(min(float64(x), float64(y))) }
-func AbsF[T NumberType](x T) float32      { return float32(math.Abs(float64(x))) }
-func SqrtF[T NumberType](x T) float32     { return float32(math.Sqrt(float64(x))) }
 func PowF[T NumberType](x T, y T) float32 { return float32(math.Pow(float64(x), float64(y))) }
-func SinF[T NumberType](x T) float32      { return float32(math.Sin(float64(x))) }
+func SqrtF[T NumberType](x T) float32     { return float32(math.Sqrt(float64(x))) }
 func CosF[T NumberType](x T) float32      { return float32(math.Cos(float64(x))) }
+func SinF[T NumberType](x T) float32      { return float32(math.Sin(float64(x))) }
 
-func manhattanVector2(a, b rl.Vector2) float32 { return AbsF(b.X-a.X) + AbsF(b.Y-a.Y) }
-func manhattanVector3(a, b rl.Vector3) float32 { return AbsF(b.X-a.X) + AbsF(b.Y-a.Y) + AbsF(b.Z-a.Z) }
+func manhattanV2(a, b rl.Vector2) float32 { return AbsF(b.X-a.X) + AbsF(b.Y-a.Y) }
+func manhattanV3(a, b rl.Vector3) float32 { return AbsF(b.X-a.X) + AbsF(b.Y-a.Y) + AbsF(b.Z-a.Z) }
 
 const (
 	InvMathPhi         = 1 / math.Phi
