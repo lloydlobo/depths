@@ -73,20 +73,50 @@ func main() {
 	const terminalVelocityLimiterAirFriction = movementMagnitude / math.Phi
 	const terminalVelocityLimiterAirFrictionY = movementMagnitude / 2
 
-	// See also https://github.com/Pakz001/Raylib-Examples/blob/master/ai/Example_-_Pattern_Movement.c
+	// FEAT: See also https://github.com/Pakz001/Raylib-Examples/blob/master/ai/Example_-_Pattern_Movement.c
+	// Like Arrow shooter crazyggame,,, fruit dispenser
+
+	safeOrangeBoxCount := 0
+	var safeOrangeBoxPositions []rl.Vector3
+	var safeOrangeBoxSizes []rl.Vector3
+	{
+		safeOrangeBoxPositions = append(safeOrangeBoxPositions, rl.NewVector3(-4, 1, 0))
+		safeOrangeBoxSizes = append(safeOrangeBoxSizes, rl.NewVector3(2, 2, 2))
+		safeOrangeBoxCount++
+	}
+	{
+		safeOrangeBoxPositions = append(safeOrangeBoxPositions, rl.NewVector3(0, 1, -4))
+		safeOrangeBoxSizes = append(safeOrangeBoxSizes, rl.NewVector3(2, 2, 2))
+		safeOrangeBoxCount++
+	}
+
+	unsafeRedBoxCount := 0
+	var unsafeRedSpherePositions []rl.Vector3
+	var unsafeRedSphereSizes []float32
+	{
+		unsafeRedSpherePositions = append(unsafeRedSpherePositions, rl.NewVector3(4, 0, 0))
+		unsafeRedSphereSizes = append(unsafeRedSphereSizes, 1.5)
+		unsafeRedBoxCount++
+	}
+	{
+		unsafeRedSpherePositions = append(unsafeRedSpherePositions, rl.NewVector3(0, 1, 4))
+		unsafeRedSphereSizes = append(unsafeRedSphereSizes, 1.5)
+		unsafeRedBoxCount++
+	}
+
 	safeOrangeBoxPos := rl.NewVector3(-4.0, 1.0, 0.0)
 	safeOrangeBoxSize := rl.NewVector3(2.0, 2.0, 2.0)
-	if true {
-		safeOrangeBoxPos = rl.NewVector3(-4.0, 1.0, 4.0)
-		safeOrangeBoxSize = rl.NewVector3(5, 2.0/2, 5)
-	}
+	// if true {
+	// 	safeOrangeBoxPos = rl.NewVector3(-4.0, 1.0, 4.0)
+	// 	safeOrangeBoxSize = rl.NewVector3(5, 2.0/2, 5)
+	// }
 
 	unsafeRedSpherePos := rl.NewVector3(4.0, 0.0, 0.0)
 	unsafeRedSphereSize := float32(1.5)
-	if true {
-		unsafeRedSpherePos = rl.NewVector3(-4.0, -0.4, -4.0)
-		unsafeRedSphereSize = float32(2.5)
-	}
+	// if true {
+	// 	unsafeRedSpherePos = rl.NewVector3(-4.0, -0.4, -4.0)
+	// 	unsafeRedSphereSize = float32(2.5)
+	// }
 
 	// anticlockwise: 0 -> 1 -> 2 -> 3 TLBR
 	walls := [4]rl.BoundingBox{}
@@ -454,10 +484,18 @@ func main() {
 		// Draw enemy-box
 		rl.DrawCube(safeOrangeBoxPos, safeOrangeBoxSize.X, safeOrangeBoxSize.Y, safeOrangeBoxSize.Z, rl.Fade(rl.Orange, 1.0))
 		rl.DrawCubeWires(safeOrangeBoxPos, safeOrangeBoxSize.X, safeOrangeBoxSize.Y, safeOrangeBoxSize.Z, rl.Fade(rl.Orange, 1.0))
+		for i := range safeOrangeBoxCount {
+			rl.DrawCubeV(safeOrangeBoxPositions[i], safeOrangeBoxSizes[i], rl.Fade(rl.Orange, 1.0))
+			rl.DrawCubeWiresV(safeOrangeBoxPositions[i], safeOrangeBoxSizes[i], rl.Fade(rl.Gold, 1.0))
+		}
 
 		// Draw enemy-sphere
 		rl.DrawSphere(unsafeRedSpherePos, unsafeRedSphereSize, rl.Red)
 		rl.DrawSphereWires(unsafeRedSpherePos, unsafeRedSphereSize, 16/4, 16/2, rl.Red)
+		for i := range unsafeRedBoxCount {
+			rl.DrawSphere(unsafeRedSpherePositions[i], unsafeRedSphereSizes[i], rl.Red)
+			rl.DrawSphereWires(unsafeRedSpherePositions[i], unsafeRedSphereSizes[i], 8, 8, rl.Maroon)
+		}
 
 		// Draw player
 		playerRadius := playerSize.X / 2
