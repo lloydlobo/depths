@@ -23,8 +23,8 @@ func main() {
 	rl.InitWindow(screenWidth, screenHeight, "raylib [models] example - box collisions")
 	// rl.ToggleFullscreen()
 
-	const arenaWidth = float32(10) * 3  // X
-	const arenaLength = float32(10) * 2 // Z
+	const arenaWidth = float32(10) * math.Phi             // X
+	const arenaLength = float32(10) * math.Phi * math.Phi // Z
 
 	const arenaWallHeight = 2
 
@@ -38,6 +38,8 @@ func main() {
 	const sphereModelRadius = arenaWidth / math.Phi
 	sphereMesh := rl.GenMeshSphere(sphereModelRadius, 16, 16)
 	sphereModel := rl.LoadModelFromMesh(sphereMesh)
+
+	fuelProgress := float32(1.0)
 
 	isPlayerBoost := false
 	isPlayerStrafe := false
@@ -163,6 +165,11 @@ func main() {
 			// Vector3Length (XZ): 1.414 --diagonal-> 0.99999994
 			if !rl.Vector3Equals(playerMovementThisFrame, rl.Vector3Zero()) {
 				playerMovementThisFrame = rl.Vector3Normalize(playerMovementThisFrame)
+				fuelProgress -= 0.05 / float32(fps)
+			}
+
+			if fuelProgress <= 0 {
+				playerPosition = rl.Vector3Zero() // Gameover
 			}
 
 			frameMovement := rl.Vector3Add(playerMovementThisFrame, playerVelocity)
@@ -374,7 +381,10 @@ func main() {
 
 		rl.DrawText(fmt.Sprintln(martianManhunterFramesCounter), 10, 10, 10, rl.Gray)
 
-		// rl.DrawText("Move player with cursors to collide", 220, 40, 20, rl.Gray)
+		rl.DrawRectangle(10, 20, 100, 20, rl.Fade(rl.Black, 0.9))
+		rl.DrawRectangleV(rl.Vector2{X: 10, Y: 20}, rl.Vector2{X: fuelProgress * 100, Y: 20}, rl.DarkGray)
+		rl.DrawText("Fuel", 10+5, 21, 20, rl.White)
+		rl.DrawText(fmt.Sprintf("%.0f", 100*fuelProgress), 90+5, 20+5*2, 10, rl.White)
 
 		rl.DrawFPS(10, int32(rl.GetScreenHeight())-25)
 
