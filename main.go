@@ -74,32 +74,46 @@ func main() {
 	// FEAT: See also https://github.com/Pakz001/Raylib-Examples/blob/master/ai/Example_-_Pattern_Movement.c
 	// Like Arrow shooter crazyggame,,, fruit dispenser
 
-	safeOrangeBoxCount := 0
-	var safeOrangeBoxPositions []rl.Vector3
-	var safeOrangeBoxSizes []rl.Vector3
+	safeRechargeBoxCount := 0
+	var safeRechargeBoxPositions []rl.Vector3
+	var safeRechargeBoxSizes []rl.Vector3
 	{
-		safeOrangeBoxPositions = append(safeOrangeBoxPositions, rl.NewVector3(-4, 1, 0))
-		safeOrangeBoxSizes = append(safeOrangeBoxSizes, rl.NewVector3(2, 2, 2))
-		safeOrangeBoxCount++
+		safeRechargeBoxPositions = append(safeRechargeBoxPositions, rl.NewVector3(-4, 1, 0))
+		safeRechargeBoxSizes = append(safeRechargeBoxSizes, rl.NewVector3(2, 2, 2))
+		safeRechargeBoxCount++
 	}
 	{
-		safeOrangeBoxPositions = append(safeOrangeBoxPositions, rl.NewVector3(0, 1, -4))
-		safeOrangeBoxSizes = append(safeOrangeBoxSizes, rl.NewVector3(2, 2, 2))
-		safeOrangeBoxCount++
+		safeRechargeBoxPositions = append(safeRechargeBoxPositions, rl.NewVector3(0, 1, -4))
+		safeRechargeBoxSizes = append(safeRechargeBoxSizes, rl.NewVector3(2, 2, 2))
+		safeRechargeBoxCount++
 	}
 
-	unsafeRedSphereCount := 0
-	var unsafeRedSpherePositions []rl.Vector3
+	unsafeDischargeSphereCount := 0
+	var unsafeDischargeSpherePositions []rl.Vector3
 	var unsafeRedSphereSizes []float32
 	{
-		unsafeRedSpherePositions = append(unsafeRedSpherePositions, rl.NewVector3(4, 0, 0))
+		unsafeDischargeSpherePositions = append(unsafeDischargeSpherePositions, rl.NewVector3(4, 0, 0))
 		unsafeRedSphereSizes = append(unsafeRedSphereSizes, 1.5)
-		unsafeRedSphereCount++
+		unsafeDischargeSphereCount++
 	}
 	{
-		unsafeRedSpherePositions = append(unsafeRedSpherePositions, rl.NewVector3(0, 0, 6))
+		unsafeDischargeSpherePositions = append(unsafeDischargeSpherePositions, rl.NewVector3(0, 0, 6))
 		unsafeRedSphereSizes = append(unsafeRedSphereSizes, 1.5)
-		unsafeRedSphereCount++
+		unsafeDischargeSphereCount++
+	}
+
+	jumppadBoxCount := 0
+	var jumppadBoxPositions []rl.Vector3
+	var jumppadBoxSizes []rl.Vector3
+	{
+		jumppadBoxPositions = append(jumppadBoxPositions, rl.NewVector3(-9, 1, 0))
+		jumppadBoxSizes = append(jumppadBoxSizes, rl.NewVector3(2, 0.25, 2))
+		jumppadBoxCount++
+	}
+	{
+		jumppadBoxPositions = append(jumppadBoxPositions, rl.NewVector3(0, 1, -9))
+		jumppadBoxSizes = append(jumppadBoxSizes, rl.NewVector3(2, 0.25, 2))
+		jumppadBoxCount++
 	}
 
 	// anticlockwise: 0 -> 1 -> 2 -> 3 TLBR
@@ -131,7 +145,6 @@ func main() {
 			rl.NewVector3(origin.X-arenaWidth/2, origin.Y-floorThick/2, origin.Z-arenaLength/2),
 			rl.NewVector3(origin.X+arenaWidth/2, origin.Y+floorThick/2, origin.Z+arenaLength/2),
 		)
-
 		floorOrigins = append(floorOrigins, origin)
 		floorBoundingBoxes = append(floorBoundingBoxes, box)
 		floorModels = append(floorModels, model)
@@ -146,7 +159,6 @@ func main() {
 			rl.NewVector3(origin.X-arenaWidth/2, origin.Y-floorThick/2, origin.Z-arenaLength/2),
 			rl.NewVector3(origin.X+arenaWidth/2, origin.Y+floorThick/2, origin.Z+arenaLength/2),
 		)
-
 		floorOrigins = append(floorOrigins, origin)
 		floorBoundingBoxes = append(floorBoundingBoxes, box)
 		floorModels = append(floorModels, model)
@@ -161,7 +173,6 @@ func main() {
 			rl.NewVector3(origin.X-arenaWidth/2, origin.Y-floorThick/2, origin.Z-arenaLength/2),
 			rl.NewVector3(origin.X+arenaWidth/2, origin.Y+floorThick/2, origin.Z+arenaLength/2),
 		)
-
 		floorOrigins = append(floorOrigins, origin)
 		floorBoundingBoxes = append(floorBoundingBoxes, box)
 		floorModels = append(floorModels, model)
@@ -176,7 +187,6 @@ func main() {
 			rl.NewVector3(origin.X-arenaWidth/2, origin.Y-floorThick/2, origin.Z-arenaLength/2),
 			rl.NewVector3(origin.X+arenaWidth/2, origin.Y+floorThick/2, origin.Z+arenaLength/2),
 		)
-
 		floorOrigins = append(floorOrigins, origin)
 		floorBoundingBoxes = append(floorBoundingBoxes, box)
 		floorModels = append(floorModels, model)
@@ -191,7 +201,6 @@ func main() {
 			rl.NewVector3(origin.X-arenaWidth/2, origin.Y-floorThick/2, origin.Z-arenaLength/2),
 			rl.NewVector3(origin.X+arenaWidth/2, origin.Y+floorThick/2, origin.Z+arenaLength/2),
 		)
-
 		floorOrigins = append(floorOrigins, origin)
 		floorBoundingBoxes = append(floorBoundingBoxes, box)
 		floorModels = append(floorModels, model)
@@ -219,13 +228,6 @@ func main() {
 	rl.SetTargetFPS(fps)
 
 	for !rl.WindowShouldClose() {
-		// Reset collision flags
-		isUnsafeCollision = false
-		isOOBCollision = false
-		isSafeSpotCollision = false
-		isFloorCollision = false
-		isWallCollision = false
-
 		// Handle user input events
 
 		playerMovementThisFrame := rl.Vector3{}
@@ -264,6 +266,23 @@ func main() {
 		_ = oldPlayerPos
 		_ = oldCamPos
 
+		// Reset collision flags
+		isUnsafeCollision = false
+		isOOBCollision = false
+		isSafeSpotCollision = false
+		isFloorCollision = false
+		isWallCollision = false
+
+		// Check gameover events and conditions
+		if fuelProgress <= 0 {
+			playerPosition = rl.Vector3Zero()
+		}
+		if shieldProgress <= 0 {
+			playerPosition = rl.Vector3Zero()
+			playerVelocity = rl.Vector3Zero()
+			playerAirTimer = 0
+		}
+
 		// Update player movement
 		playerAirTimer += 1.0
 
@@ -271,15 +290,6 @@ func main() {
 		if !rl.Vector3Equals(playerMovementThisFrame, rl.Vector3Zero()) {
 			playerMovementThisFrame = rl.Vector3Normalize(playerMovementThisFrame) // Vector3Length (XZ): 1.414 --diagonal-> 0.99999994
 			fuelProgress -= 0.05 / float32(fps)                                    // See also https://community.monogame.net/t/how-can-i-normalize-my-diagonal-movement/15276
-		}
-
-		if fuelProgress <= 0 {
-			playerPosition = rl.Vector3Zero() // Gameover
-		}
-		if shieldProgress <= 0 {
-			playerPosition = rl.Vector3Zero() // Gameover
-			playerVelocity = rl.Vector3Zero()
-			playerAirTimer = 0
 		}
 
 		frameMovement := rl.Vector3Add(playerMovementThisFrame, playerVelocity)
@@ -329,14 +339,12 @@ func main() {
 			// # Entity:Player: Handle velocity based on collisions
 			if playerCollisionsThisFrame.Y == 1 || playerCollisionsThisFrame.W == 1 {
 				playerAirTimer = 0
-				// HACK: This is handled directly by floorBoundingBoxes collision check interations
 				if false {
-					// Detect the floor the player is touching and get bounding box top offset from player bottom
-					playerPosition.Y = playerSize.Y / 2 // Fix to ground
+					value := playerSize.Y / 2 // HACK: This is handled directly by floorBoundingBoxes collision check interations
+					playerPosition.Y = value  // Detect the floor the player is touching and get bounding box top offset from player bottom
 				}
 				playerJumpsLeft = 1
 			}
-
 			// Snappy bouncy jumps
 			if playerAirTimer > maxPlayerAirTime*math.Phi && playerAirTimer < maxPlayerAirTime*math.Phi*math.Phi { // Once
 				playerVelocity.Y -= terminalVelocityLimiterAirFrictionY
@@ -358,9 +366,9 @@ func main() {
 			playerVelocity.Z = MinF(0, playerVelocity.Z+terminalVelocityLimiterAirFriction)
 		}
 
-		for i := range safeOrangeBoxCount {
-			pos := safeOrangeBoxPositions[i]
-			size := safeOrangeBoxSizes[i]
+		for i := range safeRechargeBoxCount {
+			pos := safeRechargeBoxPositions[i]
+			size := safeRechargeBoxSizes[i]
 			box := rl.NewBoundingBox(
 				rl.NewVector3(pos.X-size.X/2, pos.Y-size.Y/2, pos.Z-size.Z/2),
 				rl.NewVector3(pos.X+size.X/2, pos.Y+size.Y/2, pos.Z+size.Z/2))
@@ -372,23 +380,23 @@ func main() {
 			}
 		}
 
-		for i := range unsafeRedSphereCount {
+		for i := range unsafeDischargeSphereCount {
 			if rl.CheckCollisionBoxSphere(rl.NewBoundingBox(
 				rl.NewVector3(playerPosition.X-playerSize.X/2, playerPosition.Y-playerSize.Y/2, playerPosition.Z-playerSize.Z/2),
-				rl.NewVector3(playerPosition.X+playerSize.X/2, playerPosition.Y+playerSize.Y/2, playerPosition.Z+playerSize.Z/2)), unsafeRedSpherePositions[i], unsafeRedSphereSizes[i]) {
+				rl.NewVector3(playerPosition.X+playerSize.X/2, playerPosition.Y+playerSize.Y/2, playerPosition.Z+playerSize.Z/2)), unsafeDischargeSpherePositions[i], unsafeRedSphereSizes[i]) {
 				isUnsafeCollision = true
 
 				// Find perpendicular curve to XZ plane, i.e slope of circumference
 				// WARN: Expect wonky animation, as bottom of player box when on a slope of sphere,
 				// may not collide with top tangent to sphere surface.
-				dx := CosF(AbsF(playerPosition.X - unsafeRedSpherePositions[i].X))
-				dz := CosF(AbsF(playerPosition.Z - unsafeRedSpherePositions[i].Z))
+				dx := CosF(AbsF(playerPosition.X - unsafeDischargeSpherePositions[i].X))
+				dz := CosF(AbsF(playerPosition.Z - unsafeDischargeSpherePositions[i].Z))
 				height := unsafeRedSphereSizes[i]/2 + playerSize.Y
 				dy := (dx*dx + dz*dz) * height
 				dy = SqrtF(dy)
 				dy = rl.Clamp(dy, 0, height)
 
-				playerPosition.Y = unsafeRedSpherePositions[i].Y + dy
+				playerPosition.Y = unsafeDischargeSpherePositions[i].Y + dy
 			}
 		}
 
@@ -472,17 +480,21 @@ func main() {
 			rl.DrawModel(floorModels[i], floorOrigins[i], 1.0, col)
 			rl.DrawBoundingBox(floorBoundingBoxes[i], rl.Fade(rl.LightGray, 0.7))
 		}
-
-		for i := range safeOrangeBoxCount {
-			pos := safeOrangeBoxPositions[i]
-			size := safeOrangeBoxSizes[i]
-			rl.DrawCubeV(pos, size, rl.Fade(rl.Orange, 1.0))
-			rl.DrawCubeWiresV(pos, size, rl.Fade(rl.Gold, 1.0))
+		for i := range unsafeDischargeSphereCount {
+			rl.DrawSphere(unsafeDischargeSpherePositions[i], unsafeRedSphereSizes[i], rl.Gold)
+			rl.DrawSphereWires(unsafeDischargeSpherePositions[i], unsafeRedSphereSizes[i], 8, 8, rl.Orange)
 		}
-
-		for i := range unsafeRedSphereCount {
-			rl.DrawSphere(unsafeRedSpherePositions[i], unsafeRedSphereSizes[i], rl.Red)
-			rl.DrawSphereWires(unsafeRedSpherePositions[i], unsafeRedSphereSizes[i], 8, 8, rl.Maroon)
+		for i := range safeRechargeBoxCount {
+			pos := safeRechargeBoxPositions[i]
+			size := safeRechargeBoxSizes[i]
+			rl.DrawCubeV(pos, size, rl.Fade(rl.Green, 1.0))
+			rl.DrawCubeWiresV(pos, size, rl.Fade(rl.DarkGreen, 1.0))
+		}
+		for i := range jumppadBoxCount {
+			pos := jumppadBoxPositions[i]
+			size := jumppadBoxSizes[i]
+			rl.DrawCubeV(pos, size, rl.Fade(rl.Red, 1.0))
+			rl.DrawCubeWiresV(pos, size, rl.Fade(rl.Maroon, 1.0))
 		}
 
 		// Draw player
