@@ -26,7 +26,7 @@ func main() {
 	const arenaWidth = float32(10) * math.Phi             // X
 	const arenaLength = float32(10) * math.Phi * math.Phi // Z
 
-	const arenaWallHeight = 2
+	const arenaWallHeight = 1
 
 	camera := rl.Camera{}
 	camera.Position = rl.NewVector3(0.0, arenaWidth, arenaLength)
@@ -67,7 +67,7 @@ func main() {
 	enemyBoxSize := rl.NewVector3(2.0, 2.0, 2.0)
 	if true {
 		enemyBoxPos = rl.NewVector3(-4.0, 1.0, 4.0)
-		enemyBoxSize = rl.NewVector3(5, 2.0, 5)
+		enemyBoxSize = rl.NewVector3(5, 2.0/2, 5)
 	}
 
 	enemySpherePos := rl.NewVector3(4.0, 0.0, 0.0)
@@ -102,12 +102,12 @@ func main() {
 	isCollision := false
 	isOOBCollision := false
 
-	martianManhunterTriggerFactor := float32(0.0)
-	const maxMartianManhunterTriggerFactor = 45.0
+	// martianManhunterTriggerFactor := float32(0.0)
+	// const maxMartianManhunterTriggerFactor = 45.0
 
-	isMartianManhunter := false
-	martianManhunterFramesCounter := int32(0)
-	maxMartianManhunterFramesCounter := int32(4 * fps)
+	// isMartianManhunter := false
+	// martianManhunterFramesCounter := int32(0)
+	// maxMartianManhunterFramesCounter := int32(2 * fps)
 
 	framesCounter := 0
 
@@ -174,6 +174,8 @@ func main() {
 			}
 			if shieldProgress <= 0 {
 				playerPosition = rl.Vector3Zero() // Gameover
+				playerAirTimer = 0
+				playerVelocity = rl.Vector3Zero()
 			}
 
 			frameMovement := rl.Vector3Add(playerMovementThisFrame, playerVelocity)
@@ -276,46 +278,55 @@ func main() {
 		const offsetTrigger = 2.0
 		if isCollision || isOOBCollision {
 			playerColor = rl.DarkGray
-			martianManhunterTriggerFactor += (float32(rl.GetRandomValue(-offsetTrigger, offsetTrigger)) / offsetTrigger * 2) / (2 * math.Pi) // Screenshake
+			// martianManhunterTriggerFactor += (float32(rl.GetRandomValue(-offsetTrigger, offsetTrigger)) / offsetTrigger * 2) / (2 * math.Pi) // Screenshake
 		} else {
 			playerColor = rl.Fade(rl.Black, 0.9)
-			martianManhunterTriggerFactor = maxMartianManhunterTriggerFactor
+			// martianManhunterTriggerFactor = maxMartianManhunterTriggerFactor
 		}
 		if isCollision {
-			deltaFovy := 45 - martianManhunterTriggerFactor
-			deltaFovy = float32(math.Abs(float64(deltaFovy)))
-			alpha := deltaFovy * deltaFovy
-			if deltaFovy != 0 && alpha < 0.0001*offsetTrigger {
-				isMartianManhunter = true
-			}
-			if isMartianManhunter {
-				playerPosition = rl.Vector3Lerp(playerPosition, oldPlayerPos, 0.8)
-			} else {
-				if isStuck := !isMartianManhunter && martianManhunterTriggerFactor != maxMartianManhunterTriggerFactor; isStuck {
-					playerPosition = rl.Vector3Lerp(playerPosition, oldPlayerPos, 1-alpha)
-				} else {
-					playerPosition = oldPlayerPos
-				}
-			}
+
+			// deltaFovy := 45 - martianManhunterTriggerFactor
+			// deltaFovy = float32(math.Abs(float64(deltaFovy)))
+			// alpha := deltaFovy * deltaFovy
+			// if deltaFovy != 0 && alpha < 0.0001*offsetTrigger {
+			// 	isMartianManhunter = true
+			// }
+			// if isMartianManhunter {
+			// 	playerPosition = rl.Vector3Lerp(playerPosition, oldPlayerPos, 0.9)
+			// } else {
+			// 	if isStuck := !isMartianManhunter && martianManhunterTriggerFactor != maxMartianManhunterTriggerFactor; isStuck {
+			// 		// playerPosition = rl.Vector3Lerp(playerPosition, oldPlayerPos, 1-alpha)
+			// 		playerPosition = rl.Vector3Lerp(playerPosition, oldPlayerPos, 1.0125)
+			// 	} else {
+			// 		playerPosition = oldPlayerPos
+			// 	}
+			// }
+			playerPosition = oldPlayerPos
 		}
 		if false {
 			if isOOBCollision {
 				playerPosition = oldPlayerPos
 			}
 		}
-		if martianManhunterFramesCounter > maxMartianManhunterFramesCounter {
-			isMartianManhunter = false
-		}
-		if isMartianManhunter {
-			martianManhunterFramesCounter++
-		} else if martianManhunterFramesCounter > 0 {
-			martianManhunterFramesCounter--
-			if martianManhunterFramesCounter <= 0 {
-				martianManhunterFramesCounter = 0
-			}
-		}
-
+		// if martianManhunterFramesCounter > maxMartianManhunterFramesCounter {
+		// 	isMartianManhunter = false
+		// }
+		// if isMartianManhunter {
+		// 	martianManhunterFramesCounter++
+		// } else if martianManhunterFramesCounter > 0 {
+		// 	martianManhunterFramesCounter--
+		// 	if martianManhunterFramesCounter <= 0 {
+		// 		martianManhunterFramesCounter = 0
+		// 	}
+		// }
+		//
 		if playerCollisionsThisFrame.X == 1 || playerCollisionsThisFrame.Z == 1 {
+			shieldProgress -= 0.1 / float32(fps)
+		}
+		if isOOBCollision {
+			shieldProgress -= 0.1 / float32(fps)
+		}
+		if isCollision {
 			shieldProgress -= 0.1 / float32(fps)
 		}
 
@@ -355,8 +366,8 @@ func main() {
 		}
 
 		// Draw enemy-box
-		rl.DrawCube(enemyBoxPos, enemyBoxSize.X, enemyBoxSize.Y, enemyBoxSize.Z, rl.Black)
-		rl.DrawCubeWires(enemyBoxPos, enemyBoxSize.X, enemyBoxSize.Y, enemyBoxSize.Z, rl.Black)
+		rl.DrawCube(enemyBoxPos, enemyBoxSize.X, enemyBoxSize.Y, enemyBoxSize.Z, rl.Fade(rl.Black, 1.0))
+		rl.DrawCubeWires(enemyBoxPos, enemyBoxSize.X, enemyBoxSize.Y, enemyBoxSize.Z, rl.Fade(rl.Black, 1.0))
 
 		// Draw enemy-sphere
 		rl.DrawSphere(enemySpherePos, enemySphereSize, rl.Black)
@@ -367,14 +378,14 @@ func main() {
 			playerRadius := playerSize.X / 2
 			startPos := rl.NewVector3(playerPosition.X, playerPosition.Y-playerSize.Y/2+playerRadius, playerPosition.Z)
 			endPos := rl.NewVector3(playerPosition.X, playerPosition.Y+playerSize.Y/2-playerRadius, playerPosition.Z)
-			if martianManhunterFramesCounter > 0 {
-				alpha := float32(martianManhunterFramesCounter / maxMartianManhunterFramesCounter)
-				rl.DrawCubeV(playerPosition, playerSize, rl.Fade(playerColor, 0.5+alpha/4))
-				rl.DrawCapsule(startPos, endPos, playerRadius, 16, 16, rl.Fade(playerColor, 0.5+alpha/4))
-			} else {
-				rl.DrawCapsule(startPos, endPos, playerRadius, 16, 16, rl.Black)
-				rl.DrawCapsuleWires(startPos, endPos, playerRadius, 4, 6, rl.Fade(rl.DarkGray, 0.8))
-			}
+			// if martianManhunterFramesCounter > 0 {
+			// 	alpha := float32(martianManhunterFramesCounter / maxMartianManhunterFramesCounter)
+			// 	rl.DrawCubeV(playerPosition, playerSize, rl.Fade(playerColor, 0.5+alpha/4))
+			// 	rl.DrawCapsule(startPos, endPos, playerRadius, 16, 16, rl.Fade(playerColor, 0.5+alpha/4))
+			// } else {
+			rl.DrawCapsule(startPos, endPos, playerRadius, 16, 16, playerColor)
+			rl.DrawCapsuleWires(startPos, endPos, playerRadius, 4, 6, rl.ColorLerp(playerColor, rl.Fade(rl.DarkGray, 0.8), 0.5))
+			// }
 		}
 
 		// Draw prop sphere
@@ -397,11 +408,11 @@ func main() {
 		rl.DrawText("Shield", 10+5, 21+20, 20, rl.White)
 		rl.DrawText(fmt.Sprintf("%.0f", shieldProgress*100), 90+5, 20+20+5*2, 10, rl.White)
 
-		rl.DrawRectangle(10, 20+20+20, 100, 20, rl.Fade(rl.Black, 0.9))
-		depthPercent := (1 - (float32(martianManhunterFramesCounter) / float32(maxMartianManhunterFramesCounter)))
-		rl.DrawRectangleV(rl.Vector2{X: 10, Y: 20 + 20 + 20}, rl.Vector2{X: 100 * depthPercent, Y: 20}, rl.DarkGray)
-		rl.DrawText("Depth", 10+5, 20+20+20, 20, rl.White)
-		rl.DrawText(fmt.Sprintf("%.0f", depthPercent*100), 90+5, 20+20+20+5*2, 10, rl.White)
+		// rl.DrawRectangle(10, 20+20+20, 100, 20, rl.Fade(rl.Black, 0.9))
+		// depthPercent := (1 - (float32(martianManhunterFramesCounter) / float32(maxMartianManhunterFramesCounter)))
+		// rl.DrawRectangleV(rl.Vector2{X: 10, Y: 20 + 20 + 20}, rl.Vector2{X: 100 * depthPercent, Y: 20}, rl.DarkGray)
+		// rl.DrawText("Depth", 10+5, 20+20+20, 20, rl.White)
+		// rl.DrawText(fmt.Sprintf("%.0f", depthPercent*100), 90+5, 20+20+20+5*2, 10, rl.White)
 
 		rl.DrawFPS(10, int32(rl.GetScreenHeight())-25)
 
