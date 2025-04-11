@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/gen2brain/raylib-go/easings"
 	_ "github.com/gen2brain/raylib-go/easings"
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -135,6 +136,7 @@ func main() {
 	const platformThick = 0.25
 	var platformBoundingBoxes []rl.BoundingBox
 	var platformOrigins []rl.Vector3
+	var platformDefaultOrigins []rl.Vector3
 	var platformModels []rl.Model
 	var platformMeshes []rl.Mesh
 	var platformSizes []rl.Vector3
@@ -148,6 +150,7 @@ func main() {
 			rl.NewVector3(origin.X+size.X/2, origin.Y+size.Y/2, origin.Z+size.Z/2),
 		)
 		platformOrigins = append(platformOrigins, origin)
+		platformDefaultOrigins = append(platformDefaultOrigins, origin)
 		platformBoundingBoxes = append(platformBoundingBoxes, box)
 		platformModels = append(platformModels, model)
 		platformMeshes = append(platformMeshes, mesh)
@@ -283,6 +286,8 @@ func main() {
 		}
 
 		// Update
+
+		dt := rl.GetFrameTime() // Same as 1/float32(fps) if fps was consistent
 
 		// HACK: Store previous position to reuse as next postion on collision (quick position resets)
 		oldPlayerPos := playerPosition
@@ -440,9 +445,9 @@ func main() {
 		case isOOBCollision:
 			playerColor = rl.DarkGray
 		case isSafeSpotCollision:
-			playerColor = rl.Fade(rl.Green, 0.9)
+			playerColor = rl.Lime
 		case isUnsafeCollision:
-			playerColor = rl.DarkPurple
+			playerColor = rl.Orange
 		case isWallCollision:
 			playerColor = rl.Fade(rl.Brown, 0.9) // TODO: Figure out how to make player wall slide
 		case isFloorCollision:
@@ -452,7 +457,9 @@ func main() {
 		}
 
 		// Update progress on collision, air-time, ...
-		progressRate := 0.1 / float32(fps)
+		const progressRateDecay = 0.08            // Slows down change in frame time
+		var progressRate = dt * progressRateDecay // Rate of change in this world for aethetic taste
+
 		if isUnsafeCollision {
 			shieldProgress -= progressRate
 		}
@@ -506,12 +513,22 @@ func main() {
 			rl.DrawBoundingBox(floorBoundingBoxes[i], rl.Black)
 		}
 
+		// Draw interact-able objects
 		for i := range platformCount {
-			rl.DrawModel(platformModels[i], platformOrigins[i], 1.0, rl.SkyBlue)
-			rl.DrawBoundingBox(platformBoundingBoxes[i], rl.DarkBlue)
+			const maxAmplitude = 8                                         // Distance traveled
+			t := float32(framesCounter)                                    // Current Time
+			b := platformDefaultOrigins[i].Y + maxAmplitude/2              // Top (Beginning)
+			c := platformDefaultOrigins[i].Y - maxAmplitude - progressRate // Bottom (Change)
+			d := float32(fps) * 4                                          // Duration
+			y := easings.SineInOut(t, b, c, d)
+			platformBoundingBoxes[i].Min.Y = y
+			platformBoundingBoxes[i].Max.Y = y
+			platformOrigins[i].Y = y
+			rl.DrawCubeV(platformDefaultOrigins[i], rl.NewVector3(platformThick, maxAmplitude, platformThick), rl.LightGray) // Reference (y axis)
+			rl.DrawPlane(platformDefaultOrigins[i], rl.NewVector2(1, 1), rl.LightGray)                                       // Reference (midpoint)
+			rl.DrawModel(platformModels[i], platformOrigins[i], 1.0, rl.SkyBlue)                                             // Moving
+			rl.DrawBoundingBox(platformBoundingBoxes[i], rl.DarkBlue)                                                        // Outline
 		}
-
-		// Draw interactable objects
 		for i := range unsafeDischargeSphereCount {
 			rl.DrawSphere(unsafeDischargeSpherePositions[i], unsafeRedSphereSizes[i], rl.Gold)
 			rl.DrawSphereWires(unsafeDischargeSpherePositions[i], unsafeRedSphereSizes[i], 8, 8, rl.Orange)
@@ -542,7 +559,7 @@ func main() {
 
 		// Draw destination prop sphere
 		if true {
-			centerPos := rl.NewVector3(0, -sphereModelRadius-arenaWidth, -sphereModelRadius*2-arenaLength)
+			centerPos := rl.NewVector3(0, -sphereModelRadius-arenaWidth*(8/4), -sphereModelRadius*2-arenaLength*3)
 			rl.DrawSphere(centerPos, sphereModelRadius-0.02, rl.Fade(rl.LightGray, 0.5))
 			rl.DrawModelEx(sphereModel, centerPos, rl.NewVector3(0, -1, 0), float32(framesCounter), rl.NewVector3(1, 1, 1), rl.White)
 		}
@@ -565,6 +582,16 @@ func main() {
 		rl.DrawText(fmt.Sprintf("%.0f", shieldProgress*100), 90+5, 20+20+5*2, 10, rl.White)
 
 		rl.DrawFPS(10, int32(rl.GetScreenHeight())-25)
+
+		// Quick debug zone
+		{
+			for i := range platformCount {
+				_ = i
+				f := rl.Clamp(SinF(2.0*float32(framesCounter)*1.0/float32(fps)), -1, 1)
+				rl.DrawText(fmt.Sprintln(f), 0, 0, 10, rl.Red)
+			}
+
+		}
 
 		rl.EndDrawing()
 	}
@@ -597,6 +624,7 @@ func CosF[T NumberType](x T) float32      { return float32(math.Cos(float64(x)))
 func SinF[T NumberType](x T) float32      { return float32(math.Sin(float64(x))) }
 func FloorF[T NumberType](x T) float32    { return float32(math.Floor(float64(x))) }
 func CeilF[T NumberType](x T) float32     { return float32(math.Ceil(float64(x))) }
+func SignF[T NumberType](x T) float32     { return cmp.Or(float32(math.Abs(float64(x))/float64(x)), 0) }
 
 func manhattanV2(a, b rl.Vector2) float32 { return AbsF(b.X-a.X) + AbsF(b.Y-a.Y) }
 func manhattanV3(a, b rl.Vector3) float32 { return AbsF(b.X-a.X) + AbsF(b.Y-a.Y) + AbsF(b.Z-a.Z) }
