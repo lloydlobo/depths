@@ -91,11 +91,15 @@ func main() {
 		}
 	}
 
-	const floorThick = 1
-	floorOrigin := rl.NewVector3(0, -1, 0)
-	floorMesh := rl.GenMeshPlane(arenaWidth, arenaLength, 3, 3)
+	const floorThick = 0.5 * 2
+	floorOrigin := rl.NewVector3(0, playerPosition.Y-playerSize.Y/2-floorThick/2, 0)
+	// floorMesh := rl.GenMeshPlane(arenaWidth, arenaLength, 3, 3)
+	floorBoundingBox := rl.NewBoundingBox(
+		rl.NewVector3(-arenaWidth/2, floorOrigin.Y-floorThick/2, -arenaLength/2),
+		rl.NewVector3(arenaWidth/2, floorOrigin.Y+floorThick/2, arenaLength/2),
+	)
+	floorMesh := rl.GenMeshCube(arenaWidth, floorThick, arenaLength)
 	floorModel := rl.LoadModelFromMesh(floorMesh)
-	floorBoundingBox := rl.NewBoundingBox(rl.NewVector3(-arenaWidth/2, floorOrigin.Y, -arenaLength/2), rl.NewVector3(arenaWidth/2, floorOrigin.Y+floorThick, arenaLength/2))
 	_ = floorModel
 	_ = floorBoundingBox
 
@@ -311,13 +315,10 @@ func main() {
 		}
 
 		// Draw floor
-		rl.DrawCubeV(rl.NewVector3(floorOrigin.X, floorOrigin.Y-0.125, floorOrigin.Z), rl.NewVector3(arenaWidth, 2.0, arenaLength), rl.Fade(rl.White, 0.125/2))
-		rl.DrawCubeWiresV(floorOrigin, rl.NewVector3(arenaWidth, 2.0, arenaLength), rl.Fade(rl.LightGray, 0.7))
-		rl.DrawBoundingBox(floorBoundingBox, rl.Fade(rl.LightGray, 0.7))
-		rl.DrawModel(floorModel, rl.NewVector3(floorOrigin.X, floorOrigin.Y+1, floorOrigin.Z), 1.0, rl.Fade(rl.White, 0.9))
-		if false {
-			rl.DrawPlane(rl.NewVector3(floorOrigin.X, floorOrigin.Y, floorOrigin.Z), rl.NewVector2(arenaWidth, arenaLength), rl.Fade(rl.White, 0.3))
-		}
+		// rl.DrawCubeV(rl.NewVector3(floorOrigin.X, floorOrigin.Y-0.125, floorOrigin.Z), rl.NewVector3(arenaWidth, 2.0, arenaLength), rl.Fade(rl.ColorLerp(rl.Red, rl.White, shieldProgress), 0.125/2))
+		// rl.DrawCubeWiresV(floorOrigin, rl.NewVector3(arenaWidth, 2.0, arenaLength), rl.Fade(rl.LightGray, 0.7))
+		rl.DrawModel(floorModel, rl.NewVector3(floorOrigin.X, floorOrigin.Y, floorOrigin.Z), 1.0, rl.Fade(rl.ColorLerp(rl.Red, rl.White, shieldProgress), 0.6))
+		rl.DrawBoundingBox(floorBoundingBox, rl.Fade(rl.Orange, 0.7))
 
 		// Draw enemy-box
 		rl.DrawCube(enemyBoxPos, enemyBoxSize.X, enemyBoxSize.Y, enemyBoxSize.Z, rl.Fade(rl.Black, 1.0))
@@ -331,6 +332,7 @@ func main() {
 		playerRadius := playerSize.X / 2
 		playerStartPos := rl.NewVector3(playerPosition.X, playerPosition.Y-playerSize.Y/2+playerRadius, playerPosition.Z)
 		playerEndPos := rl.NewVector3(playerPosition.X, playerPosition.Y+playerSize.Y/2-playerRadius, playerPosition.Z)
+		rl.DrawCubeV(playerPosition, playerSize, playerColor)
 		rl.DrawCapsule(playerStartPos, playerEndPos, playerRadius, 16, 16, playerColor)
 		rl.DrawCapsuleWires(playerStartPos, playerEndPos, playerRadius, 4, 6, rl.ColorLerp(playerColor, rl.Fade(rl.DarkGray, 0.8), 0.5))
 
@@ -340,10 +342,11 @@ func main() {
 			rl.DrawModelEx(sphereModel, rl.NewVector3(0, -sphereModelRadius, -sphereModelRadius*2), rl.NewVector3(0, -1, 0), float32(framesCounter), rl.NewVector3(1, 1, 1), rl.White)
 		}
 
-		// rl.DrawGrid(4*int32(MaxF(arenaWidth, arenaLength)), 1/4.0)
+		rl.DrawGrid(4*int32(MinF(arenaWidth, arenaLength)), 1/4.0)
 
 		rl.EndMode3D()
 
+		// Draw HUD
 		rl.DrawRectangle(10, 20, 100, 20, rl.Fade(rl.Black, 0.9))
 		rl.DrawRectangleV(rl.Vector2{X: 10, Y: 20}, rl.Vector2{X: fuelProgress * 100, Y: 20}, rl.DarkGray)
 		rl.DrawText("Fuel", 10+5, 21, 20, rl.White)
@@ -353,12 +356,6 @@ func main() {
 		rl.DrawRectangleV(rl.Vector2{X: 10, Y: 20 + 20}, rl.Vector2{X: shieldProgress * 100, Y: 20}, rl.DarkGray)
 		rl.DrawText("Shield", 10+5, 21+20, 20, rl.White)
 		rl.DrawText(fmt.Sprintf("%.0f", shieldProgress*100), 90+5, 20+20+5*2, 10, rl.White)
-
-		// rl.DrawRectangle(10, 20+20+20, 100, 20, rl.Fade(rl.Black, 0.9))
-		// depthPercent := (1 - (float32(martianManhunterFramesCounter) / float32(maxMartianManhunterFramesCounter)))
-		// rl.DrawRectangleV(rl.Vector2{X: 10, Y: 20 + 20 + 20}, rl.Vector2{X: 100 * depthPercent, Y: 20}, rl.DarkGray)
-		// rl.DrawText("Depth", 10+5, 20+20+20, 20, rl.White)
-		// rl.DrawText(fmt.Sprintf("%.0f", depthPercent*100), 90+5, 20+20+20+5*2, 10, rl.White)
 
 		rl.DrawFPS(10, int32(rl.GetScreenHeight())-25)
 
