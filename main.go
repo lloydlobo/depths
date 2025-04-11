@@ -66,7 +66,7 @@ func main() {
 	maxPlayerAirTime := float32(fps) / 2.0
 	maxPlayerOOBAirTime := maxPlayerAirTime * 3
 	const movementMagnitude = float32(0.2)
-	const playerJumpVelocity = 3
+	const playerJumpVelocity = 16 // 3
 	const terminalVelocityY = 5
 	// # if max: 0.1333333333.. (makes jumping possible to 3x player height) # else use min for easy floaty feel
 	// self._terminal_limiter_air_friction: Final = max(0.1, ((pre.TILE_SIZE * 0.5) / (pre.FPS_CAP)))
@@ -344,9 +344,11 @@ func main() {
 		if rl.CheckCollisionBoxSphere(playerBox, enemySpherePos, enemySphereSize) {
 			isCollision = true
 		}
-		for i := range walls {
-			if !isWallCollision && rl.CheckCollisionBoxes(playerBox, walls[i]) {
-				isWallCollision = true
+		if false {
+			for i := range walls {
+				if !isWallCollision && rl.CheckCollisionBoxes(playerBox, walls[i]) {
+					isWallCollision = true
+				}
 			}
 		}
 
@@ -386,22 +388,24 @@ func main() {
 
 		rl.BeginDrawing()
 
-		rl.ClearBackground(rl.RayWhite)
+		rl.ClearBackground(rl.Gray)
 
 		rl.BeginMode3D(camera)
 
 		// Draw walls
-		for i := range walls {
-			max := walls[i].Max
-			min := walls[i].Min
-			const t = 1 / 2 // Interpolate t==1/2
-			size := rl.NewVector3(max.X-min.X, max.Y-min.Y, max.Z-min.Z)
-			origin := rl.NewVector3(min.X+t*(max.X-min.X), min.Y+t*(max.Y-min.Y), min.Z+t*(max.Z-min.Z))
-			rl.DrawCubeV(origin, size, rl.Fade(rl.White, 0.125/2))
-			rl.DrawBoundingBox(walls[i], rl.Fade(rl.LightGray, 0.4))
+		if false {
+			for i := range walls {
+				max := walls[i].Max
+				min := walls[i].Min
+				const t = 1 / 2 // Interpolate t==1/2
+				size := rl.NewVector3(max.X-min.X, max.Y-min.Y, max.Z-min.Z)
+				origin := rl.NewVector3(min.X+t*(max.X-min.X), min.Y+t*(max.Y-min.Y), min.Z+t*(max.Z-min.Z))
+				rl.DrawCubeV(origin, size, rl.Fade(rl.White, 0.125/2))
+				rl.DrawBoundingBox(walls[i], rl.Fade(rl.LightGray, 0.4))
+			}
 		}
 
-		// Draw floor
+		// Draw floors
 		for i := range floorCount {
 			col := rl.ColorLerp(rl.Fade(rl.RayWhite, PowF(shieldProgress, 0.33)), rl.White, SqrtF(shieldProgress))
 			rl.DrawModel(floorModels[i], floorOrigins[i], 1.0, col)
