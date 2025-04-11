@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"fmt"
 	"math"
 
@@ -19,20 +20,30 @@ func main() {
 	screenWidth = int32(rl.GetScreenWidth())
 	screenHeight = int32(rl.GetScreenHeight())
 
-	rl.SetConfigFlags(rl.FlagMsaa4xHint | rl.FlagWindowResizable)
-	rl.InitWindow(screenWidth, screenHeight, "raylib [models] example - box collisions")
+	rl.SetConfigFlags(rl.FlagMsaa4xHint | rl.FlagWindowResizable)                        // Config flags must be set before InitWindow
+	rl.InitWindow(screenWidth, screenHeight, "raylib [models] example - box collisions") // Initialize Window and OpenGL Graphics
+	rl.SetWindowState(rl.FlagVsyncHint | rl.FlagInterlacedHint | rl.FlagWindowHighdpi)   // Window state must be set after InitWindow
+
 	// rl.ToggleFullscreen()
+	rl.SetWindowMinSize(800, 450) // Prevents my window manager shrinking this to 2x1 units window size
 
-	const arenaWidth = float32(10) * math.Phi             // X
-	const arenaLength = float32(10) * math.Phi * math.Phi // Z
-	const arenaWallHeight = 1
+	const (
+		arenaWallHeight  = 1
+		arenaWidth       = float32(20) * math.Phi // X
+		arenaLength      = float32(20) * 1        // Z
+		arenaWidthRatio  = (arenaWidth / (arenaWidth + arenaLength))
+		arenaLengthRatio = (arenaLength / (arenaWidth + arenaLength))
+		camPosW          = (arenaWidth * (math.Phi + arenaLengthRatio)) * (1 - OneMinusInvMathPhi)
+		camPosL          = (arenaLength * (math.Phi + arenaWidthRatio)) * (1 - OneMinusInvMathPhi)
+	)
 
-	camera := rl.Camera{}
-	camera.Position = rl.NewVector3(0.0, arenaWidth, arenaLength)
-	camera.Target = rl.NewVector3(0.0, -1.0, 0.0)
-	camera.Up = rl.NewVector3(0.0, 1.0, 0.0)
-	camera.Fovy = 45.0
-	camera.Projection = rl.CameraPerspective
+	camera := rl.Camera{
+		Position:   rl.NewVector3(0.0, camPosW, camPosL),
+		Target:     rl.NewVector3(0.0, -1.0, 0.0),
+		Up:         rl.NewVector3(0.0, 1.0, 0.0),
+		Fovy:       float32(cmp.Or(45.0, 60.0, 30.0)),
+		Projection: rl.CameraPerspective,
+	}
 
 	const sphereModelRadius = arenaWidth / math.Phi
 	sphereMesh := rl.GenMeshSphere(sphereModelRadius, 16, 16)
@@ -91,17 +102,93 @@ func main() {
 		}
 	}
 
+	// Setup floors
+	floorCount := 0
 	const floorThick = 0.5 * 2
-	floorOrigin := rl.NewVector3(0, playerPosition.Y-playerSize.Y/2-floorThick/2, 0)
-	// floorMesh := rl.GenMeshPlane(arenaWidth, arenaLength, 3, 3)
-	floorBoundingBox := rl.NewBoundingBox(
-		rl.NewVector3(-arenaWidth/2, floorOrigin.Y-floorThick/2, -arenaLength/2),
-		rl.NewVector3(arenaWidth/2, floorOrigin.Y+floorThick/2, arenaLength/2),
-	)
-	floorMesh := rl.GenMeshCube(arenaWidth, floorThick, arenaLength)
-	floorModel := rl.LoadModelFromMesh(floorMesh)
-	_ = floorModel
-	_ = floorBoundingBox
+	var floorBoundingBoxes []rl.BoundingBox
+	var floorOrigins []rl.Vector3
+	var floorModels []rl.Model
+	var floorMeshes []rl.Mesh
+	{
+		origin := rl.NewVector3(0, (playerPosition.Y-playerSize.Y/2)-(floorThick/2), 0)
+
+		mesh := rl.GenMeshCube(arenaWidth, floorThick, arenaLength)
+		model := rl.LoadModelFromMesh(mesh)
+		box := rl.NewBoundingBox(
+			rl.NewVector3(origin.X-arenaWidth/2, origin.Y-floorThick/2, origin.Z-arenaLength/2),
+			rl.NewVector3(origin.X+arenaWidth/2, origin.Y+floorThick/2, origin.Z+arenaLength/2),
+		)
+
+		floorOrigins = append(floorOrigins, origin)
+		floorBoundingBoxes = append(floorBoundingBoxes, box)
+		floorModels = append(floorModels, model)
+		floorMeshes = append(floorMeshes, mesh)
+		floorCount++
+	}
+	{
+		origin := rl.NewVector3(arenaWidth/math.Phi, (playerPosition.Y-playerSize.Y/2)-(floorThick/2)-arenaWidth*1, arenaLength/8)
+
+		mesh := rl.GenMeshCube(arenaWidth, floorThick, arenaLength)
+		model := rl.LoadModelFromMesh(mesh)
+		box := rl.NewBoundingBox(
+			rl.NewVector3(origin.X-arenaWidth/2, origin.Y-floorThick/2, origin.Z-arenaLength/2),
+			rl.NewVector3(origin.X+arenaWidth/2, origin.Y+floorThick/2, origin.Z+arenaLength/2),
+		)
+
+		floorOrigins = append(floorOrigins, origin)
+		floorBoundingBoxes = append(floorBoundingBoxes, box)
+		floorModels = append(floorModels, model)
+		floorMeshes = append(floorMeshes, mesh)
+		floorCount++
+	}
+	{
+		origin := rl.NewVector3(-3*arenaWidth/4, (playerPosition.Y-playerSize.Y/2)-(floorThick/2)-(playerSize.Y*1), (arenaLength/1)+(playerSize.Z*2))
+
+		mesh := rl.GenMeshCube(arenaWidth, floorThick, arenaLength)
+		model := rl.LoadModelFromMesh(mesh)
+		box := rl.NewBoundingBox(
+			rl.NewVector3(origin.X-arenaWidth/2, origin.Y-floorThick/2, origin.Z-arenaLength/2),
+			rl.NewVector3(origin.X+arenaWidth/2, origin.Y+floorThick/2, origin.Z+arenaLength/2),
+		)
+
+		floorOrigins = append(floorOrigins, origin)
+		floorBoundingBoxes = append(floorBoundingBoxes, box)
+		floorModels = append(floorModels, model)
+		floorMeshes = append(floorMeshes, mesh)
+		floorCount++
+	}
+	{
+		origin := rl.NewVector3(3*arenaWidth/4, (playerPosition.Y-playerSize.Y/2-floorThick/2)-arenaWidth/2, -4*arenaLength/3.5)
+
+		mesh := rl.GenMeshCube(arenaWidth, floorThick, arenaLength)
+		model := rl.LoadModelFromMesh(mesh)
+		box := rl.NewBoundingBox(
+			rl.NewVector3(origin.X-arenaWidth/2, origin.Y-floorThick/2, origin.Z-arenaLength/2),
+			rl.NewVector3(origin.X+arenaWidth/2, origin.Y+floorThick/2, origin.Z+arenaLength/2),
+		)
+
+		floorOrigins = append(floorOrigins, origin)
+		floorBoundingBoxes = append(floorBoundingBoxes, box)
+		floorModels = append(floorModels, model)
+		floorMeshes = append(floorMeshes, mesh)
+		floorCount++
+	}
+	{
+		origin := rl.NewVector3(-2*arenaWidth/3, (playerPosition.Y-playerSize.Y/2)-(floorThick/2)-((arenaWidth/2)+(playerSize.Y*4)), (-arenaLength/2)+(playerSize.Z*2))
+
+		mesh := rl.GenMeshCube(arenaWidth, floorThick, arenaLength)
+		model := rl.LoadModelFromMesh(mesh)
+		box := rl.NewBoundingBox(
+			rl.NewVector3(origin.X-arenaWidth/2, origin.Y-floorThick/2, origin.Z-arenaLength/2),
+			rl.NewVector3(origin.X+arenaWidth/2, origin.Y+floorThick/2, origin.Z+arenaLength/2),
+		)
+
+		floorOrigins = append(floorOrigins, origin)
+		floorBoundingBoxes = append(floorBoundingBoxes, box)
+		floorModels = append(floorModels, model)
+		floorMeshes = append(floorMeshes, mesh)
+		floorCount++
+	}
 
 	isCollision := false
 	isOOBCollision := false
@@ -187,19 +274,16 @@ func main() {
 			if isTouchZPlaneEdges := playerPosition.Z-playerSize.Z/2 < -arenaLength/2 || playerPosition.Z+playerSize.Z/2 > arenaLength/2; isTouchZPlaneEdges {
 				playerCollisionsThisFrame.Z = 1
 			}
-			// HACK: Gravity: Check if player is touching the infinite floor
-			if false {
-				isTouchFloor := playerPosition.Y+playerSize.Y/2 < 2
-				if isTouchFloor {
-					playerCollisionsThisFrame.W = 1
-				}
-			} else {
-				playerBox := rl.NewBoundingBox(
-					rl.NewVector3(playerPosition.X-playerSize.X/2, playerPosition.Y-playerSize.Y/2, playerPosition.Z-playerSize.Z/2),
-					rl.NewVector3(playerPosition.X+playerSize.X/2, playerPosition.Y+playerSize.Y/2, playerPosition.Z+playerSize.Z/2))
 
-				if rl.CheckCollisionBoxes(playerBox, floorBoundingBox) {
+			// Check if player is safely standing on the floor
+			playerBox := rl.NewBoundingBox(
+				rl.NewVector3(playerPosition.X-playerSize.X/2, playerPosition.Y-playerSize.Y/2, playerPosition.Z-playerSize.Z/2),
+				rl.NewVector3(playerPosition.X+playerSize.X/2, playerPosition.Y+playerSize.Y/2, playerPosition.Z+playerSize.Z/2))
+
+			for i := range floorCount {
+				if rl.CheckCollisionBoxes(playerBox, floorBoundingBoxes[i]) {
 					playerCollisionsThisFrame.W = 1
+					playerPosition.Y = playerSize.Y/2 + floorBoundingBoxes[i].Max.Y // HACK: Allow player to stand on the floor
 				}
 			}
 
@@ -214,7 +298,10 @@ func main() {
 				if playerAirTimer > 0 && playerJumpsLeft == 0 {
 				}
 				playerAirTimer = 0
-				playerPosition.Y = playerSize.Y / 2 // Fix to ground
+				// FIXME: Detect the floor the player is touching and get bounding box top offset from player bottom
+				if false {
+					playerPosition.Y = playerSize.Y / 2 // Fix to ground
+				}
 				playerJumpsLeft = 1
 			}
 			// Snappy bouncy jumps
@@ -315,10 +402,11 @@ func main() {
 		}
 
 		// Draw floor
-		// rl.DrawCubeV(rl.NewVector3(floorOrigin.X, floorOrigin.Y-0.125, floorOrigin.Z), rl.NewVector3(arenaWidth, 2.0, arenaLength), rl.Fade(rl.ColorLerp(rl.Red, rl.White, shieldProgress), 0.125/2))
-		// rl.DrawCubeWiresV(floorOrigin, rl.NewVector3(arenaWidth, 2.0, arenaLength), rl.Fade(rl.LightGray, 0.7))
-		rl.DrawModel(floorModel, rl.NewVector3(floorOrigin.X, floorOrigin.Y, floorOrigin.Z), 1.0, rl.Fade(rl.ColorLerp(rl.Red, rl.White, shieldProgress), 0.6))
-		rl.DrawBoundingBox(floorBoundingBox, rl.Fade(rl.Orange, 0.7))
+		for i := range floorCount {
+			col := rl.ColorLerp(rl.Fade(rl.RayWhite, PowF(shieldProgress, 0.33)), rl.White, SqrtF(shieldProgress))
+			rl.DrawModel(floorModels[i], floorOrigins[i], 1.0, col)
+			rl.DrawBoundingBox(floorBoundingBoxes[i], rl.Fade(rl.LightGray, 0.7))
+		}
 
 		// Draw enemy-box
 		rl.DrawCube(enemyBoxPos, enemyBoxSize.X, enemyBoxSize.Y, enemyBoxSize.Z, rl.Fade(rl.Black, 1.0))
@@ -342,7 +430,9 @@ func main() {
 			rl.DrawModelEx(sphereModel, rl.NewVector3(0, -sphereModelRadius, -sphereModelRadius*2), rl.NewVector3(0, -1, 0), float32(framesCounter), rl.NewVector3(1, 1, 1), rl.White)
 		}
 
-		rl.DrawGrid(4*int32(MinF(arenaWidth, arenaLength)), 1/4.0)
+		if false {
+			rl.DrawGrid(4*int32(MinF(arenaWidth, arenaLength)), 1/4.0)
+		}
 
 		rl.EndMode3D()
 
@@ -387,7 +477,14 @@ type NumberType OrderedNumber
 func MaxF[T NumberType](x T, y T) float32 { return float32(max(float64(x), float64(y))) }
 func MinF[T NumberType](x T, y T) float32 { return float32(min(float64(x), float64(y))) }
 func AbsF[T NumberType](x T) float32      { return float32(math.Abs(float64(x))) }
+func SqrtF[T NumberType](x T) float32     { return float32(math.Sqrt(float64(x))) }
+func PowF[T NumberType](x T, y T) float32 { return float32(math.Pow(float64(x), float64(y))) }
 
 func manhattanVector2(a, b rl.Vector2) float32 { return AbsF(b.X-a.X) + AbsF(b.Y-a.Y) }
 func manhattanVector3(a, b rl.Vector3) float32 { return AbsF(b.X-a.X) + AbsF(b.Y-a.Y) + AbsF(b.Z-a.Z) }
+
+const (
+	InvMathPhi         = 1 / math.Phi
+	OneMinusInvMathPhi = 1 - InvMathPhi
+)
 
