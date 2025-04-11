@@ -130,6 +130,31 @@ func main() {
 		}
 	}
 
+	// Setup moving platforms
+	platformCount := 0
+	const platformThick = 0.25
+	var platformBoundingBoxes []rl.BoundingBox
+	var platformOrigins []rl.Vector3
+	var platformModels []rl.Model
+	var platformMeshes []rl.Mesh
+	var platformSizes []rl.Vector3
+	{
+		origin := rl.NewVector3(11, (playerPosition.Y-playerSize.Y/2)-(platformThick/2)-1, -15)
+		size := rl.NewVector3(CeilF(playerSize.X*PowF(math.Phi, 4)), platformThick, CeilF(playerSize.Z*PowF(math.Phi, 4)))
+		mesh := rl.GenMeshCube(size.X, size.Y, size.Z)
+		model := rl.LoadModelFromMesh(mesh)
+		box := rl.NewBoundingBox(
+			rl.NewVector3(origin.X-size.X/2, origin.Y-size.Y/2, origin.Z-size.Z/2),
+			rl.NewVector3(origin.X+size.X/2, origin.Y+size.Y/2, origin.Z+size.Z/2),
+		)
+		platformOrigins = append(platformOrigins, origin)
+		platformBoundingBoxes = append(platformBoundingBoxes, box)
+		platformModels = append(platformModels, model)
+		platformMeshes = append(platformMeshes, mesh)
+		platformSizes = append(platformSizes, size)
+		platformCount++
+	}
+
 	// Setup floors
 	floorCount := 0
 	const floorThick = 0.5 * 2
@@ -478,8 +503,15 @@ func main() {
 		for i := range floorCount {
 			col := rl.ColorLerp(rl.Fade(rl.RayWhite, PowF(shieldProgress, 0.33)), rl.White, SqrtF(shieldProgress))
 			rl.DrawModel(floorModels[i], floorOrigins[i], 1.0, col)
-			rl.DrawBoundingBox(floorBoundingBoxes[i], rl.Fade(rl.LightGray, 0.7))
+			rl.DrawBoundingBox(floorBoundingBoxes[i], rl.Black)
 		}
+
+		for i := range platformCount {
+			rl.DrawModel(platformModels[i], platformOrigins[i], 1.0, rl.SkyBlue)
+			rl.DrawBoundingBox(platformBoundingBoxes[i], rl.DarkBlue)
+		}
+
+		// Draw interactable objects
 		for i := range unsafeDischargeSphereCount {
 			rl.DrawSphere(unsafeDischargeSpherePositions[i], unsafeRedSphereSizes[i], rl.Gold)
 			rl.DrawSphereWires(unsafeDischargeSpherePositions[i], unsafeRedSphereSizes[i], 8, 8, rl.Orange)
@@ -501,16 +533,18 @@ func main() {
 		playerRadius := playerSize.X / 2
 		playerStartPos := rl.NewVector3(playerPosition.X, playerPosition.Y-playerSize.Y/2+playerRadius, playerPosition.Z)
 		playerEndPos := rl.NewVector3(playerPosition.X, playerPosition.Y+playerSize.Y/2-playerRadius, playerPosition.Z)
-		if isDebug := false; isDebug {
-			rl.DrawCubeV(playerPosition, playerSize, playerColor)
-		}
 		rl.DrawCapsule(playerStartPos, playerEndPos, playerRadius, 16, 16, playerColor)
 		rl.DrawCapsuleWires(playerStartPos, playerEndPos, playerRadius, 4, 6, rl.ColorLerp(playerColor, rl.Fade(rl.DarkGray, 0.8), 0.5))
+		if isDebug := false; isDebug {
+			rl.DrawCubeV(playerPosition, playerSize, playerColor)
+			rl.DrawCubeWiresV(playerPosition, playerSize, playerColor)
+		}
 
-		// Draw prop sphere
-		if false {
-			rl.DrawSphere(rl.NewVector3(0, -sphereModelRadius, -sphereModelRadius*2), sphereModelRadius-0.02, rl.Fade(rl.LightGray, 0.5))
-			rl.DrawModelEx(sphereModel, rl.NewVector3(0, -sphereModelRadius, -sphereModelRadius*2), rl.NewVector3(0, -1, 0), float32(framesCounter), rl.NewVector3(1, 1, 1), rl.White)
+		// Draw destination prop sphere
+		if true {
+			centerPos := rl.NewVector3(0, -sphereModelRadius-arenaWidth, -sphereModelRadius*2-arenaLength)
+			rl.DrawSphere(centerPos, sphereModelRadius-0.02, rl.Fade(rl.LightGray, 0.5))
+			rl.DrawModelEx(sphereModel, centerPos, rl.NewVector3(0, -1, 0), float32(framesCounter), rl.NewVector3(1, 1, 1), rl.White)
 		}
 
 		if false {
@@ -561,6 +595,8 @@ func PowF[T NumberType](x T, y T) float32 { return float32(math.Pow(float64(x), 
 func SqrtF[T NumberType](x T) float32     { return float32(math.Sqrt(float64(x))) }
 func CosF[T NumberType](x T) float32      { return float32(math.Cos(float64(x))) }
 func SinF[T NumberType](x T) float32      { return float32(math.Sin(float64(x))) }
+func FloorF[T NumberType](x T) float32    { return float32(math.Floor(float64(x))) }
+func CeilF[T NumberType](x T) float32     { return float32(math.Ceil(float64(x))) }
 
 func manhattanV2(a, b rl.Vector2) float32 { return AbsF(b.X-a.X) + AbsF(b.Y-a.Y) }
 func manhattanV3(a, b rl.Vector3) float32 { return AbsF(b.X-a.X) + AbsF(b.Y-a.Y) + AbsF(b.Z-a.Z) }
