@@ -64,7 +64,7 @@ func main() {
 	playerAirTimer := float32(0)
 
 	maxPlayerAirTime := float32(fps) / 2.0
-	maxPlayerOOBAirTime := maxPlayerAirTime * 3
+	maxPlayerFreefallAirTime := maxPlayerAirTime * 3
 	const movementMagnitude = float32(0.2)
 	const playerJumpVelocity = 4 // 3
 	const terminalVelocityY = 5
@@ -220,8 +220,9 @@ func main() {
 		floorCount++
 	}
 
-	isCollision := false
+	isUnsafeCollision := false
 	isSafeSpotCollision := false
+	isFloorCollision := false
 	isOOBCollision := false
 	isWallCollision := false
 
@@ -237,6 +238,13 @@ func main() {
 	rl.SetTargetFPS(fps)
 
 	for !rl.WindowShouldClose() {
+		// Reset collision flags
+		isUnsafeCollision = false
+		isOOBCollision = false
+		isSafeSpotCollision = false
+		isFloorCollision = false
+		isWallCollision = false
+
 		// Handle user input events
 
 		playerMovementThisFrame := rl.Vector3{}
@@ -294,16 +302,20 @@ func main() {
 		frameMovement := rl.Vector3Add(playerMovementThisFrame, playerVelocity)
 		{
 			playerPosition.X += frameMovement.X * movementMagnitude
-			if isTouchXPlaneEdges := playerPosition.X-playerSize.X/2 < -arenaWidth/2 || playerPosition.X+playerSize.X/2 > arenaWidth/2; isTouchXPlaneEdges {
-				playerCollisionsThisFrame.X = 1
+			if false {
+				if isTouchXPlaneEdges := playerPosition.X-playerSize.X/2 < -arenaWidth/2 || playerPosition.X+playerSize.X/2 > arenaWidth/2; isTouchXPlaneEdges {
+					playerCollisionsThisFrame.X = 1
+				}
 			}
 			playerPosition.Y += frameMovement.Y * movementMagnitude
 			if false {
 				playerCollisionsThisFrame.Y = 1
 			}
 			playerPosition.Z += frameMovement.Z * movementMagnitude
-			if isTouchZPlaneEdges := playerPosition.Z-playerSize.Z/2 < -arenaLength/2 || playerPosition.Z+playerSize.Z/2 > arenaLength/2; isTouchZPlaneEdges {
-				playerCollisionsThisFrame.Z = 1
+			if false {
+				if isTouchZPlaneEdges := playerPosition.Z-playerSize.Z/2 < -arenaLength/2 || playerPosition.Z+playerSize.Z/2 > arenaLength/2; isTouchZPlaneEdges {
+					playerCollisionsThisFrame.Z = 1
+				}
 			}
 
 			// Check if player is safely standing on the floor
@@ -313,6 +325,7 @@ func main() {
 
 			for i := range floorCount {
 				if rl.CheckCollisionBoxes(playerBox, floorBoundingBoxes[i]) {
+					isFloorCollision = true
 					playerCollisionsThisFrame.W = 1
 					if isFloorSinking := false; isFloorSinking { // Only push floor down if player just jumped and landed on the floor
 						isJumpLandingOnFloor := playerAirTimer >= maxPlayerAirTime
@@ -365,16 +378,8 @@ func main() {
 			playerVelocity.Z = MinF(0, playerVelocity.Z+terminalVelocityLimiterAirFriction)
 		}
 
-		// Reset collision flags
-		isCollision = false
-		isOOBCollision = false
-		isWallCollision = false
-		isSafeSpotCollision = false
-
 		// Check collisions player vs enemy-box
-		playerBox := rl.NewBoundingBox(
-			rl.NewVector3(playerPosition.X-playerSize.X/2, playerPosition.Y-playerSize.Y/2, playerPosition.Z-playerSize.Z/2),
-			rl.NewVector3(playerPosition.X+playerSize.X/2, playerPosition.Y+playerSize.Y/2, playerPosition.Z+playerSize.Z/2))
+
 		// safeOrangeBoundingBox := rl.NewBoundingBox(
 		// 	rl.NewVector3(safeOrangeBoxPos.X-safeOrangeBoxSize.X/2, safeOrangeBoxPos.Y-safeOrangeBoxSize.Y/2, safeOrangeBoxPos.Z-safeOrangeBoxSize.Z/2),
 		// 	rl.NewVector3(safeOrangeBoxPos.X+safeOrangeBoxSize.X/2, safeOrangeBoxPos.Y+safeOrangeBoxSize.Y/2, safeOrangeBoxPos.Z+safeOrangeBoxSize.Z/2))
@@ -385,15 +390,19 @@ func main() {
 			box := rl.NewBoundingBox(
 				rl.NewVector3(pos.X-size.X/2, pos.Y-size.Y/2, pos.Z-size.Z/2),
 				rl.NewVector3(pos.X+size.X/2, pos.Y+size.Y/2, pos.Z+size.Z/2))
-			if rl.CheckCollisionBoxes(box, playerBox) {
+			if rl.CheckCollisionBoxes(box, rl.NewBoundingBox(
+				rl.NewVector3(playerPosition.X-playerSize.X/2, playerPosition.Y-playerSize.Y/2, playerPosition.Z-playerSize.Z/2),
+				rl.NewVector3(playerPosition.X+playerSize.X/2, playerPosition.Y+playerSize.Y/2, playerPosition.Z+playerSize.Z/2))) {
 				isSafeSpotCollision = true
 				playerPosition.Y = playerSize.Y/2 + box.Max.Y // HACK: Allow player to stand on the floor
 			}
 		}
 
 		for i := range unsafeRedSphereCount {
-			if rl.CheckCollisionBoxSphere(playerBox, unsafeRedSpherePositions[i], unsafeRedSphereSizes[i]) {
-				isCollision = true
+			if rl.CheckCollisionBoxSphere(rl.NewBoundingBox(
+				rl.NewVector3(playerPosition.X-playerSize.X/2, playerPosition.Y-playerSize.Y/2, playerPosition.Z-playerSize.Z/2),
+				rl.NewVector3(playerPosition.X+playerSize.X/2, playerPosition.Y+playerSize.Y/2, playerPosition.Z+playerSize.Z/2)), unsafeRedSpherePositions[i], unsafeRedSphereSizes[i]) {
+				isUnsafeCollision = true
 
 				// Find perpendicular curve to XZ plane, i.e slope of circumference
 				// WARN: Expect wonky animation, as bottom of player box when on a slope of sphere,
@@ -404,55 +413,48 @@ func main() {
 				dy := (dx*dx + dz*dz) * height
 				dy = SqrtF(dy)
 				dy = rl.Clamp(dy, 0, height)
+
 				playerPosition.Y = unsafeRedSpherePositions[i].Y + dy
 			}
 		}
 
 		if false {
 			for i := range walls {
-				if !isWallCollision && rl.CheckCollisionBoxes(playerBox, walls[i]) {
+				if !isWallCollision && rl.CheckCollisionBoxes(rl.NewBoundingBox(
+					rl.NewVector3(playerPosition.X-playerSize.X/2, playerPosition.Y-playerSize.Y/2, playerPosition.Z-playerSize.Z/2),
+					rl.NewVector3(playerPosition.X+playerSize.X/2, playerPosition.Y+playerSize.Y/2, playerPosition.Z+playerSize.Z/2)), walls[i]) {
 					isWallCollision = true
 				}
 			}
 		}
 
-		// Check collisions player vs arena outer bounds (security check)
-		if playerPosition.X-playerSize.X/2 <= -arenaWidth/2 || playerPosition.X+playerSize.X/2 >= arenaWidth/2 {
-			isOOBCollision = true
-		}
-		if playerPosition.Z-playerSize.Z/2 <= -arenaLength/2 || playerPosition.Z+playerSize.Z/2 >= arenaLength/2 {
-			isOOBCollision = true
-		}
-
 		const offsetTrigger = 2.0
 
 		switch {
-		case isCollision:
+		case isUnsafeCollision:
 			playerColor = rl.DarkBlue
-			// playerPosition = oldPlayerPos
 		case isOOBCollision:
 			playerColor = rl.DarkGray
 		case isSafeSpotCollision:
 			playerColor = rl.Fade(rl.Green, 0.9)
-		case isWallCollision:
-			// TODO: Figure out how to make player wall slide
+		case isWallCollision: // TODO: Figure out how to make player wall slide
 			playerColor = rl.Fade(rl.Brown, 0.9)
 			playerPosition = oldPlayerPos
+			panic("unimplemented")
 		default:
 			playerColor = rl.Fade(rl.Black, 0.9)
 		}
 
 		// Update progress
 		progressRate := 0.1 / float32(fps)
-		if (playerCollisionsThisFrame.X == 1 || playerCollisionsThisFrame.Z == 1) && (!isOOBCollision || !isSafeSpotCollision) {
+		if (playerCollisionsThisFrame.X == 1 || playerCollisionsThisFrame.Z == 1) &&
+			(!isOOBCollision && !isSafeSpotCollision && !isFloorCollision) {
 			shieldProgress -= progressRate
 		}
-		if playerAirTimer > maxPlayerOOBAirTime {
-			if !isSafeSpotCollision {
-				shieldProgress -= (playerAirTimer / maxPlayerOOBAirTime) * (progressRate)
-			}
+		if playerAirTimer > maxPlayerFreefallAirTime {
+			shieldProgress -= PowF(progressRate*shieldProgress, maxPlayerFreefallAirTime/playerAirTimer)
 		}
-		if isCollision {
+		if isUnsafeCollision {
 			shieldProgress -= progressRate
 		}
 		if isSafeSpotCollision {
