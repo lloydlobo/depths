@@ -66,7 +66,7 @@ func main() {
 	maxPlayerAirTime := float32(fps) / 2.0
 	maxPlayerOOBAirTime := maxPlayerAirTime * 3
 	const movementMagnitude = float32(0.2)
-	const playerJumpVelocity = 16 // 3
+	const playerJumpVelocity = 4 // 3
 	const terminalVelocityY = 5
 	// # if max: 0.1333333333.. (makes jumping possible to 3x player height) # else use min for easy floaty feel
 	// self._terminal_limiter_air_friction: Final = max(0.1, ((pre.TILE_SIZE * 0.5) / (pre.FPS_CAP)))
@@ -74,18 +74,18 @@ func main() {
 	const terminalVelocityLimiterAirFrictionY = movementMagnitude / 2
 
 	// See also https://github.com/Pakz001/Raylib-Examples/blob/master/ai/Example_-_Pattern_Movement.c
-	enemyBoxPos := rl.NewVector3(-4.0, 1.0, 0.0)
-	enemyBoxSize := rl.NewVector3(2.0, 2.0, 2.0)
+	safeOrangeBoxPos := rl.NewVector3(-4.0, 1.0, 0.0)
+	safeOrangeBoxSize := rl.NewVector3(2.0, 2.0, 2.0)
 	if true {
-		enemyBoxPos = rl.NewVector3(-4.0, 1.0, 4.0)
-		enemyBoxSize = rl.NewVector3(5, 2.0/2, 5)
+		safeOrangeBoxPos = rl.NewVector3(-4.0, 1.0, 4.0)
+		safeOrangeBoxSize = rl.NewVector3(5, 2.0/2, 5)
 	}
 
-	enemySpherePos := rl.NewVector3(4.0, 0.0, 0.0)
-	enemySphereSize := float32(1.5)
+	unsafeRedSpherePos := rl.NewVector3(4.0, 0.0, 0.0)
+	unsafeRedSphereSize := float32(1.5)
 	if true {
-		enemySpherePos = rl.NewVector3(-4.0, -0.4, -4.0)
-		enemySphereSize = float32(2.5)
+		unsafeRedSpherePos = rl.NewVector3(-4.0, -0.4, -4.0)
+		unsafeRedSphereSize = float32(2.5)
 	}
 
 	// anticlockwise: 0 -> 1 -> 2 -> 3 TLBR
@@ -191,6 +191,7 @@ func main() {
 	}
 
 	isCollision := false
+	isSafeSpotCollision := false
 	isOOBCollision := false
 	isWallCollision := false
 
@@ -283,6 +284,15 @@ func main() {
 			for i := range floorCount {
 				if rl.CheckCollisionBoxes(playerBox, floorBoundingBoxes[i]) {
 					playerCollisionsThisFrame.W = 1
+					if isFloorSinking := false; isFloorSinking { // Only push floor down if player just jumped and landed on the floor
+						isJumpLandingOnFloor := playerAirTimer >= maxPlayerAirTime
+						isFallingWithFloor := playerAirTimer > 0
+						if isJumpLandingOnFloor || isFallingWithFloor {
+							floorOrigins[i].Y += playerVelocity.Y * terminalVelocityLimiterAirFrictionY
+							floorBoundingBoxes[i].Min.Y += playerVelocity.Y * terminalVelocityLimiterAirFrictionY
+							floorBoundingBoxes[i].Max.Y += playerVelocity.Y * terminalVelocityLimiterAirFrictionY
+						}
+					}
 					playerPosition.Y = playerSize.Y/2 + floorBoundingBoxes[i].Max.Y // HACK: Allow player to stand on the floor
 				}
 			}
@@ -295,15 +305,15 @@ func main() {
 			}
 			// # Entity:Player: Handle velocity based on collisions
 			if playerCollisionsThisFrame.Y == 1 || playerCollisionsThisFrame.W == 1 {
-				if playerAirTimer > 0 && playerJumpsLeft == 0 {
-				}
 				playerAirTimer = 0
-				// FIXME: Detect the floor the player is touching and get bounding box top offset from player bottom
+				// HACK: This is handled directly by floorBoundingBoxes collision check interations
 				if false {
+					// Detect the floor the player is touching and get bounding box top offset from player bottom
 					playerPosition.Y = playerSize.Y / 2 // Fix to ground
 				}
 				playerJumpsLeft = 1
 			}
+
 			// Snappy bouncy jumps
 			if playerAirTimer > maxPlayerAirTime*math.Phi && playerAirTimer < maxPlayerAirTime*math.Phi*math.Phi { // Once
 				playerVelocity.Y -= terminalVelocityLimiterAirFrictionY
@@ -329,20 +339,29 @@ func main() {
 		isCollision = false
 		isOOBCollision = false
 		isWallCollision = false
+		isSafeSpotCollision = false
 
 		// Check collisions player vs enemy-box
 		playerBox := rl.NewBoundingBox(
 			rl.NewVector3(playerPosition.X-playerSize.X/2, playerPosition.Y-playerSize.Y/2, playerPosition.Z-playerSize.Z/2),
 			rl.NewVector3(playerPosition.X+playerSize.X/2, playerPosition.Y+playerSize.Y/2, playerPosition.Z+playerSize.Z/2))
-		enemyBoundingBox := rl.NewBoundingBox(
-			rl.NewVector3(enemyBoxPos.X-enemyBoxSize.X/2, enemyBoxPos.Y-enemyBoxSize.Y/2, enemyBoxPos.Z-enemyBoxSize.Z/2),
-			rl.NewVector3(enemyBoxPos.X+enemyBoxSize.X/2, enemyBoxPos.Y+enemyBoxSize.Y/2, enemyBoxPos.Z+enemyBoxSize.Z/2))
+		safeOrangeBoundingBox := rl.NewBoundingBox(
+			rl.NewVector3(safeOrangeBoxPos.X-safeOrangeBoxSize.X/2, safeOrangeBoxPos.Y-safeOrangeBoxSize.Y/2, safeOrangeBoxPos.Z-safeOrangeBoxSize.Z/2),
+			rl.NewVector3(safeOrangeBoxPos.X+safeOrangeBoxSize.X/2, safeOrangeBoxPos.Y+safeOrangeBoxSize.Y/2, safeOrangeBoxPos.Z+safeOrangeBoxSize.Z/2))
 
-		if rl.CheckCollisionBoxes(playerBox, enemyBoundingBox) {
-			isCollision = true
+		if rl.CheckCollisionBoxes(playerBox, safeOrangeBoundingBox) {
+			isSafeSpotCollision = true
+			playerPosition.Y = playerSize.Y/2 + safeOrangeBoundingBox.Max.Y // HACK: Allow player to stand on the floor
 		}
-		if rl.CheckCollisionBoxSphere(playerBox, enemySpherePos, enemySphereSize) {
+		if rl.CheckCollisionBoxSphere(playerBox, unsafeRedSpherePos, unsafeRedSphereSize) {
 			isCollision = true
+
+			// Find perpendicular curve to XZ plane, i.e slope of circumferenc
+			dx := SinF(AbsF(playerPosition.X-unsafeRedSpherePos.X) + unsafeRedSphereSize/2)
+			dz := SinF(AbsF(playerPosition.Z-unsafeRedSpherePos.Z) + unsafeRedSphereSize/2)
+			yOffset := AbsF(dx*unsafeRedSphereSize/2 + dz*unsafeRedSphereSize/2)
+			yOffset = rl.Clamp(SqrtF(yOffset), 0, unsafeRedSphereSize/2)
+			playerPosition.Y = playerSize.Y/2 + (unsafeRedSpherePos.Y + playerSize.Y/2 + yOffset) // HACK: Allow player to stand on the floor
 		}
 		if false {
 			for i := range walls {
@@ -361,25 +380,45 @@ func main() {
 		}
 
 		const offsetTrigger = 2.0
-		if isCollision || isOOBCollision {
+
+		switch {
+		case isCollision:
+			playerColor = rl.Red
+			// playerPosition = oldPlayerPos
+		case isOOBCollision:
 			playerColor = rl.DarkGray
-		} else {
+		case isSafeSpotCollision:
+			playerColor = rl.Fade(rl.Green, 0.9)
+		case isWallCollision:
+			// TODO: Figure out how to make player wall slide
+			playerColor = rl.Fade(rl.Brown, 0.9)
+			playerPosition = oldPlayerPos
+		default:
 			playerColor = rl.Fade(rl.Black, 0.9)
 		}
-		if isCollision {
-			playerPosition = oldPlayerPos
-		}
-		if isWallCollision { // TODO: Figure out how to make player wall slide
-			playerPosition = oldPlayerPos
-		}
-		if (playerCollisionsThisFrame.X == 1 || playerCollisionsThisFrame.Z == 1) && !isOOBCollision {
-			shieldProgress -= 0.1 / float32(fps)
+
+		// Update progress
+		progressRate := 0.1 / float32(fps)
+		if (playerCollisionsThisFrame.X == 1 || playerCollisionsThisFrame.Z == 1) && (!isOOBCollision || !isSafeSpotCollision) {
+			shieldProgress -= progressRate
 		}
 		if playerAirTimer > maxPlayerOOBAirTime {
-			shieldProgress -= (playerAirTimer / maxPlayerOOBAirTime) * (0.1 / float32(fps))
+			if !isSafeSpotCollision {
+				shieldProgress -= (playerAirTimer / maxPlayerOOBAirTime) * (progressRate)
+			}
 		}
 		if isCollision {
-			shieldProgress -= 0.1 / float32(fps)
+			shieldProgress -= progressRate
+		}
+		if isSafeSpotCollision {
+			shieldProgress += progressRate / 2
+			if shieldProgress >= 1.0 {
+				shieldProgress = 1.0
+			}
+			fuelProgress += progressRate / 2
+			if fuelProgress >= 1.0 {
+				fuelProgress = 1.0
+			}
 		}
 
 		framesCounter++
@@ -388,7 +427,7 @@ func main() {
 
 		rl.BeginDrawing()
 
-		rl.ClearBackground(rl.Gray)
+		rl.ClearBackground(rl.RayWhite)
 
 		rl.BeginMode3D(camera)
 
@@ -413,12 +452,12 @@ func main() {
 		}
 
 		// Draw enemy-box
-		rl.DrawCube(enemyBoxPos, enemyBoxSize.X, enemyBoxSize.Y, enemyBoxSize.Z, rl.Fade(rl.Black, 1.0))
-		rl.DrawCubeWires(enemyBoxPos, enemyBoxSize.X, enemyBoxSize.Y, enemyBoxSize.Z, rl.Fade(rl.Red, 1.0))
+		rl.DrawCube(safeOrangeBoxPos, safeOrangeBoxSize.X, safeOrangeBoxSize.Y, safeOrangeBoxSize.Z, rl.Fade(rl.Orange, 1.0))
+		rl.DrawCubeWires(safeOrangeBoxPos, safeOrangeBoxSize.X, safeOrangeBoxSize.Y, safeOrangeBoxSize.Z, rl.Fade(rl.Orange, 1.0))
 
 		// Draw enemy-sphere
-		rl.DrawSphere(enemySpherePos, enemySphereSize, rl.Black)
-		rl.DrawSphereWires(enemySpherePos, enemySphereSize, 16/4, 16/2, rl.Red)
+		rl.DrawSphere(unsafeRedSpherePos, unsafeRedSphereSize, rl.Red)
+		rl.DrawSphereWires(unsafeRedSpherePos, unsafeRedSphereSize, 16/4, 16/2, rl.Red)
 
 		// Draw player
 		playerRadius := playerSize.X / 2
@@ -483,6 +522,8 @@ func MinF[T NumberType](x T, y T) float32 { return float32(min(float64(x), float
 func AbsF[T NumberType](x T) float32      { return float32(math.Abs(float64(x))) }
 func SqrtF[T NumberType](x T) float32     { return float32(math.Sqrt(float64(x))) }
 func PowF[T NumberType](x T, y T) float32 { return float32(math.Pow(float64(x), float64(y))) }
+func SinF[T NumberType](x T) float32      { return float32(math.Sin(float64(x))) }
+func CosF[T NumberType](x T) float32      { return float32(math.Cos(float64(x))) }
 
 func manhattanVector2(a, b rl.Vector2) float32 { return AbsF(b.X-a.X) + AbsF(b.Y-a.Y) }
 func manhattanVector3(a, b rl.Vector3) float32 { return AbsF(b.X-a.X) + AbsF(b.Y-a.Y) + AbsF(b.Z-a.Z) }
