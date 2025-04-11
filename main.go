@@ -40,6 +40,7 @@ func main() {
 	sphereModel := rl.LoadModelFromMesh(sphereMesh)
 
 	fuelProgress := float32(1.0)
+	shieldProgress := float32(1.0)
 
 	isPlayerBoost := false
 	isPlayerStrafe := false
@@ -169,6 +170,9 @@ func main() {
 			}
 
 			if fuelProgress <= 0 {
+				playerPosition = rl.Vector3Zero() // Gameover
+			}
+			if shieldProgress <= 0 {
 				playerPosition = rl.Vector3Zero() // Gameover
 			}
 
@@ -311,6 +315,10 @@ func main() {
 			}
 		}
 
+		if playerCollisionsThisFrame.X == 1 || playerCollisionsThisFrame.Z == 1 {
+			shieldProgress -= 0.1 / float32(fps)
+		}
+
 		framesCounter++
 
 		// Draw
@@ -385,6 +393,11 @@ func main() {
 		rl.DrawRectangleV(rl.Vector2{X: 10, Y: 20}, rl.Vector2{X: fuelProgress * 100, Y: 20}, rl.DarkGray)
 		rl.DrawText("Fuel", 10+5, 21, 20, rl.White)
 		rl.DrawText(fmt.Sprintf("%.0f", 100*fuelProgress), 90+5, 20+5*2, 10, rl.White)
+
+		rl.DrawRectangle(10, 20+20, 100, 20, rl.Fade(rl.Black, 0.9))
+		rl.DrawRectangleV(rl.Vector2{X: 10, Y: 20 + 20}, rl.Vector2{X: shieldProgress * 100, Y: 20}, rl.DarkGray)
+		rl.DrawText("Shield", 10+5, 21+20, 20, rl.White)
+		rl.DrawText(fmt.Sprintf("%.0f", 100*shieldProgress), 90+5, 20+5*2+20, 10, rl.White)
 
 		rl.DrawFPS(10, int32(rl.GetScreenHeight())-25)
 
