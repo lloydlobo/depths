@@ -90,29 +90,29 @@ func main() {
 		safeOrangeBoxCount++
 	}
 
-	unsafeRedBoxCount := 0
+	unsafeRedSphereCount := 0
 	var unsafeRedSpherePositions []rl.Vector3
 	var unsafeRedSphereSizes []float32
 	{
 		unsafeRedSpherePositions = append(unsafeRedSpherePositions, rl.NewVector3(4, 0, 0))
 		unsafeRedSphereSizes = append(unsafeRedSphereSizes, 1.5)
-		unsafeRedBoxCount++
+		unsafeRedSphereCount++
 	}
 	{
-		unsafeRedSpherePositions = append(unsafeRedSpherePositions, rl.NewVector3(0, 1, 4))
+		unsafeRedSpherePositions = append(unsafeRedSpherePositions, rl.NewVector3(0, 0, 6))
 		unsafeRedSphereSizes = append(unsafeRedSphereSizes, 1.5)
-		unsafeRedBoxCount++
+		unsafeRedSphereCount++
 	}
 
-	safeOrangeBoxPos := rl.NewVector3(-4.0, 1.0, 0.0)
-	safeOrangeBoxSize := rl.NewVector3(2.0, 2.0, 2.0)
+	// safeOrangeBoxPos := rl.NewVector3(-4.0, 1.0, 0.0)
+	// safeOrangeBoxSize := rl.NewVector3(2.0, 2.0, 2.0)
 	// if true {
 	// 	safeOrangeBoxPos = rl.NewVector3(-4.0, 1.0, 4.0)
 	// 	safeOrangeBoxSize = rl.NewVector3(5, 2.0/2, 5)
 	// }
 
-	unsafeRedSpherePos := rl.NewVector3(4.0, 0.0, 0.0)
-	unsafeRedSphereSize := float32(1.5)
+	// unsafeRedSpherePos := rl.NewVector3(4.0, 0.0, 0.0)
+	// unsafeRedSphereSize := float32(1.5)
 	// if true {
 	// 	unsafeRedSpherePos = rl.NewVector3(-4.0, -0.4, -4.0)
 	// 	unsafeRedSphereSize = float32(2.5)
@@ -375,24 +375,39 @@ func main() {
 		playerBox := rl.NewBoundingBox(
 			rl.NewVector3(playerPosition.X-playerSize.X/2, playerPosition.Y-playerSize.Y/2, playerPosition.Z-playerSize.Z/2),
 			rl.NewVector3(playerPosition.X+playerSize.X/2, playerPosition.Y+playerSize.Y/2, playerPosition.Z+playerSize.Z/2))
-		safeOrangeBoundingBox := rl.NewBoundingBox(
-			rl.NewVector3(safeOrangeBoxPos.X-safeOrangeBoxSize.X/2, safeOrangeBoxPos.Y-safeOrangeBoxSize.Y/2, safeOrangeBoxPos.Z-safeOrangeBoxSize.Z/2),
-			rl.NewVector3(safeOrangeBoxPos.X+safeOrangeBoxSize.X/2, safeOrangeBoxPos.Y+safeOrangeBoxSize.Y/2, safeOrangeBoxPos.Z+safeOrangeBoxSize.Z/2))
+		// safeOrangeBoundingBox := rl.NewBoundingBox(
+		// 	rl.NewVector3(safeOrangeBoxPos.X-safeOrangeBoxSize.X/2, safeOrangeBoxPos.Y-safeOrangeBoxSize.Y/2, safeOrangeBoxPos.Z-safeOrangeBoxSize.Z/2),
+		// 	rl.NewVector3(safeOrangeBoxPos.X+safeOrangeBoxSize.X/2, safeOrangeBoxPos.Y+safeOrangeBoxSize.Y/2, safeOrangeBoxPos.Z+safeOrangeBoxSize.Z/2))
 
-		if rl.CheckCollisionBoxes(playerBox, safeOrangeBoundingBox) {
-			isSafeSpotCollision = true
-			playerPosition.Y = playerSize.Y/2 + safeOrangeBoundingBox.Max.Y // HACK: Allow player to stand on the floor
+		for i := range safeOrangeBoxCount {
+			pos := safeOrangeBoxPositions[i]
+			size := safeOrangeBoxSizes[i]
+			box := rl.NewBoundingBox(
+				rl.NewVector3(pos.X-size.X/2, pos.Y-size.Y/2, pos.Z-size.Z/2),
+				rl.NewVector3(pos.X+size.X/2, pos.Y+size.Y/2, pos.Z+size.Z/2))
+			if rl.CheckCollisionBoxes(box, playerBox) {
+				isSafeSpotCollision = true
+				playerPosition.Y = playerSize.Y/2 + box.Max.Y // HACK: Allow player to stand on the floor
+			}
 		}
-		if rl.CheckCollisionBoxSphere(playerBox, unsafeRedSpherePos, unsafeRedSphereSize) {
-			isCollision = true
 
-			// Find perpendicular curve to XZ plane, i.e slope of circumferenc
-			dx := SinF(AbsF(playerPosition.X-unsafeRedSpherePos.X) + unsafeRedSphereSize/2)
-			dz := SinF(AbsF(playerPosition.Z-unsafeRedSpherePos.Z) + unsafeRedSphereSize/2)
-			yOffset := AbsF(dx*unsafeRedSphereSize/2 + dz*unsafeRedSphereSize/2)
-			yOffset = rl.Clamp(SqrtF(yOffset), 0, unsafeRedSphereSize/2)
-			playerPosition.Y = playerSize.Y/2 + (unsafeRedSpherePos.Y + playerSize.Y/2 + yOffset) // HACK: Allow player to stand on the floor
+		for i := range unsafeRedSphereCount {
+			if rl.CheckCollisionBoxSphere(playerBox, unsafeRedSpherePositions[i], unsafeRedSphereSizes[i]) {
+				isCollision = true
+
+				// Find perpendicular curve to XZ plane, i.e slope of circumference
+				// WARN: Expect wonky animation, as bottom of player box when on a slope of sphere,
+				// may not collide with top tangent to sphere surface.
+				dx := CosF(AbsF(playerPosition.X - unsafeRedSpherePositions[i].X))
+				dz := CosF(AbsF(playerPosition.Z - unsafeRedSpherePositions[i].Z))
+				height := unsafeRedSphereSizes[i]/2 + playerSize.Y
+				dy := (dx*dx + dz*dz) * height
+				dy = SqrtF(dy)
+				dy = rl.Clamp(dy, 0, height)
+				playerPosition.Y = unsafeRedSpherePositions[i].Y + dy
+			}
 		}
+
 		if false {
 			for i := range walls {
 				if !isWallCollision && rl.CheckCollisionBoxes(playerBox, walls[i]) {
@@ -413,7 +428,7 @@ func main() {
 
 		switch {
 		case isCollision:
-			playerColor = rl.Red
+			playerColor = rl.DarkBlue
 			// playerPosition = oldPlayerPos
 		case isOOBCollision:
 			playerColor = rl.DarkGray
@@ -482,17 +497,20 @@ func main() {
 		}
 
 		// Draw enemy-box
-		rl.DrawCube(safeOrangeBoxPos, safeOrangeBoxSize.X, safeOrangeBoxSize.Y, safeOrangeBoxSize.Z, rl.Fade(rl.Orange, 1.0))
-		rl.DrawCubeWires(safeOrangeBoxPos, safeOrangeBoxSize.X, safeOrangeBoxSize.Y, safeOrangeBoxSize.Z, rl.Fade(rl.Orange, 1.0))
+		// rl.DrawCube(safeOrangeBoxPos, safeOrangeBoxSize.X, safeOrangeBoxSize.Y, safeOrangeBoxSize.Z, rl.Fade(rl.Orange, 1.0))
+		// rl.DrawCubeWires(safeOrangeBoxPos, safeOrangeBoxSize.X, safeOrangeBoxSize.Y, safeOrangeBoxSize.Z, rl.Fade(rl.Orange, 1.0))
 		for i := range safeOrangeBoxCount {
-			rl.DrawCubeV(safeOrangeBoxPositions[i], safeOrangeBoxSizes[i], rl.Fade(rl.Orange, 1.0))
-			rl.DrawCubeWiresV(safeOrangeBoxPositions[i], safeOrangeBoxSizes[i], rl.Fade(rl.Gold, 1.0))
+			pos := safeOrangeBoxPositions[i]
+			size := safeOrangeBoxSizes[i]
+			rl.DrawCubeV(pos, size, rl.Fade(rl.Orange, 1.0))
+			rl.DrawCubeWiresV(pos, size, rl.Fade(rl.Gold, 1.0))
 		}
 
 		// Draw enemy-sphere
-		rl.DrawSphere(unsafeRedSpherePos, unsafeRedSphereSize, rl.Red)
-		rl.DrawSphereWires(unsafeRedSpherePos, unsafeRedSphereSize, 16/4, 16/2, rl.Red)
-		for i := range unsafeRedBoxCount {
+		// rl.DrawSphere(unsafeRedSpherePos, unsafeRedSphereSize, rl.Red)
+		// rl.DrawSphereWires(unsafeRedSpherePos, unsafeRedSphereSize, 16/4, 16/2, rl.Red)
+
+		for i := range unsafeRedSphereCount {
 			rl.DrawSphere(unsafeRedSpherePositions[i], unsafeRedSphereSizes[i], rl.Red)
 			rl.DrawSphereWires(unsafeRedSpherePositions[i], unsafeRedSphereSizes[i], 8, 8, rl.Maroon)
 		}
