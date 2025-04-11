@@ -107,7 +107,7 @@ func main() {
 
 	isMartianManhunter := false
 	martianManhunterFramesCounter := int32(0)
-	martianManhunterMaxFrames := int32(4 * fps)
+	maxMartianManhunterFramesCounter := int32(4 * fps)
 
 	framesCounter := 0
 
@@ -303,7 +303,7 @@ func main() {
 				playerPosition = oldPlayerPos
 			}
 		}
-		if martianManhunterFramesCounter > martianManhunterMaxFrames {
+		if martianManhunterFramesCounter > maxMartianManhunterFramesCounter {
 			isMartianManhunter = false
 		}
 		if isMartianManhunter {
@@ -368,7 +368,7 @@ func main() {
 			startPos := rl.NewVector3(playerPosition.X, playerPosition.Y-playerSize.Y/2+playerRadius, playerPosition.Z)
 			endPos := rl.NewVector3(playerPosition.X, playerPosition.Y+playerSize.Y/2-playerRadius, playerPosition.Z)
 			if martianManhunterFramesCounter > 0 {
-				alpha := float32(martianManhunterFramesCounter / martianManhunterMaxFrames)
+				alpha := float32(martianManhunterFramesCounter / maxMartianManhunterFramesCounter)
 				rl.DrawCubeV(playerPosition, playerSize, rl.Fade(playerColor, 0.5+alpha/4))
 				rl.DrawCapsule(startPos, endPos, playerRadius, 16, 16, rl.Fade(playerColor, 0.5+alpha/4))
 			} else {
@@ -387,8 +387,6 @@ func main() {
 
 		rl.EndMode3D()
 
-		rl.DrawText(fmt.Sprintln(martianManhunterFramesCounter), 10, 10, 10, rl.Gray)
-
 		rl.DrawRectangle(10, 20, 100, 20, rl.Fade(rl.Black, 0.9))
 		rl.DrawRectangleV(rl.Vector2{X: 10, Y: 20}, rl.Vector2{X: fuelProgress * 100, Y: 20}, rl.DarkGray)
 		rl.DrawText("Fuel", 10+5, 21, 20, rl.White)
@@ -397,7 +395,12 @@ func main() {
 		rl.DrawRectangle(10, 20+20, 100, 20, rl.Fade(rl.Black, 0.9))
 		rl.DrawRectangleV(rl.Vector2{X: 10, Y: 20 + 20}, rl.Vector2{X: shieldProgress * 100, Y: 20}, rl.DarkGray)
 		rl.DrawText("Shield", 10+5, 21+20, 20, rl.White)
-		rl.DrawText(fmt.Sprintf("%.0f", 100*shieldProgress), 90+5, 20+5*2+20, 10, rl.White)
+		rl.DrawText(fmt.Sprintf("%.0f", 100*shieldProgress), 90+5, 20+20+5*2, 10, rl.White)
+
+		rl.DrawRectangle(10, 20+20+20, 100, 20, rl.Fade(rl.Black, 0.9))
+		rl.DrawRectangleV(rl.Vector2{X: 10, Y: 20 + 20 + 20}, rl.Vector2{X: 100 * (1 - (float32(martianManhunterFramesCounter) / float32(maxMartianManhunterFramesCounter))), Y: 20}, rl.DarkGray)
+		rl.DrawText("Depth", 10+5, 20+20+20, 20, rl.White)
+		rl.DrawText(fmt.Sprintln(martianManhunterFramesCounter), 90+5, 20+20+20+5*2, 10, rl.White)
 
 		rl.DrawFPS(10, int32(rl.GetScreenHeight())-25)
 
