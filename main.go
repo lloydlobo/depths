@@ -25,7 +25,6 @@ func main() {
 
 	const arenaWidth = float32(10) * math.Phi             // X
 	const arenaLength = float32(10) * math.Phi * math.Phi // Z
-
 	const arenaWallHeight = 1
 
 	camera := rl.Camera{}
@@ -54,6 +53,7 @@ func main() {
 	playerAirTimer := float32(0)
 
 	maxPlayerAirTime := float32(fps) / 2.0
+	maxPlayerOOBAirTime := maxPlayerAirTime * 3
 	const movementMagnitude = float32(0.2)
 	const playerJumpVelocity = 3
 	const terminalVelocityY = 5
@@ -91,8 +91,8 @@ func main() {
 		}
 	}
 
-	floorOrigin := rl.NewVector3(0, -1, 0)
 	const floorThick = 1
+	floorOrigin := rl.NewVector3(0, -1, 0)
 	floorMesh := rl.GenMeshPlane(arenaWidth, arenaLength, 3, 3)
 	floorModel := rl.LoadModelFromMesh(floorMesh)
 	floorBoundingBox := rl.NewBoundingBox(rl.NewVector3(-arenaWidth/2, floorOrigin.Y, -arenaLength/2), rl.NewVector3(arenaWidth/2, floorOrigin.Y+floorThick, arenaLength/2))
@@ -101,13 +101,7 @@ func main() {
 
 	isCollision := false
 	isOOBCollision := false
-
-	// martianManhunterTriggerFactor := float32(0.0)
-	// const maxMartianManhunterTriggerFactor = 45.0
-
-	// isMartianManhunter := false
-	// martianManhunterFramesCounter := int32(0)
-	// maxMartianManhunterFramesCounter := int32(2 * fps)
+	isWallCollision := false
 
 	framesCounter := 0
 
@@ -157,96 +151,93 @@ func main() {
 		oldCamPos := camera.Position
 		_ = oldCamPos
 
-		// Update player
+		// Update player movement
+		playerAirTimer += 1.0
+
+		// Normalize input vector to avoid speeding up diagonally
+		if !rl.Vector3Equals(playerMovementThisFrame, rl.Vector3Zero()) {
+			playerMovementThisFrame = rl.Vector3Normalize(playerMovementThisFrame) // Vector3Length (XZ): 1.414 --diagonal-> 0.99999994
+			fuelProgress -= 0.05 / float32(fps)                                    // See also https://community.monogame.net/t/how-can-i-normalize-my-diagonal-movement/15276
+		}
+
+		if fuelProgress <= 0 {
+			playerPosition = rl.Vector3Zero() // Gameover
+		}
+		if shieldProgress <= 0 {
+			playerPosition = rl.Vector3Zero() // Gameover
+			playerAirTimer = 0
+			playerVelocity = rl.Vector3Zero()
+		}
+
+		frameMovement := rl.Vector3Add(playerMovementThisFrame, playerVelocity)
 		{
-			playerAirTimer += 1.0
+			playerPosition.X += frameMovement.X * movementMagnitude
+			if isTouchXPlaneEdges := playerPosition.X-playerSize.X/2 < -arenaWidth/2 || playerPosition.X+playerSize.X/2 > arenaWidth/2; isTouchXPlaneEdges {
+				playerCollisionsThisFrame.X = 1
+			}
+			playerPosition.Y += frameMovement.Y * movementMagnitude
+			if false {
+				playerCollisionsThisFrame.Y = 1
+			}
+			playerPosition.Z += frameMovement.Z * movementMagnitude
+			if isTouchZPlaneEdges := playerPosition.Z-playerSize.Z/2 < -arenaLength/2 || playerPosition.Z+playerSize.Z/2 > arenaLength/2; isTouchZPlaneEdges {
+				playerCollisionsThisFrame.Z = 1
+			}
+			// HACK: Gravity: Check if player is touching the infinite floor
+			if false {
+				isTouchFloor := playerPosition.Y+playerSize.Y/2 < 2
+				if isTouchFloor {
+					playerCollisionsThisFrame.W = 1
+				}
+			} else {
+				playerBox := rl.NewBoundingBox(
+					rl.NewVector3(playerPosition.X-playerSize.X/2, playerPosition.Y-playerSize.Y/2, playerPosition.Z-playerSize.Z/2),
+					rl.NewVector3(playerPosition.X+playerSize.X/2, playerPosition.Y+playerSize.Y/2, playerPosition.Z+playerSize.Z/2))
 
-			// Normalize input vector to avoid speeding up diagonally
-			// See also https://community.monogame.net/t/how-can-i-normalize-my-diagonal-movement/15276
-			// Vector3Length (XZ): 1.414 --diagonal-> 0.99999994
-			if !rl.Vector3Equals(playerMovementThisFrame, rl.Vector3Zero()) {
-				playerMovementThisFrame = rl.Vector3Normalize(playerMovementThisFrame)
-				fuelProgress -= 0.05 / float32(fps)
+				if rl.CheckCollisionBoxes(playerBox, floorBoundingBox) {
+					playerCollisionsThisFrame.W = 1
+				}
 			}
 
-			if fuelProgress <= 0 {
-				playerPosition = rl.Vector3Zero() // Gameover
+			// # Entity: Update velocity
+			playerVelocity.Y = MinF(terminalVelocityY, playerVelocity.Y-terminalVelocityLimiterAirFrictionY) // Decelerate if in air
+			// # Entity: Handle velocity based on collisions up or down
+			if playerCollisionsThisFrame.Y == 1 || playerCollisionsThisFrame.W == 1 {
+				playerVelocity.Y = 0 // self.Velocity = 0
 			}
-			if shieldProgress <= 0 {
-				playerPosition = rl.Vector3Zero() // Gameover
+			// # Entity:Player: Handle velocity based on collisions
+			if playerCollisionsThisFrame.Y == 1 || playerCollisionsThisFrame.W == 1 {
+				if playerAirTimer > 0 && playerJumpsLeft == 0 {
+				}
 				playerAirTimer = 0
-				playerVelocity = rl.Vector3Zero()
+				playerPosition.Y = playerSize.Y / 2 // Fix to ground
+				playerJumpsLeft = 1
 			}
-
-			frameMovement := rl.Vector3Add(playerMovementThisFrame, playerVelocity)
-			{
-				playerPosition.X += frameMovement.X * movementMagnitude
-				if isTouchXPlaneEdges := playerPosition.X-playerSize.X/2 < -arenaWidth/2 || playerPosition.X+playerSize.X/2 > arenaWidth/2; isTouchXPlaneEdges {
-					playerCollisionsThisFrame.X = 1
-				}
-				playerPosition.Y += frameMovement.Y * movementMagnitude
-				if false {
-					playerCollisionsThisFrame.Y = 1
-				}
-				playerPosition.Z += frameMovement.Z * movementMagnitude
-				if isTouchZPlaneEdges := playerPosition.Z-playerSize.Z/2 < -arenaLength/2 || playerPosition.Z+playerSize.Z/2 > arenaLength/2; isTouchZPlaneEdges {
-					playerCollisionsThisFrame.Z = 1
-				}
-				// HACK: Gravity: Check if player is touching the infinite floor
-				if false {
-					isTouchFloor := playerPosition.Y+playerSize.Y/2 < 2
-					if isTouchFloor {
-						playerCollisionsThisFrame.W = 1
-					}
-				} else {
-					playerBox := rl.NewBoundingBox(
-						rl.NewVector3(playerPosition.X-playerSize.X/2, playerPosition.Y-playerSize.Y/2, playerPosition.Z-playerSize.Z/2),
-						rl.NewVector3(playerPosition.X+playerSize.X/2, playerPosition.Y+playerSize.Y/2, playerPosition.Z+playerSize.Z/2))
-
-					if rl.CheckCollisionBoxes(playerBox, floorBoundingBox) {
-						playerCollisionsThisFrame.W = 1
-					}
-				}
-
-				// # Entity: Update velocity
-				playerVelocity.Y = MinF(terminalVelocityY, playerVelocity.Y-terminalVelocityLimiterAirFrictionY) // Decelerate if in air
-				// # Entity: Handle velocity based on collisions up or down
-				if playerCollisionsThisFrame.Y == 1 || playerCollisionsThisFrame.W == 1 {
-					playerVelocity.Y = 0 // self.Velocity = 0
-				}
-				// # Entity:Player: Handle velocity based on collisions
-				if playerCollisionsThisFrame.Y == 1 || playerCollisionsThisFrame.W == 1 {
-					if playerAirTimer > 0 && playerJumpsLeft == 0 {
-					}
-					playerAirTimer = 0
-					playerPosition.Y = playerSize.Y / 2 // Fix to ground
-					playerJumpsLeft = 1
-				}
-				// Snappy bouncy jumps
-				if playerAirTimer > maxPlayerAirTime*math.Phi && playerAirTimer < maxPlayerAirTime*math.Phi*math.Phi { // Once
-					playerVelocity.Y -= terminalVelocityLimiterAirFrictionY
-				}
+			// Snappy bouncy jumps
+			if playerAirTimer > maxPlayerAirTime*math.Phi && playerAirTimer < maxPlayerAirTime*math.Phi*math.Phi { // Once
+				playerVelocity.Y -= terminalVelocityLimiterAirFrictionY
 			}
+		}
 
-			// Apply Gravity
-			playerVelocity.Y -= terminalVelocityLimiterAirFrictionY
+		// Apply Gravity
+		playerVelocity.Y -= terminalVelocityLimiterAirFrictionY
 
-			// Normalize velocity along XZ plane (width and length) Only for player (remove for other entities)!!!!!
-			if playerVelocity.X > 0 {
-				playerVelocity.X = MaxF(0, playerVelocity.X-terminalVelocityLimiterAirFriction)
-			} else {
-				playerVelocity.X = MinF(0, playerVelocity.X+terminalVelocityLimiterAirFriction)
-			}
-			if playerVelocity.Z > 0 {
-				playerVelocity.Z = MaxF(0, playerVelocity.Z-terminalVelocityLimiterAirFriction)
-			} else {
-				playerVelocity.Z = MinF(0, playerVelocity.Z+terminalVelocityLimiterAirFriction)
-			}
+		// Normalize velocity along XZ plane (width and length) Only for player (remove for other entities)!!!!!
+		if playerVelocity.X > 0 {
+			playerVelocity.X = MaxF(0, playerVelocity.X-terminalVelocityLimiterAirFriction)
+		} else {
+			playerVelocity.X = MinF(0, playerVelocity.X+terminalVelocityLimiterAirFriction)
+		}
+		if playerVelocity.Z > 0 {
+			playerVelocity.Z = MaxF(0, playerVelocity.Z-terminalVelocityLimiterAirFriction)
+		} else {
+			playerVelocity.Z = MinF(0, playerVelocity.Z+terminalVelocityLimiterAirFriction)
 		}
 
 		// Reset collision flags
 		isCollision = false
 		isOOBCollision = false
+		isWallCollision = false
 
 		// Check collisions player vs enemy-box
 		playerBox := rl.NewBoundingBox(
@@ -263,8 +254,8 @@ func main() {
 			isCollision = true
 		}
 		for i := range walls {
-			if rl.CheckCollisionBoxes(playerBox, walls[i]) {
-				isCollision = true
+			if !isWallCollision && rl.CheckCollisionBoxes(playerBox, walls[i]) {
+				isWallCollision = true
 			}
 		}
 
@@ -275,56 +266,24 @@ func main() {
 		if playerPosition.Z-playerSize.Z/2 <= -arenaLength/2 || playerPosition.Z+playerSize.Z/2 >= arenaLength/2 {
 			isOOBCollision = true
 		}
+
 		const offsetTrigger = 2.0
 		if isCollision || isOOBCollision {
 			playerColor = rl.DarkGray
-			// martianManhunterTriggerFactor += (float32(rl.GetRandomValue(-offsetTrigger, offsetTrigger)) / offsetTrigger * 2) / (2 * math.Pi) // Screenshake
 		} else {
 			playerColor = rl.Fade(rl.Black, 0.9)
-			// martianManhunterTriggerFactor = maxMartianManhunterTriggerFactor
 		}
 		if isCollision {
-
-			// deltaFovy := 45 - martianManhunterTriggerFactor
-			// deltaFovy = float32(math.Abs(float64(deltaFovy)))
-			// alpha := deltaFovy * deltaFovy
-			// if deltaFovy != 0 && alpha < 0.0001*offsetTrigger {
-			// 	isMartianManhunter = true
-			// }
-			// if isMartianManhunter {
-			// 	playerPosition = rl.Vector3Lerp(playerPosition, oldPlayerPos, 0.9)
-			// } else {
-			// 	if isStuck := !isMartianManhunter && martianManhunterTriggerFactor != maxMartianManhunterTriggerFactor; isStuck {
-			// 		// playerPosition = rl.Vector3Lerp(playerPosition, oldPlayerPos, 1-alpha)
-			// 		playerPosition = rl.Vector3Lerp(playerPosition, oldPlayerPos, 1.0125)
-			// 	} else {
-			// 		playerPosition = oldPlayerPos
-			// 	}
-			// }
 			playerPosition = oldPlayerPos
 		}
-		if false {
-			if isOOBCollision {
-				playerPosition = oldPlayerPos
-			}
+		if isWallCollision { // TODO: Figure out how to make player wall slide
+			playerPosition = oldPlayerPos
 		}
-		// if martianManhunterFramesCounter > maxMartianManhunterFramesCounter {
-		// 	isMartianManhunter = false
-		// }
-		// if isMartianManhunter {
-		// 	martianManhunterFramesCounter++
-		// } else if martianManhunterFramesCounter > 0 {
-		// 	martianManhunterFramesCounter--
-		// 	if martianManhunterFramesCounter <= 0 {
-		// 		martianManhunterFramesCounter = 0
-		// 	}
-		// }
-		//
-		if playerCollisionsThisFrame.X == 1 || playerCollisionsThisFrame.Z == 1 {
+		if (playerCollisionsThisFrame.X == 1 || playerCollisionsThisFrame.Z == 1) && !isOOBCollision {
 			shieldProgress -= 0.1 / float32(fps)
 		}
-		if isOOBCollision {
-			shieldProgress -= 0.1 / float32(fps)
+		if playerAirTimer > maxPlayerOOBAirTime {
+			shieldProgress -= (playerAirTimer / maxPlayerOOBAirTime) * (0.1 / float32(fps))
 		}
 		if isCollision {
 			shieldProgress -= 0.1 / float32(fps)
@@ -340,24 +299,19 @@ func main() {
 
 		rl.BeginMode3D(camera)
 
+		// Draw walls
 		for i := range walls {
-			vecMin := walls[i].Min
-			vecMax := walls[i].Max
-			const amount = 0.5 // Lerp(min, max, 0.5)
-			size := rl.Vector3{X: vecMax.X - vecMin.X, Y: vecMax.Y - vecMin.Y, Z: vecMax.Z - vecMin.Z}
-			origin := rl.Vector3{
-				X: vecMin.X + amount*(vecMax.X-vecMin.X),
-				Y: vecMin.Y + amount*(vecMax.Y-vecMin.Y),
-				Z: vecMin.Z + amount*(vecMax.Z-vecMin.Z),
-			}
-			_ = size
-			_ = origin
+			max := walls[i].Max
+			min := walls[i].Min
+			const t = 1 / 2 // Interpolate t==1/2
+			size := rl.NewVector3(max.X-min.X, max.Y-min.Y, max.Z-min.Z)
+			origin := rl.NewVector3(min.X+t*(max.X-min.X), min.Y+t*(max.Y-min.Y), min.Z+t*(max.Z-min.Z))
 			rl.DrawCubeV(origin, size, rl.Fade(rl.White, 0.125/2))
 			rl.DrawBoundingBox(walls[i], rl.Fade(rl.LightGray, 0.4))
 		}
 
 		// Draw floor
-		rl.DrawCubeV(rl.Vector3{X: floorOrigin.X, Y: floorOrigin.Y - 0.125, Z: floorOrigin.Z}, rl.NewVector3(arenaWidth, 2.0, arenaLength), rl.Fade(rl.White, 0.125/2))
+		rl.DrawCubeV(rl.NewVector3(floorOrigin.X, floorOrigin.Y-0.125, floorOrigin.Z), rl.NewVector3(arenaWidth, 2.0, arenaLength), rl.Fade(rl.White, 0.125/2))
 		rl.DrawCubeWiresV(floorOrigin, rl.NewVector3(arenaWidth, 2.0, arenaLength), rl.Fade(rl.LightGray, 0.7))
 		rl.DrawBoundingBox(floorBoundingBox, rl.Fade(rl.LightGray, 0.7))
 		rl.DrawModel(floorModel, rl.NewVector3(floorOrigin.X, floorOrigin.Y+1, floorOrigin.Z), 1.0, rl.Fade(rl.White, 0.9))
@@ -367,26 +321,18 @@ func main() {
 
 		// Draw enemy-box
 		rl.DrawCube(enemyBoxPos, enemyBoxSize.X, enemyBoxSize.Y, enemyBoxSize.Z, rl.Fade(rl.Black, 1.0))
-		rl.DrawCubeWires(enemyBoxPos, enemyBoxSize.X, enemyBoxSize.Y, enemyBoxSize.Z, rl.Fade(rl.Black, 1.0))
+		rl.DrawCubeWires(enemyBoxPos, enemyBoxSize.X, enemyBoxSize.Y, enemyBoxSize.Z, rl.Fade(rl.Red, 1.0))
 
 		// Draw enemy-sphere
 		rl.DrawSphere(enemySpherePos, enemySphereSize, rl.Black)
-		rl.DrawSphereWires(enemySpherePos, enemySphereSize, 16/4, 16/2, rl.Black)
+		rl.DrawSphereWires(enemySpherePos, enemySphereSize, 16/4, 16/2, rl.Red)
 
 		// Draw player
-		{
-			playerRadius := playerSize.X / 2
-			startPos := rl.NewVector3(playerPosition.X, playerPosition.Y-playerSize.Y/2+playerRadius, playerPosition.Z)
-			endPos := rl.NewVector3(playerPosition.X, playerPosition.Y+playerSize.Y/2-playerRadius, playerPosition.Z)
-			// if martianManhunterFramesCounter > 0 {
-			// 	alpha := float32(martianManhunterFramesCounter / maxMartianManhunterFramesCounter)
-			// 	rl.DrawCubeV(playerPosition, playerSize, rl.Fade(playerColor, 0.5+alpha/4))
-			// 	rl.DrawCapsule(startPos, endPos, playerRadius, 16, 16, rl.Fade(playerColor, 0.5+alpha/4))
-			// } else {
-			rl.DrawCapsule(startPos, endPos, playerRadius, 16, 16, playerColor)
-			rl.DrawCapsuleWires(startPos, endPos, playerRadius, 4, 6, rl.ColorLerp(playerColor, rl.Fade(rl.DarkGray, 0.8), 0.5))
-			// }
-		}
+		playerRadius := playerSize.X / 2
+		playerStartPos := rl.NewVector3(playerPosition.X, playerPosition.Y-playerSize.Y/2+playerRadius, playerPosition.Z)
+		playerEndPos := rl.NewVector3(playerPosition.X, playerPosition.Y+playerSize.Y/2-playerRadius, playerPosition.Z)
+		rl.DrawCapsule(playerStartPos, playerEndPos, playerRadius, 16, 16, playerColor)
+		rl.DrawCapsuleWires(playerStartPos, playerEndPos, playerRadius, 4, 6, rl.ColorLerp(playerColor, rl.Fade(rl.DarkGray, 0.8), 0.5))
 
 		// Draw prop sphere
 		if false {
@@ -423,13 +369,28 @@ func main() {
 }
 
 // From cmp.Ordered
+// Ordered is a constraint that permits any ordered type: any type
+// that supports the operators < <= >= >.
+// If future releases of Go add new ordered types,
+// this constraint will be modified to include them.
+//
+// Note that floating-point types may contain NaN ("not-a-number") values.
+// An operator such as == or < will always report false when
+// comparing a NaN value with any other value, NaN or not.
+// See the [Compare] function for a consistent way to compare NaN values.
 type OrderedNumber interface {
 	~int | ~int8 | ~int16 | ~int32 | ~int64 |
 		~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr |
 		~float32 | ~float64
 }
+
+// To avoid casting each time `OrderedNumber` interface it is used
 type NumberType OrderedNumber
 
 func MaxF[T NumberType](x T, y T) float32 { return float32(max(float64(x), float64(y))) }
 func MinF[T NumberType](x T, y T) float32 { return float32(min(float64(x), float64(y))) }
+func AbsF[T NumberType](x T) float32      { return float32(math.Abs(float64(x))) }
+
+func manhattanVector2(a, b rl.Vector2) float32 { return AbsF(b.X-a.X) + AbsF(b.Y-a.Y) }
+func manhattanVector3(a, b rl.Vector3) float32 { return AbsF(b.X-a.X) + AbsF(b.Y-a.Y) + AbsF(b.Z-a.Z) }
 
