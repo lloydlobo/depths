@@ -136,7 +136,7 @@ func main() {
 
 	// Setup moving platforms
 	platformCount := 0
-	const maxPlatformTravelAmplitude = 8 // Distance traveled
+	const maxPlatformTravelAmplitude = float32(14) // Distance traveled
 	const platformThick = 0.25 * 2
 	var platformBoundingBoxes []rl.BoundingBox
 	var platformOrigins []rl.Vector3
@@ -145,7 +145,7 @@ func main() {
 	var platformMeshes []rl.Mesh
 	var platformSizes []rl.Vector3
 	{
-		origin := rl.NewVector3(11, (playerPosition.Y-playerSize.Y/2)-(platformThick/2)-1, -15)
+		origin := rl.NewVector3(0, (playerPosition.Y-playerSize.Y/2)-(platformThick/1)-1, 0)
 		origin = rl.NewVector3(0, maxPlatformTravelAmplitude-2, 0)
 		size := rl.NewVector3(CeilF(playerSize.X*PowF(math.Phi, 4)), platformThick, CeilF(playerSize.Z*PowF(math.Phi, 4)))
 		mesh := rl.GenMeshCube(size.X, size.Y, size.Z)
@@ -352,7 +352,9 @@ func main() {
 		for i := range floorCount {
 			if rl.CheckCollisionBoxes(floorBoundingBoxes[i], GetBoundingBoxFromPositionSizeV(playerPosition, playerSize)) {
 				isFloorCollision = true
-				if isFloorSinking := true; isFloorSinking { // Only push floor down if player just jumped and landed on the floor
+
+				// Only push floor down if player just jumped and landed on the floor
+				if isFloorSinking := false; isFloorSinking {
 					isJumpLandingOnFloor := playerAirTimer >= maxPlayerAirTime
 					isFallingWithFloor := playerAirTimer > 0
 					if isJumpLandingOnFloor || isFallingWithFloor {
@@ -361,6 +363,7 @@ func main() {
 						floorBoundingBoxes[i].Max.Y += playerVelocity.Y * terminalVelocityLimiterAirFrictionY
 					}
 				}
+
 				playerPosition.Y = playerSize.Y/2 + floorBoundingBoxes[i].Max.Y // HACK: Allow player to stand on the floor
 				playerCollisionsThisFrame.W = 1
 			}
@@ -383,15 +386,14 @@ func main() {
 
 		for i := range platformCount {
 			if isMovePlatformVerticaly := true; isMovePlatformVerticaly {
-				t := float32(framesCounter)                                                  // Current Time
-				b := platformDefaultOrigins[i].Y + maxPlatformTravelAmplitude/2              // Top (Beginning)
-				c := platformDefaultOrigins[i].Y - maxPlatformTravelAmplitude - progressRate // Bottom (Change)
-				d := float32(fps)                                                            // Duration
+				t := float32(framesCounter)                                                // Current Time
+				b := float32(platformDefaultOrigins[i].Y + maxPlatformTravelAmplitude/2.0) // Top(Beginning)
+				c := float32(-maxPlatformTravelAmplitude)                                  // Bottom(Change)
+				d := float32(fps) * 4                                                      // Duration
 				dy := easings.SineInOut(t, b, c, d)
 				platformOrigins[i].Y = dy
 				platformBoundingBoxes[i].Min.Y = platformOrigins[i].Y - platformThick/2
 				platformBoundingBoxes[i].Max.Y = platformOrigins[i].Y + platformThick/2
-
 			}
 			isInsideXRange := playerPosition.X+playerSize.X/2 < platformBoundingBoxes[i].Max.X && playerPosition.X-playerSize.X/2 > platformBoundingBoxes[i].Min.X
 			isInsideZRange := playerPosition.Z+playerSize.Z/2 < platformBoundingBoxes[i].Max.Z && playerPosition.Z-playerSize.Z/2 > platformBoundingBoxes[i].Min.Z
@@ -468,22 +470,22 @@ func main() {
 
 		// Highlight player color on interactions with different world objects
 		switch {
+		case isFloorCollision:
+			playerColor = rl.Black
 		case isOOBCollision:
 			playerColor = rl.DarkGray
-		case isSafeSpotCollision:
-			playerColor = rl.Lime
 		case isPlatformCollision:
 			playerColor = rl.Blue
+		case isSafeSpotCollision:
+			playerColor = rl.Lime
+		case isTrampolineCollision:
+			playerColor = rl.Maroon
 		case isUnsafeCollision:
 			playerColor = rl.Orange
 		case isWallCollision:
-			playerColor = rl.Fade(rl.Brown, 0.9) // TODO: Figure out how to make player wall slide
-		case isTrampolineCollision:
-			playerColor = rl.Maroon
-		case isFloorCollision:
-			playerColor = rl.Black
-		default:
-			playerColor = rl.Fade(rl.Black, 0.9)
+			playerColor = rl.Fade(rl.Brown, 0.9)
+		default: // Air-Time
+			playerColor = rl.Fade(rl.Black, 0.8)
 		}
 
 		if isSafeSpotCollision || isUnsafeCollision || isFloorCollision || isPlatformCollision || isWallCollision {
