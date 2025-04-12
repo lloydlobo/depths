@@ -3,6 +3,7 @@ package main
 import (
 	"cmp"
 	"fmt"
+	"log/slog"
 	"math"
 
 	"github.com/gen2brain/raylib-go/easings"
@@ -135,6 +136,7 @@ func main() {
 
 	// Setup moving platforms
 	platformCount := 0
+	const maxPlatformTravelAmplitude = 8 // Distance traveled
 	const platformThick = 0.25
 	var platformBoundingBoxes []rl.BoundingBox
 	var platformOrigins []rl.Vector3
@@ -144,6 +146,7 @@ func main() {
 	var platformSizes []rl.Vector3
 	{
 		origin := rl.NewVector3(11, (playerPosition.Y-playerSize.Y/2)-(platformThick/2)-1, -15)
+		origin = rl.NewVector3(0, maxPlatformTravelAmplitude+2, 0)
 		size := rl.NewVector3(CeilF(playerSize.X*PowF(math.Phi, 4)), platformThick, CeilF(playerSize.Z*PowF(math.Phi, 4)))
 		mesh := rl.GenMeshCube(size.X, size.Y, size.Z)
 		model := rl.LoadModelFromMesh(mesh)
@@ -432,7 +435,7 @@ func main() {
 			if rl.CheckCollisionBoxes(box, GetBoundingBoxFromPositionSizeV(playerPosition, playerSize)) {
 				isSafeSpotCollision = true
 				playerPosition.Y = playerSize.Y/2 + box.Max.Y // HACK: Allow player to stand on the floor
-				handlePlayerJump(playerJumpVelocity * 8)
+				handlePlayerJump(playerJumpVelocity * 4)
 			}
 		}
 		if false {
@@ -459,6 +462,11 @@ func main() {
 			playerColor = rl.Black
 		default:
 			playerColor = rl.Fade(rl.Black, 0.9)
+		}
+
+		if isSafeSpotCollision || isUnsafeCollision || isFloorCollision {
+			slog.Info("Reseting player air timer", "playerAirTimer", playerAirTimer)
+			playerAirTimer = 0
 		}
 
 		// Update progress on collision, air-time, ...
@@ -520,19 +528,18 @@ func main() {
 
 		// Draw interactive objects
 		for i := range platformCount {
-			const maxAmplitude = 8                                         // Distance traveled
-			t := float32(framesCounter)                                    // Current Time
-			b := platformDefaultOrigins[i].Y + maxAmplitude/2              // Top (Beginning)
-			c := platformDefaultOrigins[i].Y - maxAmplitude - progressRate // Bottom (Change)
-			d := float32(fps) * 4                                          // Duration
+			t := float32(framesCounter)                                                  // Current Time
+			b := platformDefaultOrigins[i].Y + maxPlatformTravelAmplitude/2              // Top (Beginning)
+			c := platformDefaultOrigins[i].Y - maxPlatformTravelAmplitude - progressRate // Bottom (Change)
+			d := float32(fps) * 4                                                        // Duration
 			y := easings.SineInOut(t, b, c, d)
 			platformBoundingBoxes[i].Min.Y = y
 			platformBoundingBoxes[i].Max.Y = y
 			platformOrigins[i].Y = y
-			rl.DrawCubeV(platformDefaultOrigins[i], rl.NewVector3(platformThick, maxAmplitude, platformThick), rl.LightGray) // Reference (y axis)
-			rl.DrawPlane(platformDefaultOrigins[i], rl.NewVector2(1, 1), rl.LightGray)                                       // Reference (midpoint)
-			rl.DrawModel(platformModels[i], platformOrigins[i], 1.0, rl.SkyBlue)                                             // Moving
-			rl.DrawBoundingBox(platformBoundingBoxes[i], rl.DarkBlue)                                                        // Outline
+			rl.DrawCubeV(platformDefaultOrigins[i], rl.NewVector3(platformThick, maxPlatformTravelAmplitude, platformThick), rl.LightGray) // Reference (y axis)
+			rl.DrawPlane(platformDefaultOrigins[i], rl.NewVector2(1, 1), rl.LightGray)                                                     // Reference (midpoint)
+			rl.DrawModel(platformModels[i], platformOrigins[i], 1.0, rl.SkyBlue)                                                           // Moving
+			rl.DrawBoundingBox(platformBoundingBoxes[i], rl.DarkBlue)                                                                      // Outline
 		}
 		for i := range unsafeDischargeSphereCount {
 			rl.DrawSphere(unsafeDischargeSpherePositions[i], unsafeRedSphereSizes[i], rl.Gold)
@@ -590,12 +597,9 @@ func main() {
 
 		// Quick debug zone
 		{
-			for i := range platformCount {
-				_ = i
-				f := rl.Clamp(SinF(2.0*float32(framesCounter)*1.0/float32(fps)), -1, 1)
-				rl.DrawText(fmt.Sprintln(f), 0, 0, 10, rl.Red)
-			}
-
+			text := fmt.Sprintf("playerAirTimer: %.2f\n", playerAirTimer)
+			strWidth := rl.MeasureText(text, 10)
+			rl.DrawText(text, int32(rl.GetScreenWidth())-10-strWidth, 10, 10, rl.Red)
 		}
 
 		rl.EndDrawing()
