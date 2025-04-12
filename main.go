@@ -87,9 +87,9 @@ func main() {
 	// Setup floors
 	{
 		tempFloorItems := []Item{}
-		const floorThick = 0.5 * 2
+		const floorThick = 1
 		{
-			origin := rl.NewVector3(0, (playerPosition.Y-playerSize.Y/2)-(floorThick/2), 0)
+			origin := rl.NewVector3(0, (playerPosition.Y-playerSize.Y/2)-(floorThick/2)-4, 0)
 			size := rl.NewVector3(4.0*5.0, floorThick*2.0, 4.0*5.0)
 			item := NewItem(ItemFloor, origin, size, rl.White)
 			item.ModelID = int32(len(itemModels))
@@ -765,38 +765,7 @@ func NewItemGroup(typ ItemType, items []Item) Item {
 }
 
 func (item *Item) Update() {
-	switch typ := item.Type; typ {
-	case ItemFloors:
-		for i := range item.Children {
-			item.Children[i].Update()
-		}
-	case ItemPlatforms:
-		for i := range item.Children {
-			item.Children[i].Update()
-		}
-	case ItemFloor:
-		// if rl.CheckCollisionBoxes(GetBoundingBoxFromPositionSizeV(item.Position, item.Size), GetBoundingBoxFromPositionSizeV(rl.Vector3One(), rl.Vector3One())) {
-		// 	isFloorCollision = true
-		//
-		// 	// Only push floor down if player just jumped and landed on the floor
-		// 	if isFloorSinking := false; isFloorSinking {
-		// 		isJumpLandingOnFloor := playerAirTimer >= maxPlayerAirTime
-		// 		isFallingWithFloor := playerAirTimer > 0
-		// 		if isJumpLandingOnFloor || isFallingWithFloor {
-		// 			floorOrigins[i].Y += playerVelocity.Y * terminalVelocityLimiterAirFrictionY
-		// 			floorBoundingBoxes[i].Min.Y += playerVelocity.Y * terminalVelocityLimiterAirFrictionY
-		// 			floorBoundingBoxes[i].Max.Y += playerVelocity.Y * terminalVelocityLimiterAirFrictionY
-		// 		}
-		// 	}
-		//
-		// 	playerPosition.Y = playerSize.Y/2 + floorBoundingBoxes[i].Max.Y // HACK: Allow player to stand on the floor
-		// 	playerCollisionsThisFrame.W = 1
-		// }
-	case ItemPlatform:
-		rl.DrawModel(itemModels[item.ModelID], item.Position, item.Scale, item.Color)
-	default:
-		panic("Invalid item type")
-	}
+	panic("Unimplemented: func (item *Item) Update()")
 }
 
 func (item *Item) Draw() {
