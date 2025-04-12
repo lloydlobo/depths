@@ -3,7 +3,7 @@ package main
 import (
 	"cmp"
 	"fmt"
-	"log/slog"
+	"log"
 	"math"
 
 	"github.com/gen2brain/raylib-go/easings"
@@ -106,18 +106,18 @@ func main() {
 		unsafeDischargeSphereCount++
 	}
 
-	jumppadBoxCount := 0
-	var jumppadBoxPositions []rl.Vector3
-	var jumppadBoxSizes []rl.Vector3
+	trampolineBoxCount := 0
+	var trampolineBoxPositions []rl.Vector3
+	var trampolineBoxSizes []rl.Vector3
 	{
-		jumppadBoxPositions = append(jumppadBoxPositions, rl.NewVector3(-9, 1, 0))
-		jumppadBoxSizes = append(jumppadBoxSizes, rl.NewVector3(2, 0.25, 2))
-		jumppadBoxCount++
+		trampolineBoxPositions = append(trampolineBoxPositions, rl.NewVector3(-9, 1, 0))
+		trampolineBoxSizes = append(trampolineBoxSizes, rl.NewVector3(2, 0.25, 2))
+		trampolineBoxCount++
 	}
 	{
-		jumppadBoxPositions = append(jumppadBoxPositions, rl.NewVector3(0, 1, -9))
-		jumppadBoxSizes = append(jumppadBoxSizes, rl.NewVector3(2, 0.25, 2))
-		jumppadBoxCount++
+		trampolineBoxPositions = append(trampolineBoxPositions, rl.NewVector3(0, 1, -9))
+		trampolineBoxSizes = append(trampolineBoxSizes, rl.NewVector3(2, 0.25, 2))
+		trampolineBoxCount++
 	}
 
 	// anticlockwise: 0 -> 1 -> 2 -> 3 TLBR
@@ -137,7 +137,7 @@ func main() {
 	// Setup moving platforms
 	platformCount := 0
 	const maxPlatformTravelAmplitude = 8 // Distance traveled
-	const platformThick = 0.25
+	const platformThick = 0.25 * 2
 	var platformBoundingBoxes []rl.BoundingBox
 	var platformOrigins []rl.Vector3
 	var platformDefaultOrigins []rl.Vector3
@@ -146,7 +146,7 @@ func main() {
 	var platformSizes []rl.Vector3
 	{
 		origin := rl.NewVector3(11, (playerPosition.Y-playerSize.Y/2)-(platformThick/2)-1, -15)
-		origin = rl.NewVector3(0, maxPlatformTravelAmplitude+2, 0)
+		origin = rl.NewVector3(0, maxPlatformTravelAmplitude-2, 0)
 		size := rl.NewVector3(CeilF(playerSize.X*PowF(math.Phi, 4)), platformThick, CeilF(playerSize.Z*PowF(math.Phi, 4)))
 		mesh := rl.GenMeshCube(size.X, size.Y, size.Z)
 		model := rl.LoadModelFromMesh(mesh)
@@ -242,11 +242,13 @@ func main() {
 	}
 
 	var (
-		isFloorCollision    bool
-		isOOBCollision      bool
-		isSafeSpotCollision bool
-		isUnsafeCollision   bool
-		isWallCollision     bool
+		isFloorCollision      bool
+		isTrampolineCollision bool // Boosts upwards if jumped on
+		isOOBCollision        bool // Out of worl bounds (unimplemented)
+		isPlatformCollision   bool // Movable platforms
+		isSafeSpotCollision   bool // Add health
+		isUnsafeCollision     bool // Reduce health
+		isWallCollision       bool // TODO: Slide/Y-axis-barrier
 	)
 
 	framesCounter := 0
@@ -255,9 +257,14 @@ func main() {
 		if velocityY <= 0 {
 			panic(fmt.Sprintf("Jumps must have a positive upwards Y velocity. Got: %f", velocityY))
 		}
-		playerJumpsLeft--
+
 		playerVelocity.Y = velocityY
 		playerAirTimer = maxPlayerAirTime
+
+		playerJumpsLeft--
+		if playerJumpVelocity < 0 {
+			playerJumpsLeft = 0
+		}
 	}
 
 	rl.DisableCursor()
@@ -295,7 +302,9 @@ func main() {
 
 		// Update
 
-		dt := rl.GetFrameTime() // Same as 1/float32(fps) if fps was consistent
+		dt := rl.GetFrameTime()                   // Same as 1/float32(fps) if fps was consistent
+		const progressRateDecay = 0.08            // Slows down change in frame time
+		var progressRate = dt * progressRateDecay // Rate of change in this world for aethetic taste
 
 		// HACK: Store previous position to reuse as next postion on collision (quick position resets)
 		oldPlayerPos := playerPosition
@@ -305,10 +314,12 @@ func main() {
 		_ = oldCamPos
 
 		// Reset collision flags
-		isUnsafeCollision = false
-		isOOBCollision = false
-		isSafeSpotCollision = false
 		isFloorCollision = false
+		isTrampolineCollision = false
+		isOOBCollision = false
+		isPlatformCollision = false
+		isSafeSpotCollision = false
+		isUnsafeCollision = false
 		isWallCollision = false
 
 		// Check gameover events and conditions
@@ -331,61 +342,27 @@ func main() {
 		}
 
 		frameMovement := rl.Vector3Add(playerMovementThisFrame, playerVelocity)
-		{
-			playerPosition.X += frameMovement.X * movementMagnitude
-			if false {
-				if isTouchXPlaneEdges := playerPosition.X-playerSize.X/2 < -arenaWidth/2 || playerPosition.X+playerSize.X/2 > arenaWidth/2; isTouchXPlaneEdges {
-					playerCollisionsThisFrame.X = 1
-				}
-			}
-			playerPosition.Y += frameMovement.Y * movementMagnitude
-			if false {
-				playerCollisionsThisFrame.Y = 1
-			}
-			playerPosition.Z += frameMovement.Z * movementMagnitude
-			if false {
-				if isTouchZPlaneEdges := playerPosition.Z-playerSize.Z/2 < -arenaLength/2 || playerPosition.Z+playerSize.Z/2 > arenaLength/2; isTouchZPlaneEdges {
-					playerCollisionsThisFrame.Z = 1
-				}
-			}
-			// Check if player is safely standing on the floor
-			for i := range floorCount {
-				if rl.CheckCollisionBoxes(floorBoundingBoxes[i], rl.NewBoundingBox(
-					rl.NewVector3(playerPosition.X-playerSize.X/2, playerPosition.Y-playerSize.Y/2, playerPosition.Z-playerSize.Z/2),
-					rl.NewVector3(playerPosition.X+playerSize.X/2, playerPosition.Y+playerSize.Y/2, playerPosition.Z+playerSize.Z/2))) {
-					isFloorCollision = true
-					playerCollisionsThisFrame.W = 1
-					if isFloorSinking := false; isFloorSinking { // Only push floor down if player just jumped and landed on the floor
-						isJumpLandingOnFloor := playerAirTimer >= maxPlayerAirTime
-						isFallingWithFloor := playerAirTimer > 0
-						if isJumpLandingOnFloor || isFallingWithFloor {
-							floorOrigins[i].Y += playerVelocity.Y * terminalVelocityLimiterAirFrictionY
-							floorBoundingBoxes[i].Min.Y += playerVelocity.Y * terminalVelocityLimiterAirFrictionY
-							floorBoundingBoxes[i].Max.Y += playerVelocity.Y * terminalVelocityLimiterAirFrictionY
-						}
-					}
-					playerPosition.Y = playerSize.Y/2 + floorBoundingBoxes[i].Max.Y // HACK: Allow player to stand on the floor
-				}
-			}
 
-			// # Entity: Update velocity
-			playerVelocity.Y = MinF(terminalVelocityY, playerVelocity.Y-terminalVelocityLimiterAirFrictionY) // Decelerate if in air
-			// # Entity: Handle velocity based on collisions up or down
-			if playerCollisionsThisFrame.Y == 1 || playerCollisionsThisFrame.W == 1 {
-				playerVelocity.Y = 0 // self.Velocity = 0
-			}
-			// # Entity:Player: Handle velocity based on collisions
-			if playerCollisionsThisFrame.Y == 1 || playerCollisionsThisFrame.W == 1 {
-				playerAirTimer = 0
-				if false {
-					value := playerSize.Y / 2 // HACK: This is handled directly by floorBoundingBoxes collision check interations
-					playerPosition.Y = value  // Detect the floor the player is touching and get bounding box top offset from player bottom
+		playerPosition.X += frameMovement.X * movementMagnitude
+		playerPosition.Y += frameMovement.Y * movementMagnitude
+		playerPosition.Z += frameMovement.Z * movementMagnitude
+
+		// Check if player is safely standing on the floor
+		// NOTE: SHOULD REARRANGE ORDER OF COLLISION CHECKS FOR FLOOR AND PLATFORM AND PLAYER.COLLISIONSTHISFRAME.W/Y
+		for i := range floorCount {
+			if rl.CheckCollisionBoxes(floorBoundingBoxes[i], GetBoundingBoxFromPositionSizeV(playerPosition, playerSize)) {
+				isFloorCollision = true
+				if isFloorSinking := true; isFloorSinking { // Only push floor down if player just jumped and landed on the floor
+					isJumpLandingOnFloor := playerAirTimer >= maxPlayerAirTime
+					isFallingWithFloor := playerAirTimer > 0
+					if isJumpLandingOnFloor || isFallingWithFloor {
+						floorOrigins[i].Y += playerVelocity.Y * terminalVelocityLimiterAirFrictionY
+						floorBoundingBoxes[i].Min.Y += playerVelocity.Y * terminalVelocityLimiterAirFrictionY
+						floorBoundingBoxes[i].Max.Y += playerVelocity.Y * terminalVelocityLimiterAirFrictionY
+					}
 				}
-				playerJumpsLeft = 1
-			}
-			// Snappy bouncy jumps
-			if playerAirTimer > maxPlayerAirTime*math.Phi && playerAirTimer < maxPlayerAirTime*math.Phi*math.Phi { // Once
-				playerVelocity.Y -= terminalVelocityLimiterAirFrictionY
+				playerPosition.Y = playerSize.Y/2 + floorBoundingBoxes[i].Max.Y // HACK: Allow player to stand on the floor
+				playerCollisionsThisFrame.W = 1
 			}
 		}
 
@@ -404,12 +381,47 @@ func main() {
 			playerVelocity.Z = MinF(0, playerVelocity.Z+terminalVelocityLimiterAirFriction)
 		}
 
+		for i := range platformCount {
+			if isMovePlatformVerticaly := true; isMovePlatformVerticaly {
+				t := float32(framesCounter)                                                  // Current Time
+				b := platformDefaultOrigins[i].Y + maxPlatformTravelAmplitude/2              // Top (Beginning)
+				c := platformDefaultOrigins[i].Y - maxPlatformTravelAmplitude - progressRate // Bottom (Change)
+				d := float32(fps)                                                            // Duration
+				dy := easings.SineInOut(t, b, c, d)
+				platformOrigins[i].Y = dy
+				platformBoundingBoxes[i].Min.Y = platformOrigins[i].Y - platformThick/2
+				platformBoundingBoxes[i].Max.Y = platformOrigins[i].Y + platformThick/2
+
+			}
+			isInsideXRange := playerPosition.X+playerSize.X/2 < platformBoundingBoxes[i].Max.X && playerPosition.X-playerSize.X/2 > platformBoundingBoxes[i].Min.X
+			isInsideZRange := playerPosition.Z+playerSize.Z/2 < platformBoundingBoxes[i].Max.Z && playerPosition.Z-playerSize.Z/2 > platformBoundingBoxes[i].Min.Z
+			isAboveYRange := playerPosition.Y+playerSize.Y/2 >= platformBoundingBoxes[i].Max.Y && playerPosition.Y-playerSize.Y/2 >= platformBoundingBoxes[i].Min.Y
+			const tolerance = platformThick // Avoid spamming isPlatformCollision as pure player size calculation does not handle changing bound tolerance in the same loop
+			if isInsideXRange && isInsideZRange && isAboveYRange {
+				isPlatformCollision = true
+				if rl.CheckCollisionBoxes(
+					platformBoundingBoxes[i],
+					GetBoundingBoxFromPositionSizeV(playerPosition, rl.Vector3AddValue(playerSize, tolerance)),
+				) {
+					playerPosition.Y = playerSize.Y/2 + platformBoundingBoxes[i].Max.Y
+					playerCollisionsThisFrame.W = 1
+				}
+			} else if isPassFromUnderOrTouchEdges := rl.CheckCollisionBoxes(
+				platformBoundingBoxes[i],
+				GetBoundingBoxFromPositionSizeV(playerPosition, playerSize),
+			); isPassFromUnderOrTouchEdges {
+				isPlatformCollision = true
+				playerCollisionsThisFrame.Y = 1
+				playerPosition.Y = playerSize.Y/2 + platformBoundingBoxes[i].Max.Y
+				playerCollisionsThisFrame.Y = 0
+				playerCollisionsThisFrame.W = 1
+			}
+		}
 		for i := range unsafeDischargeSphereCount {
 			if rl.CheckCollisionBoxSphere(rl.NewBoundingBox(
 				rl.NewVector3(playerPosition.X-playerSize.X/2, playerPosition.Y-playerSize.Y/2, playerPosition.Z-playerSize.Z/2),
 				rl.NewVector3(playerPosition.X+playerSize.X/2, playerPosition.Y+playerSize.Y/2, playerPosition.Z+playerSize.Z/2)), unsafeDischargeSpherePositions[i], unsafeRedSphereSizes[i]) {
 				isUnsafeCollision = true
-
 				// Find perpendicular curve to XZ plane, i.e slope of circumference
 				// WARN: Expect wonky animation, as bottom of player box when on a slope of sphere,
 				// may not collide with top tangent to sphere surface.
@@ -419,23 +431,29 @@ func main() {
 				dy := (dx*dx + dz*dz) * height
 				dy = SqrtF(dy)
 				dy = rl.Clamp(dy, 0, height)
-
 				playerPosition.Y = unsafeDischargeSpherePositions[i].Y + dy
+				playerCollisionsThisFrame.W = 1
 			}
 		}
 		for i := range safeRechargeBoxCount {
 			box := GetBoundingBoxFromPositionSizeV(safeRechargeBoxPositions[i], safeRechargeBoxSizes[i])
 			if rl.CheckCollisionBoxes(box, GetBoundingBoxFromPositionSizeV(playerPosition, playerSize)) {
+				playerCollisionsThisFrame.W = 1
 				isSafeSpotCollision = true
 				playerPosition.Y = playerSize.Y/2 + box.Max.Y // HACK: Allow player to stand on the floor
 			}
 		}
-		for i := range jumppadBoxCount {
-			box := GetBoundingBoxFromPositionSizeV(jumppadBoxPositions[i], jumppadBoxSizes[i])
+		for i := range trampolineBoxCount {
+			box := GetBoundingBoxFromPositionSizeV(trampolineBoxPositions[i], trampolineBoxSizes[i])
 			if rl.CheckCollisionBoxes(box, GetBoundingBoxFromPositionSizeV(playerPosition, playerSize)) {
-				isSafeSpotCollision = true
+				isTrampolineCollision = true
 				playerPosition.Y = playerSize.Y/2 + box.Max.Y // HACK: Allow player to stand on the floor
-				handlePlayerJump(playerJumpVelocity * 4)
+				if playerAirTimer <= maxPlayerAirTime {       // Do not activate when stepped on
+					playerCollisionsThisFrame.W = 1
+				} else {
+					handlePlayerJump(playerJumpVelocity * 8)
+					playerJumpsLeft++
+				}
 			}
 		}
 		if false {
@@ -454,25 +472,46 @@ func main() {
 			playerColor = rl.DarkGray
 		case isSafeSpotCollision:
 			playerColor = rl.Lime
+		case isPlatformCollision:
+			playerColor = rl.Blue
 		case isUnsafeCollision:
 			playerColor = rl.Orange
 		case isWallCollision:
 			playerColor = rl.Fade(rl.Brown, 0.9) // TODO: Figure out how to make player wall slide
+		case isTrampolineCollision:
+			playerColor = rl.Maroon
 		case isFloorCollision:
 			playerColor = rl.Black
 		default:
 			playerColor = rl.Fade(rl.Black, 0.9)
 		}
 
-		if isSafeSpotCollision || isUnsafeCollision || isFloorCollision {
-			slog.Info("Reseting player air timer", "playerAirTimer", playerAirTimer)
-			playerAirTimer = 0
+		if isSafeSpotCollision || isUnsafeCollision || isFloorCollision || isPlatformCollision || isWallCollision {
+			log.Println("Collision detected")
+		}
+
+		// Update player collisions
+		{ // # Entity: Update velocity
+			playerVelocity.Y = MinF(terminalVelocityY, playerVelocity.Y-terminalVelocityLimiterAirFrictionY) // Decelerate if in air
+
+			// # Entity: Handle velocity based on collisions up or down
+			if playerCollisionsThisFrame.Y == 1 || playerCollisionsThisFrame.W == 1 {
+				playerVelocity.Y = 0 // self.Velocity = 0
+			}
+
+			// # Entity:Player: Handle velocity based on collisions
+			if /* playerCollisionsThisFrame.Y == 1 || */ playerCollisionsThisFrame.W == 1 {
+				playerAirTimer = 0
+				playerJumpsLeft = 1
+			}
+
+			// Snappy bouncy jumps
+			if playerAirTimer > maxPlayerAirTime*math.Phi && playerAirTimer < maxPlayerAirTime*math.Phi*math.Phi { // Once
+				playerVelocity.Y -= terminalVelocityLimiterAirFrictionY
+			}
 		}
 
 		// Update progress on collision, air-time, ...
-		const progressRateDecay = 0.08            // Slows down change in frame time
-		var progressRate = dt * progressRateDecay // Rate of change in this world for aethetic taste
-
 		if isUnsafeCollision {
 			shieldProgress -= progressRate
 		}
@@ -489,8 +528,9 @@ func main() {
 		if playerAirTimer > maxPlayerFreefallAirTime {
 			shieldProgress -= PowF(progressRate*shieldProgress, maxPlayerFreefallAirTime/playerAirTimer)
 		}
-		if isDebug := false; isDebug {
-			if (playerCollisionsThisFrame.X == 1 || playerCollisionsThisFrame.Z == 1) && (!isOOBCollision && !isSafeSpotCollision && !isFloorCollision) {
+		if isDebugAllCollisions := false; isDebugAllCollisions {
+			if (playerCollisionsThisFrame.X == 1 || playerCollisionsThisFrame.Z == 1) &&
+				(!isOOBCollision && !isSafeSpotCollision && !isFloorCollision && !isPlatformCollision && !isWallCollision) {
 				shieldProgress -= progressRate
 			}
 		}
@@ -528,14 +568,6 @@ func main() {
 
 		// Draw interactive objects
 		for i := range platformCount {
-			t := float32(framesCounter)                                                  // Current Time
-			b := platformDefaultOrigins[i].Y + maxPlatformTravelAmplitude/2              // Top (Beginning)
-			c := platformDefaultOrigins[i].Y - maxPlatformTravelAmplitude - progressRate // Bottom (Change)
-			d := float32(fps) * 4                                                        // Duration
-			y := easings.SineInOut(t, b, c, d)
-			platformBoundingBoxes[i].Min.Y = y
-			platformBoundingBoxes[i].Max.Y = y
-			platformOrigins[i].Y = y
 			rl.DrawCubeV(platformDefaultOrigins[i], rl.NewVector3(platformThick, maxPlatformTravelAmplitude, platformThick), rl.LightGray) // Reference (y axis)
 			rl.DrawPlane(platformDefaultOrigins[i], rl.NewVector2(1, 1), rl.LightGray)                                                     // Reference (midpoint)
 			rl.DrawModel(platformModels[i], platformOrigins[i], 1.0, rl.SkyBlue)                                                           // Moving
@@ -551,9 +583,9 @@ func main() {
 			rl.DrawCubeV(pos, size, rl.Fade(rl.Green, 1.0))
 			rl.DrawCubeWiresV(pos, size, rl.Fade(rl.DarkGreen, 1.0))
 		}
-		for i := range jumppadBoxCount {
-			pos := jumppadBoxPositions[i]
-			size := jumppadBoxSizes[i]
+		for i := range trampolineBoxCount {
+			pos := trampolineBoxPositions[i]
+			size := trampolineBoxSizes[i]
 			rl.DrawCubeV(pos, size, rl.Fade(rl.Red, 1.0))
 			rl.DrawCubeWiresV(pos, size, rl.Fade(rl.Maroon, 1.0))
 		}
@@ -597,7 +629,7 @@ func main() {
 
 		// Quick debug zone
 		{
-			text := fmt.Sprintf("playerAirTimer: %.2f\n", playerAirTimer)
+			text := fmt.Sprintf("playerAirTimer: %.2f\nplayerJumpsLeft: %d", playerAirTimer, playerJumpsLeft)
 			strWidth := rl.MeasureText(text, 10)
 			rl.DrawText(text, int32(rl.GetScreenWidth())-10-strWidth, 10, 10, rl.Red)
 		}
@@ -640,6 +672,8 @@ func SinF[T NumberType](x T) float32      { return float32(math.Sin(float64(x)))
 func FloorF[T NumberType](x T) float32    { return float32(math.Floor(float64(x))) }
 func CeilF[T NumberType](x T) float32     { return float32(math.Ceil(float64(x))) }
 func SignF[T NumberType](x T) float32     { return cmp.Or(float32(math.Abs(float64(x))/float64(x)), 0) }
+func MaxI[T NumberType](x T, y T) int     { return int(max(float64(x), float64(y))) }
+func MinI[T NumberType](x T, y T) int     { return int(min(float64(x), float64(y))) }
 
 func manhattanV2(a, b rl.Vector2) float32 { return AbsF(b.X-a.X) + AbsF(b.Y-a.Y) }
 func manhattanV3(a, b rl.Vector3) float32 { return AbsF(b.X-a.X) + AbsF(b.Y-a.Y) + AbsF(b.Z-a.Z) }
