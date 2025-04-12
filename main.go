@@ -41,7 +41,7 @@ func main() {
 		Position:   rl.NewVector3(0.0, camPosW, camPosL),
 		Target:     rl.NewVector3(0.0, -1.0, 0.0),
 		Up:         rl.NewVector3(0.0, 1.0, 0.0),
-		Fovy:       float32(cmp.Or(45.0, 60.0, 30.0)),
+		Fovy:       float32(cmp.Or(60.0, 45.0, 30.0)), // Use higher Fovy to zoom out if following a target
 		Projection: rl.CameraPerspective,
 	}
 
