@@ -45,6 +45,14 @@ func main() {
 		Projection: rl.CameraPerspective,
 	}
 
+	defaultCameraTarget := rl.NewVector3(0.0, -1.0, 0.0)
+	defaultCameraPosition := rl.NewVector3(0.0, camPosW, camPosL)
+	defaultCameraPositionTargetVector := rl.NewVector3(defaultCameraPosition.X-defaultCameraTarget.X,
+		defaultCameraPosition.Y-defaultCameraTarget.Y,
+		defaultCameraPosition.Z-defaultCameraTarget.Z,
+	)
+	defaultCameraPositionTargetDistance := rl.Vector3Distance(defaultCameraPosition, defaultCameraTarget)
+
 	const sphereModelRadius = arenaWidth / math.Phi
 	sphereMesh := rl.GenMeshSphere(sphereModelRadius, 16, 16)
 	sphereModel := rl.LoadModelFromMesh(sphereMesh)
@@ -64,8 +72,6 @@ func main() {
 	_ = isPlayerBoost
 	_ = isPlayerStrafe
 
-	// rl.QuaternionFromEuler()
-	// rl.QuaternionToEuler()
 	maxPlayerAirTime := float32(fps) / 2.0
 	maxPlayerFreefallAirTime := maxPlayerAirTime * 3
 	const movementMagnitude = float32(0.2)
@@ -76,6 +82,8 @@ func main() {
 
 	// FEAT: See also https://github.com/Pakz001/Raylib-Examples/blob/master/ai/Example_-_Pattern_Movement.c
 	// Like Arrow shooter crazyggame,,, fruit dispenser
+	// rl.QuaternionFromEuler()
+	// rl.QuaternionToEuler()
 
 	safeRechargeBoxCount := 0
 	var safeRechargeBoxPositions []rl.Vector3
@@ -297,16 +305,25 @@ func main() {
 				handlePlayerJump(playerJumpVelocity)
 			}
 		}
+		if rl.IsWindowResized() {
+			screenWidth = int32(rl.GetScreenWidth())
+			screenHeight = int32(rl.GetScreenHeight())
+		}
 
 		// Update
 
-		dt := rl.GetFrameTime()                   // Same as 1/float32(fps) if fps was consistent
-		const progressRateDecay = 0.08            // Slows down change in frame time
-		var progressRate = dt * progressRateDecay // Rate of change in this world for aethetic taste
+		dt := rl.GetFrameTime()                // Same as 1/float32(fps) if fps was consistent
+		const progressRateDecay = 0.08         // Slows down change in frame time
+		progressRate := dt * progressRateDecay // Rate of change in this world for aethetic taste
 
 		// HACK: Store previous position to reuse as next postion on collision (quick position resets)
 		oldPlayerPos := playerPosition
 		oldCamPos := camera.Position
+		oldCamTarget := camera.Target
+
+		// Follow player center
+		camera.Target = rl.Vector3Lerp(oldCamTarget, playerPosition, progressRate*(float32(fps)/3.0))
+		camera.Position = rl.Vector3Add(camera.Target, defaultCameraPositionTargetVector)
 
 		_ = oldPlayerPos
 		_ = oldCamPos
@@ -618,9 +635,14 @@ func main() {
 
 		// Quick debug zone
 		{
-			text := fmt.Sprintf("playerAirTimer: %.2f\nplayerJumpsLeft: %d", playerAirTimer, playerJumpsLeft)
-			strWidth := rl.MeasureText(text, 10)
-			rl.DrawText(text, int32(rl.GetScreenWidth())-10-strWidth, 10, 10, rl.DarkGray)
+			text := fmt.Sprintf("playerAirTimer: %.2f\nplayerJumpsLeft: %d\n"+
+				"camera.Position: %.2f\ncamera.Target: %.2f\ncameraPositionTargetDistance: %.2f\n"+
+				"defaultCameraPosition: %.2f\ndefaultCameraTarget: %.2f\ndefaultCameraPositionTargetDistance: %.2f\n",
+				playerAirTimer, playerJumpsLeft,
+				camera.Position, camera.Target, rl.Vector3Distance(camera.Position, camera.Target),
+				defaultCameraPosition, defaultCameraTarget, defaultCameraPositionTargetDistance,
+			)
+			rl.DrawText(text, int32(rl.GetScreenWidth())-10-rl.MeasureText(text, 10), 10, 10, rl.DarkGray)
 		}
 
 		rl.EndDrawing()
@@ -661,8 +683,9 @@ func SinF[T NumberType](x T) float32      { return float32(math.Sin(float64(x)))
 func FloorF[T NumberType](x T) float32    { return float32(math.Floor(float64(x))) }
 func CeilF[T NumberType](x T) float32     { return float32(math.Ceil(float64(x))) }
 func SignF[T NumberType](x T) float32     { return cmp.Or(float32(math.Abs(float64(x))/float64(x)), 0) }
-func MaxI[T NumberType](x T, y T) int     { return int(max(float64(x), float64(y))) }
-func MinI[T NumberType](x T, y T) int     { return int(min(float64(x), float64(y))) }
+func MaxI[T NumberType](x T, y T) int32   { return int32(max(float64(x), float64(y))) }
+func MinI[T NumberType](x T, y T) int32   { return int32(min(float64(x), float64(y))) }
+func RoundI[T NumberType](x T) int32      { return int32(math.Round(float64(x))) }
 
 func manhattanV2(a, b rl.Vector2) float32 { return AbsF(b.X-a.X) + AbsF(b.Y-a.Y) }
 func manhattanV3(a, b rl.Vector3) float32 { return AbsF(b.X-a.X) + AbsF(b.Y-a.Y) + AbsF(b.Z-a.Z) }
