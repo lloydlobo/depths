@@ -3,7 +3,6 @@ package main
 import (
 	"cmp"
 	"fmt"
-	"log"
 	"math"
 
 	"github.com/gen2brain/raylib-go/easings"
@@ -136,8 +135,8 @@ func main() {
 
 	// Setup moving platforms
 	platformCount := 0
-	const maxPlatformTravelAmplitude = float32(14) // Distance traveled
-	const platformThick = 0.25 * 2
+	const maxPlatformTravelAmplitude = float32(arenaWidth / 2) // Distance traveled
+	const platformThick = 0.25 * 4
 	var platformBoundingBoxes []rl.BoundingBox
 	var platformOrigins []rl.Vector3
 	var platformDefaultOrigins []rl.Vector3
@@ -145,8 +144,7 @@ func main() {
 	var platformMeshes []rl.Mesh
 	var platformSizes []rl.Vector3
 	{
-		origin := rl.NewVector3(0, (playerPosition.Y-playerSize.Y/2)-(platformThick/1)-1, 0)
-		origin = rl.NewVector3(0, maxPlatformTravelAmplitude-2, 0)
+		origin := rl.NewVector3(2*arenaWidth/3, 0, -arenaLength/2)
 		size := rl.NewVector3(CeilF(playerSize.X*PowF(math.Phi, 4)), platformThick, CeilF(playerSize.Z*PowF(math.Phi, 4)))
 		mesh := rl.GenMeshCube(size.X, size.Y, size.Z)
 		model := rl.LoadModelFromMesh(mesh)
@@ -402,15 +400,15 @@ func main() {
 			if isInsideXRange && isInsideZRange && isAboveYRange {
 				isPlatformCollision = true
 				if rl.CheckCollisionBoxes(
-					platformBoundingBoxes[i],
 					GetBoundingBoxFromPositionSizeV(playerPosition, rl.Vector3AddValue(playerSize, tolerance)),
+					platformBoundingBoxes[i],
 				) {
 					playerPosition.Y = playerSize.Y/2 + platformBoundingBoxes[i].Max.Y
 					playerCollisionsThisFrame.W = 1
 				}
 			} else if isPassFromUnderOrTouchEdges := rl.CheckCollisionBoxes(
-				platformBoundingBoxes[i],
 				GetBoundingBoxFromPositionSizeV(playerPosition, playerSize),
+				platformBoundingBoxes[i],
 			); isPassFromUnderOrTouchEdges {
 				isPlatformCollision = true
 				playerCollisionsThisFrame.Y = 1
@@ -420,16 +418,17 @@ func main() {
 			}
 		}
 		for i := range unsafeDischargeSphereCount {
-			if rl.CheckCollisionBoxSphere(rl.NewBoundingBox(
-				rl.NewVector3(playerPosition.X-playerSize.X/2, playerPosition.Y-playerSize.Y/2, playerPosition.Z-playerSize.Z/2),
-				rl.NewVector3(playerPosition.X+playerSize.X/2, playerPosition.Y+playerSize.Y/2, playerPosition.Z+playerSize.Z/2)), unsafeDischargeSpherePositions[i], unsafeRedSphereSizes[i]) {
+			if rl.CheckCollisionBoxSphere(
+				GetBoundingBoxFromPositionSizeV(playerPosition, playerSize),
+				unsafeDischargeSpherePositions[i],
+				unsafeRedSphereSizes[i],
+			) {
 				isUnsafeCollision = true
 				// Find perpendicular curve to XZ plane, i.e slope of circumference
-				// WARN: Expect wonky animation, as bottom of player box when on a slope of sphere,
-				// may not collide with top tangent to sphere surface.
+				// WARN: Expect wonky animation, as bottom of player box when on a slope of sphere, may not collide with top tangent to sphere surface.
+				height := unsafeRedSphereSizes[i]/2 + playerSize.Y
 				dx := CosF(AbsF(playerPosition.X - unsafeDischargeSpherePositions[i].X))
 				dz := CosF(AbsF(playerPosition.Z - unsafeDischargeSpherePositions[i].Z))
-				height := unsafeRedSphereSizes[i]/2 + playerSize.Y
 				dy := (dx*dx + dz*dz) * height
 				dy = SqrtF(dy)
 				dy = rl.Clamp(dy, 0, height)
@@ -488,29 +487,18 @@ func main() {
 			playerColor = rl.Fade(rl.Black, 0.8)
 		}
 
-		if isSafeSpotCollision || isUnsafeCollision || isFloorCollision || isPlatformCollision || isWallCollision {
-			log.Println("Collision detected")
+		// Update player entity collisions
+		// Entity: Update velocity
+		playerVelocity.Y = MinF(terminalVelocityY, playerVelocity.Y-terminalVelocityLimiterAirFrictionY) // Decelerate if in air
+		if playerCollisionsThisFrame.Y == 1 || playerCollisionsThisFrame.W == 1 {
+			playerVelocity.Y = 0
 		}
-
-		// Update player collisions
-		{ // # Entity: Update velocity
-			playerVelocity.Y = MinF(terminalVelocityY, playerVelocity.Y-terminalVelocityLimiterAirFrictionY) // Decelerate if in air
-
-			// # Entity: Handle velocity based on collisions up or down
-			if playerCollisionsThisFrame.Y == 1 || playerCollisionsThisFrame.W == 1 {
-				playerVelocity.Y = 0 // self.Velocity = 0
-			}
-
-			// # Entity:Player: Handle velocity based on collisions
-			if /* playerCollisionsThisFrame.Y == 1 || */ playerCollisionsThisFrame.W == 1 {
-				playerAirTimer = 0
-				playerJumpsLeft = 1
-			}
-
-			// Snappy bouncy jumps
-			if playerAirTimer > maxPlayerAirTime*math.Phi && playerAirTimer < maxPlayerAirTime*math.Phi*math.Phi { // Once
-				playerVelocity.Y -= terminalVelocityLimiterAirFrictionY
-			}
+		if playerCollisionsThisFrame.W == 1 {
+			playerAirTimer = 0
+			playerJumpsLeft = 1
+		}
+		if playerAirTimer > maxPlayerAirTime*math.Phi && playerAirTimer < maxPlayerAirTime*math.Phi*math.Phi {
+			playerVelocity.Y -= terminalVelocityLimiterAirFrictionY // Entity: Snappy bouncy jumps (Once)
 		}
 
 		// Update progress on collision, air-time, ...
@@ -548,19 +536,6 @@ func main() {
 
 		rl.BeginMode3D(camera)
 
-		// Draw walls
-		if false {
-			for i := range walls {
-				max := walls[i].Max
-				min := walls[i].Min
-				const t = 1 / 2 // Interpolate t==1/2
-				size := rl.NewVector3(max.X-min.X, max.Y-min.Y, max.Z-min.Z)
-				origin := rl.NewVector3(min.X+t*(max.X-min.X), min.Y+t*(max.Y-min.Y), min.Z+t*(max.Z-min.Z))
-				rl.DrawCubeV(origin, size, rl.Fade(rl.White, 0.125/2))
-				rl.DrawBoundingBox(walls[i], rl.Fade(rl.LightGray, 0.4))
-			}
-		}
-
 		// Draw floors
 		for i := range floorCount {
 			col := rl.ColorLerp(rl.Fade(rl.RayWhite, PowF(shieldProgress, 0.33)), rl.White, SqrtF(shieldProgress))
@@ -570,10 +545,10 @@ func main() {
 
 		// Draw interactive objects
 		for i := range platformCount {
-			rl.DrawCubeV(platformDefaultOrigins[i], rl.NewVector3(platformThick, maxPlatformTravelAmplitude, platformThick), rl.LightGray) // Reference (y axis)
-			rl.DrawPlane(platformDefaultOrigins[i], rl.NewVector2(1, 1), rl.LightGray)                                                     // Reference (midpoint)
-			rl.DrawModel(platformModels[i], platformOrigins[i], 1.0, rl.SkyBlue)                                                           // Moving
-			rl.DrawBoundingBox(platformBoundingBoxes[i], rl.DarkBlue)                                                                      // Outline
+			rl.DrawModel(platformModels[i], platformOrigins[i], 1.0, rl.SkyBlue)                                           // Platform
+			rl.DrawBoundingBox(platformBoundingBoxes[i], rl.DarkBlue)                                                      // Platform outline
+			rl.DrawCubeV(platformDefaultOrigins[i], rl.NewVector3(0.125, maxPlatformTravelAmplitude, 0.125), rl.LightGray) // Reference (y axis)
+			rl.DrawPlane(platformDefaultOrigins[i], rl.NewVector2(0.5, 0.5), rl.Gray)                                      // Reference (midpoint plane)
 		}
 		for i := range unsafeDischargeSphereCount {
 			rl.DrawSphere(unsafeDischargeSpherePositions[i], unsafeRedSphereSizes[i], rl.Gold)
@@ -590,6 +565,18 @@ func main() {
 			size := trampolineBoxSizes[i]
 			rl.DrawCubeV(pos, size, rl.Fade(rl.Red, 1.0))
 			rl.DrawCubeWiresV(pos, size, rl.Fade(rl.Maroon, 1.0))
+		}
+		if false {
+			// Draw walls
+			for i := range walls {
+				max := walls[i].Max
+				min := walls[i].Min
+				const t = 1 / 2 // Interpolate t==1/2
+				size := rl.NewVector3(max.X-min.X, max.Y-min.Y, max.Z-min.Z)
+				origin := rl.NewVector3(min.X+t*(max.X-min.X), min.Y+t*(max.Y-min.Y), min.Z+t*(max.Z-min.Z))
+				rl.DrawCubeV(origin, size, rl.Fade(rl.White, 0.125/2))
+				rl.DrawBoundingBox(walls[i], rl.Fade(rl.LightGray, 0.4))
+			}
 		}
 
 		// Draw player
@@ -633,7 +620,7 @@ func main() {
 		{
 			text := fmt.Sprintf("playerAirTimer: %.2f\nplayerJumpsLeft: %d", playerAirTimer, playerJumpsLeft)
 			strWidth := rl.MeasureText(text, 10)
-			rl.DrawText(text, int32(rl.GetScreenWidth())-10-strWidth, 10, 10, rl.Red)
+			rl.DrawText(text, int32(rl.GetScreenWidth())-10-strWidth, 10, 10, rl.DarkGray)
 		}
 
 		rl.EndDrawing()
