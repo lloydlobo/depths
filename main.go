@@ -618,6 +618,13 @@ func main() {
 			rl.DrawGrid(int32(MinF(arenaWidth, arenaLength)), 1)
 		}
 
+		// Draw XYZ origin
+		if true {
+			rl.DrawCubeV(rl.Vector3Zero(), rl.NewVector3(8.0, 0.1, 0.1), rl.Red)
+			rl.DrawCubeV(rl.Vector3Zero(), rl.NewVector3(0.1, 8.0, 0.1), rl.Green)
+			rl.DrawCubeV(rl.Vector3Zero(), rl.NewVector3(0.1, 0.1, 8.0), rl.Blue)
+		}
+
 		rl.EndMode3D()
 
 		// Draw HUD
