@@ -64,6 +64,8 @@ func main() {
 	_ = isPlayerBoost
 	_ = isPlayerStrafe
 
+	// rl.QuaternionFromEuler()
+	// rl.QuaternionToEuler()
 	maxPlayerAirTime := float32(fps) / 2.0
 	maxPlayerFreefallAirTime := maxPlayerAirTime * 3
 	const movementMagnitude = float32(0.2)
@@ -246,9 +248,12 @@ func main() {
 
 	framesCounter := 0
 
-	handlePlayerJump := func() {
+	handlePlayerJump := func(velocityY float32) {
+		if velocityY <= 0 {
+			panic(fmt.Sprintf("Jumps must have a positive upwards Y velocity. Got: %f", velocityY))
+		}
 		playerJumpsLeft--
-		playerVelocity.Y = playerJumpVelocity
+		playerVelocity.Y = velocityY
 		playerAirTimer = maxPlayerAirTime
 	}
 
@@ -281,7 +286,7 @@ func main() {
 		}
 		if rl.IsKeyDown(rl.KeySpace) { // Jump
 			if playerJumpsLeft > 0 {
-				handlePlayerJump()
+				handlePlayerJump(playerJumpVelocity)
 			}
 		}
 
@@ -396,20 +401,6 @@ func main() {
 			playerVelocity.Z = MinF(0, playerVelocity.Z+terminalVelocityLimiterAirFriction)
 		}
 
-		for i := range safeRechargeBoxCount {
-			pos := safeRechargeBoxPositions[i]
-			size := safeRechargeBoxSizes[i]
-			box := rl.NewBoundingBox(
-				rl.NewVector3(pos.X-size.X/2, pos.Y-size.Y/2, pos.Z-size.Z/2),
-				rl.NewVector3(pos.X+size.X/2, pos.Y+size.Y/2, pos.Z+size.Z/2))
-			if rl.CheckCollisionBoxes(box, rl.NewBoundingBox(
-				rl.NewVector3(playerPosition.X-playerSize.X/2, playerPosition.Y-playerSize.Y/2, playerPosition.Z-playerSize.Z/2),
-				rl.NewVector3(playerPosition.X+playerSize.X/2, playerPosition.Y+playerSize.Y/2, playerPosition.Z+playerSize.Z/2))) {
-				isSafeSpotCollision = true
-				playerPosition.Y = playerSize.Y/2 + box.Max.Y // HACK: Allow player to stand on the floor
-			}
-		}
-
 		for i := range unsafeDischargeSphereCount {
 			if rl.CheckCollisionBoxSphere(rl.NewBoundingBox(
 				rl.NewVector3(playerPosition.X-playerSize.X/2, playerPosition.Y-playerSize.Y/2, playerPosition.Z-playerSize.Z/2),
@@ -429,7 +420,21 @@ func main() {
 				playerPosition.Y = unsafeDischargeSpherePositions[i].Y + dy
 			}
 		}
-
+		for i := range safeRechargeBoxCount {
+			box := GetBoundingBoxFromPositionSizeV(safeRechargeBoxPositions[i], safeRechargeBoxSizes[i])
+			if rl.CheckCollisionBoxes(box, GetBoundingBoxFromPositionSizeV(playerPosition, playerSize)) {
+				isSafeSpotCollision = true
+				playerPosition.Y = playerSize.Y/2 + box.Max.Y // HACK: Allow player to stand on the floor
+			}
+		}
+		for i := range jumppadBoxCount {
+			box := GetBoundingBoxFromPositionSizeV(jumppadBoxPositions[i], jumppadBoxSizes[i])
+			if rl.CheckCollisionBoxes(box, GetBoundingBoxFromPositionSizeV(playerPosition, playerSize)) {
+				isSafeSpotCollision = true
+				playerPosition.Y = playerSize.Y/2 + box.Max.Y // HACK: Allow player to stand on the floor
+				handlePlayerJump(playerJumpVelocity * 8)
+			}
+		}
 		if false {
 			for i := range walls {
 				if !isWallCollision && rl.CheckCollisionBoxes(rl.NewBoundingBox(
@@ -513,7 +518,7 @@ func main() {
 			rl.DrawBoundingBox(floorBoundingBoxes[i], rl.Black)
 		}
 
-		// Draw interact-able objects
+		// Draw interactive objects
 		for i := range platformCount {
 			const maxAmplitude = 8                                         // Distance traveled
 			t := float32(framesCounter)                                    // Current Time
@@ -599,6 +604,12 @@ func main() {
 	rl.CloseWindow()
 }
 
+func GetBoundingBoxFromPositionSizeV(pos rl.Vector3, size rl.Vector3) rl.BoundingBox {
+	return rl.NewBoundingBox(
+		rl.NewVector3(pos.X-size.X/2, pos.Y-size.Y/2, pos.Z-size.Z/2),
+		rl.NewVector3(pos.X+size.X/2, pos.Y+size.Y/2, pos.Z+size.Z/2))
+}
+
 // Copied from Go's cmp.Ordered
 // Ordered is a constraint that permits any ordered type: any type
 // that supports the operators < <= >= >.
@@ -633,4 +644,3 @@ const (
 	InvMathPhi         = 1 / math.Phi
 	OneMinusInvMathPhi = 1 - InvMathPhi
 )
-
