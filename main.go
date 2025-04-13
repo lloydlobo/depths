@@ -380,41 +380,8 @@ func main() {
 						playerCollisionsThisFrame.W = 1
 					}
 				}
-			case ItemPlatforms:
-				for i := range item.Children {
-					platform := item.Children[i]
-					if isMovePlatformVerticaly := true; isMovePlatformVerticaly {
-						t := float32(framesCounter)                                        // Current Time
-						b := float32(platform.Position.Y + maxPlatformTravelAmplitude/2.0) // Top(Beginning)
-						c := float32(-maxPlatformTravelAmplitude)                          // Bottom(Change)
-						d := float32(fps) * 4                                              // Duration
-						dy := easings.SineInOut(t, b, c, d)
-						platform.Position.Y = dy
-						// platformBoundingBoxes[i].Min.Y = platformOrigins[i].Y - platformThick/2
-						// platformBoundingBoxes[i].Max.Y = platformOrigins[i].Y + platformThick/2
-					}
-					box := GetBoundingBoxFromPositionSizeV(platform.Position, platform.Size)
-					isInsideXRange := playerPosition.X+playerSize.X/2 < box.Max.X && playerPosition.X-playerSize.X/2 > box.Min.X
-					isInsideZRange := playerPosition.Z+playerSize.Z/2 < box.Max.Z && playerPosition.Z-playerSize.Z/2 > box.Min.Z
-					isAboveYRange := playerPosition.Y+playerSize.Y/2 >= box.Max.Y && playerPosition.Y-playerSize.Y/2 >= box.Min.Y
-					const tolerance = platformThick // Avoid spamming isPlatformCollision as pure player size calculation does not handle changing bound tolerance in the same loop
-					if isInsideXRange && isInsideZRange && isAboveYRange {
-						isPlatformCollision = true
-						if rl.CheckCollisionBoxes(box, GetBoundingBoxFromPositionSizeV(playerPosition, rl.Vector3AddValue(playerSize, tolerance))) {
-							playerPosition.Y = playerSize.Y/2 + box.Max.Y
-							playerCollisionsThisFrame.W = 1
-						}
-					} else {
-						isPassFromUnderOrTouchEdges := rl.CheckCollisionBoxes(platformBoundingBoxes[i], GetBoundingBoxFromPositionSizeV(playerPosition, playerSize))
-						if isPassFromUnderOrTouchEdges {
-							isPlatformCollision = true
-							playerCollisionsThisFrame.Y = 1
-							playerPosition.Y = playerSize.Y/2 + box.Max.Y
-							playerCollisionsThisFrame.Y = 0
-							playerCollisionsThisFrame.W = 1
-						}
-					}
-				}
+			default:
+				panic("Unimplemented")
 			}
 		}
 		for i := range platformCount {
@@ -572,6 +539,11 @@ func main() {
 		rl.BeginMode3D(camera)
 
 		// Draw interactive objects
+		{ // Scratchpad
+			for i := range items {
+				items[i].Draw()
+			}
+		}
 		for i := range platformCount {
 			rl.DrawModel(platformModels[i], platformOrigins[i], 1.0, rl.SkyBlue)                                           // Platform
 			rl.DrawBoundingBox(platformBoundingBoxes[i], rl.DarkBlue)                                                      // Platform outline
@@ -634,13 +606,6 @@ func main() {
 			rl.DrawCubeV(rl.Vector3Zero(), rl.NewVector3(8.0, 0.2, 0.2), rl.Red)
 			rl.DrawCubeV(rl.Vector3Zero(), rl.NewVector3(0.2, 8.0, 0.2), rl.Green)
 			rl.DrawCubeV(rl.Vector3Zero(), rl.NewVector3(0.2, 0.2, 8.0), rl.Blue)
-		}
-
-		// Scratchpad
-		{
-			for i := range items {
-				items[i].Draw()
-			}
 		}
 
 		rl.EndMode3D()
@@ -774,14 +739,18 @@ func (item *Item) Draw() {
 		for i := range item.Children {
 			item.Children[i].Draw()
 		}
+
+	case ItemFloor:
+		rl.DrawModel(itemModels[item.ModelID], item.Position, item.Scale, item.Color)
+
 	case ItemPlatforms:
 		for i := range item.Children {
 			item.Children[i].Draw()
 		}
-	case ItemFloor:
-		rl.DrawModel(itemModels[item.ModelID], item.Position, item.Scale, item.Color)
+
 	case ItemPlatform:
 		rl.DrawModel(itemModels[item.ModelID], item.Position, item.Scale, item.Color)
+
 	default:
 		panic("Invalid item type")
 	}
