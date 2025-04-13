@@ -4,8 +4,10 @@ import (
 	"cmp"
 	"encoding/json"
 	"fmt"
+	"image/color"
 	"log/slog"
 	"math"
+	"os"
 
 	"github.com/gen2brain/raylib-go/easings"
 	_ "github.com/gen2brain/raylib-go/easings"
@@ -31,8 +33,8 @@ func main() {
 
 	const (
 		arenaWallHeight  = 1
-		arenaWidth       = float32(15) * math.Phi // X
-		arenaLength      = float32(15) * 1        // Z
+		arenaWidth       = float32(10) * math.Phi // X
+		arenaLength      = float32(10) * 1        // Z
 		arenaWidthRatio  = (arenaWidth / (arenaWidth + arenaLength))
 		arenaLengthRatio = (arenaLength / (arenaWidth + arenaLength))
 		camPosW          = (arenaWidth * (math.Phi + arenaLengthRatio)) * (1 - OneMinusInvMathPhi)
@@ -90,13 +92,14 @@ func main() {
 	const MaxResourceSOACapacity = 16
 
 	// ResourceSOA is a struct of arrays that holds game components.
+	// TODO: use omit empty json struct tag
 	type ResourceSOA struct { // size=6824 (0x1aa8)
 		PlatformBoundingBoxes    [MaxResourceSOACapacity]rl.BoundingBox
 		PlatformDefaultPositions [MaxResourceSOACapacity]rl.Vector3
 		PlatformModels           [MaxResourceSOACapacity]rl.Model
 		PlatformPositions        [MaxResourceSOACapacity]rl.Vector3
 		PlatformSizes            [MaxResourceSOACapacity]rl.Vector3
-		PlatformMoveNormals      [MaxResourceSOACapacity]rl.Vector3
+		PlatformMovementNormals  [MaxResourceSOACapacity]rl.Vector3
 		PlatformCount            int
 
 		FloorBoundingBoxes [MaxResourceSOACapacity]rl.BoundingBox
@@ -124,8 +127,7 @@ func main() {
 		resource.HealBoxPositions[resource.HealBoxCount] = rl.NewVector3(-4, 1, 0)
 		resource.HealBoxSizes[resource.HealBoxCount] = rl.NewVector3(2, 2, 2)
 		resource.HealBoxCount++
-	}
-	{
+
 		resource.HealBoxPositions[resource.HealBoxCount] = rl.NewVector3(0, 1, -4)
 		resource.HealBoxSizes[resource.HealBoxCount] = rl.NewVector3(2, 2, 2)
 		resource.HealBoxCount++
@@ -135,8 +137,7 @@ func main() {
 		resource.DamageSpherePositions[resource.DamageSphereCount] = rl.NewVector3(4, 0, 0)
 		resource.DamageSphereSizes[resource.DamageSphereCount] = 1.5
 		resource.DamageSphereCount++
-	}
-	{
+
 		resource.DamageSpherePositions[resource.DamageSphereCount] = rl.NewVector3(0, 0, 6)
 		resource.DamageSphereSizes[resource.DamageSphereCount] = 1.5
 		resource.DamageSphereCount++
@@ -146,59 +147,47 @@ func main() {
 		resource.TrampolineBoxPositions[resource.TrampolineBoxCount] = rl.NewVector3(0, 3, 6)
 		resource.TrampolineBoxSizes[resource.TrampolineBoxCount] = rl.NewVector3(2, 0.25, 2)
 		resource.TrampolineBoxCount++
-	}
-	{
+
 		resource.TrampolineBoxPositions[resource.TrampolineBoxCount] = rl.NewVector3(0, 1, -9)
 		resource.TrampolineBoxSizes[resource.TrampolineBoxCount] = rl.NewVector3(2, 0.25, 2)
 		resource.TrampolineBoxCount++
 	}
 
-	// anticlockwise: 0 -> 1 -> 2 -> 3 TLBR
-	const wallThick = 1 / 2.0
-	walls := [4]rl.BoundingBox{}
-	{
-		w := arenaWidth / 2
-		l := arenaLength / 2
-		walls = [4]rl.BoundingBox{
-			rl.NewBoundingBox(rl.NewVector3(-w, 0, -l), rl.NewVector3(w, arenaWallHeight, -l+wallThick)),
-			rl.NewBoundingBox(rl.NewVector3(-w, 0, -l), rl.NewVector3(-w+wallThick, arenaWallHeight, l)),
-			rl.NewBoundingBox(rl.NewVector3(-w, 0, l-wallThick), rl.NewVector3(w, arenaWallHeight, l)),
-			rl.NewBoundingBox(rl.NewVector3(w-wallThick, 0, -l), rl.NewVector3(w, arenaWallHeight, l)),
-		}
+	type Entity struct {
+		Pos   rl.Vector3 `json:"pos"`
+		Size  rl.Vector3 `json:"size"`
+		Color color.RGBA
 	}
 
 	// Setup moving platforms
-	const maxPlatformTravelAmplitude = float32(arenaWidth / 2) // Distance traveled
-	const platformThick = 0.25 * 4
-	{
-		origin := rl.NewVector3(2*arenaWidth/3, 0, -arenaLength/2)
-		size := rl.NewVector3(CeilF(playerSize.X*PowF(math.Phi, 4)), platformThick, CeilF(playerSize.Z*PowF(math.Phi, 4)))
+	const maxPlatformMoveAmplitude = float32(arenaWidth / 2) // Distance traveled
+	const platformThick = 0.25 * 1
+
+	setupPlatformResource := func(pos, size, movementNormal rl.Vector3) {
+		if !IsUnitVec3(movementNormal) {
+			panic(fmt.Sprintf("Invalid unit vector: movementNormal: %+v", movementNormal))
+		}
 		model := rl.LoadModelFromMesh(rl.GenMeshCube(size.X, size.Y, size.Z))
-		box := rl.NewBoundingBox(
-			rl.NewVector3(origin.X-size.X/2, origin.Y-size.Y/2, origin.Z-size.Z/2),
-			rl.NewVector3(origin.X+size.X/2, origin.Y+size.Y/2, origin.Z+size.Z/2))
+		box := GetBoundingBoxFromPositionSizeV(pos, size)
 		resource.PlatformBoundingBoxes[resource.PlatformCount] = box
-		resource.PlatformDefaultPositions[resource.PlatformCount] = origin
+		resource.PlatformDefaultPositions[resource.PlatformCount] = pos
 		resource.PlatformModels[resource.PlatformCount] = model
-		resource.PlatformPositions[resource.PlatformCount] = origin
+		resource.PlatformPositions[resource.PlatformCount] = pos
 		resource.PlatformSizes[resource.PlatformCount] = size
-		resource.PlatformMoveNormals[resource.PlatformCount] = rl.NewVector3(0, 1, 0) // Up/Down
+		resource.PlatformMovementNormals[resource.PlatformCount] = movementNormal // Up/Down
 		resource.PlatformCount++
 	}
-	{
-		origin := rl.NewVector3(2*arenaWidth/3, 0, -arenaLength/2*2)
-		size := rl.NewVector3(CeilF(playerSize.X*PowF(math.Phi, 4)), platformThick, CeilF(playerSize.Z*PowF(math.Phi, 4)))
-		model := rl.LoadModelFromMesh(rl.GenMeshCube(size.X, size.Y, size.Z))
-		box := rl.NewBoundingBox(
-			rl.NewVector3(origin.X-size.X/2, origin.Y-size.Y/2, origin.Z-size.Z/2),
-			rl.NewVector3(origin.X+size.X/2, origin.Y+size.Y/2, origin.Z+size.Z/2))
-		resource.PlatformBoundingBoxes[resource.PlatformCount] = box
-		resource.PlatformDefaultPositions[resource.PlatformCount] = origin
-		resource.PlatformModels[resource.PlatformCount] = model
-		resource.PlatformPositions[resource.PlatformCount] = origin
-		resource.PlatformSizes[resource.PlatformCount] = size
-		resource.PlatformMoveNormals[resource.PlatformCount] = rl.NewVector3(0, 0, 1) // Front/Back
-		resource.PlatformCount++
+
+	for _, data := range []struct {
+		Entity         Entity
+		MovementNormal rl.Vector3
+	}{
+		{Entity: Entity{Pos: rl.NewVector3(0, -4, -20), Size: rl.NewVector3(4, platformThick, 4)}, MovementNormal: rl.NewVector3(0, 0, 0)}, /* Static */
+		{Entity: Entity{Pos: rl.NewVector3(0, 2, 0), Size: rl.NewVector3(4, platformThick, 4)}, MovementNormal: rl.NewVector3(1, 0, 0)},
+		{Entity: Entity{Pos: rl.NewVector3(-8, 4, -8), Size: rl.NewVector3(4, platformThick, 4)}, MovementNormal: rl.NewVector3(0, 1, 0)},
+		{Entity: Entity{Pos: rl.NewVector3(4, -8, -12), Size: rl.NewVector3(4, platformThick, 4)}, MovementNormal: rl.NewVector3(0, 0, 1)},
+	} {
+		setupPlatformResource(data.Entity.Pos, data.Entity.Size, data.MovementNormal)
 	}
 
 	// Setup floors
@@ -439,39 +428,79 @@ func main() {
 		}
 
 		for i := range resource.PlatformCount {
-			if isMovePlatformVerticaly := true; isMovePlatformVerticaly {
-				t := float32(framesCounter)                                                           // Current Time
-				b := float32(resource.PlatformDefaultPositions[i].Y + maxPlatformTravelAmplitude/2.0) // Top(Beginning)
-				c := float32(-maxPlatformTravelAmplitude)                                             // Bottom(Change)
-				d := float32(fps) * 4                                                                 // Duration
-				dy := easings.SineInOut(t, b, c, d)
-				resource.PlatformPositions[i].Y = dy
-				resource.PlatformBoundingBoxes[i].Min.Y = resource.PlatformPositions[i].Y - platformThick/2
-				resource.PlatformBoundingBoxes[i].Max.Y = resource.PlatformPositions[i].Y + platformThick/2
+			oldPos := resource.PlatformPositions[i]
+			// Update platform across movement normal type
+			var f float32
+			switch resource.PlatformMovementNormals[i] { // Only positive values accepted to keep it simple
+			case rl.Vector3{X: 1, Y: 0, Z: 0}:
+				t := float32(framesCounter)                                                         // Current Time
+				b := float32(resource.PlatformDefaultPositions[i].X + maxPlatformMoveAmplitude/2.0) // Top(Beginning)
+				c := float32(-maxPlatformMoveAmplitude)                                             // Bottom(Change)
+				d := float32(fps) * 4                                                               // Duration
+				f = easings.SineInOut(t, b, c, d)
+				resource.PlatformPositions[i].X = f
+				resource.PlatformBoundingBoxes[i].Min.X = resource.PlatformPositions[i].X - resource.PlatformSizes[i].X/2
+				resource.PlatformBoundingBoxes[i].Max.X = resource.PlatformPositions[i].X + resource.PlatformSizes[i].X/2
+			case rl.Vector3{X: 0, Y: 1, Z: 0}:
+				t := float32(framesCounter)                                                         // Current Time
+				b := float32(resource.PlatformDefaultPositions[i].Y + maxPlatformMoveAmplitude/2.0) // Top(Beginning)
+				c := float32(-maxPlatformMoveAmplitude)                                             // Bottom(Change)
+				d := float32(fps) * 4                                                               // Duration
+				f = easings.SineInOut(t, b, c, d)
+				resource.PlatformPositions[i].Y = f
+				resource.PlatformBoundingBoxes[i].Min.Y = resource.PlatformPositions[i].Y - resource.PlatformSizes[i].Y/2 // platformThick/2
+				resource.PlatformBoundingBoxes[i].Max.Y = resource.PlatformPositions[i].Y + resource.PlatformSizes[i].Y/2 // platformThick/2
+			case rl.Vector3{X: 0, Y: 0, Z: 1}:
+				t := float32(framesCounter)                                                         // Current Time
+				b := float32(resource.PlatformDefaultPositions[i].Z + maxPlatformMoveAmplitude/2.0) // Top(Beginning)
+				c := float32(-maxPlatformMoveAmplitude)                                             // Bottom(Change)
+				d := float32(fps) * 4                                                               // Duration
+				f = easings.SineInOut(t, b, c, d)
+				resource.PlatformPositions[i].Z = f
+				resource.PlatformBoundingBoxes[i].Min.Z = resource.PlatformPositions[i].Z - resource.PlatformSizes[i].Z/2
+				resource.PlatformBoundingBoxes[i].Max.Z = resource.PlatformPositions[i].Z + resource.PlatformSizes[i].Z/2
 			}
+			// Check collisions between platform and player
 			box := resource.PlatformBoundingBoxes
 			isInsideXRange := playerPosition.X+playerSize.X/2 < box[i].Max.X && playerPosition.X-playerSize.X/2 > box[i].Min.X
 			isInsideZRange := playerPosition.Z+playerSize.Z/2 < box[i].Max.Z && playerPosition.Z-playerSize.Z/2 > box[i].Min.Z
 			isAboveYRange := playerPosition.Y+playerSize.Y/2 >= box[i].Max.Y && playerPosition.Y-playerSize.Y/2 >= box[i].Min.Y
-			const tolerance = platformThick // Avoid spamming isPlatformCollision as pure player size calculation does not handle changing bound tolerance in the same loop
-			if isInsideXRange && isInsideZRange && isAboveYRange {
+			didPlatformMovePlayer := false
+			const tolerance = platformThick                        // Avoid spamming isPlatformCollision as pure player size
+			if isInsideXRange && isInsideZRange && isAboveYRange { // ... calculation does not handle changing bound tolerance in the same loop
 				isPlatformCollision = true
 				if rl.CheckCollisionBoxes(
 					GetBoundingBoxFromPositionSizeV(playerPosition, rl.Vector3AddValue(playerSize, tolerance)),
 					box[i],
 				) {
+					// Handled standing on playtform for Y-axis
+					didPlatformMovePlayer = true
 					playerPosition.Y = playerSize.Y/2 + box[i].Max.Y
 					playerCollisionsThisFrame.W = 1
 				}
-			} else if isPassFromUnderOrTouchEdges := rl.CheckCollisionBoxes(
-				GetBoundingBoxFromPositionSizeV(playerPosition, playerSize),
-				box[i],
-			); isPassFromUnderOrTouchEdges {
-				isPlatformCollision = true
-				playerCollisionsThisFrame.Y = 1
-				playerPosition.Y = playerSize.Y/2 + box[i].Max.Y
-				playerCollisionsThisFrame.Y = 0
-				playerCollisionsThisFrame.W = 1
+			} else {
+				if isPassFromUnderOrTouchEdges := rl.CheckCollisionBoxes(
+					GetBoundingBoxFromPositionSizeV(playerPosition, playerSize),
+					box[i],
+				); isPassFromUnderOrTouchEdges {
+					isPlatformCollision = true
+					didPlatformMovePlayer = true
+					playerCollisionsThisFrame.Y = 1
+					playerPosition.Y = playerSize.Y/2 + box[i].Max.Y
+					playerCollisionsThisFrame.Y = 0
+					playerCollisionsThisFrame.W = 1
+				}
+			}
+			// Update player lateral position while standing on moving platform
+			if didPlatformMovePlayer {
+				switch resource.PlatformMovementNormals[i] {
+				case rl.Vector3{X: 1, Y: 0, Z: 0}:
+					delta := (resource.PlatformPositions[i].X - oldPos.X)
+					playerPosition.X += delta
+				case rl.Vector3{X: 0, Y: 0, Z: 1}:
+					delta := (resource.PlatformPositions[i].Z - oldPos.Z)
+					playerPosition.Z += delta
+				}
 			}
 		}
 		for i := range resource.DamageSphereCount {
@@ -511,15 +540,6 @@ func main() {
 				} else {
 					handlePlayerJump(playerJumpVelocity * 8)
 					playerJumpsLeft++
-				}
-			}
-		}
-		if false {
-			for i := range walls {
-				if !isWallCollision && rl.CheckCollisionBoxes(rl.NewBoundingBox(
-					rl.NewVector3(playerPosition.X-playerSize.X/2, playerPosition.Y-playerSize.Y/2, playerPosition.Z-playerSize.Z/2),
-					rl.NewVector3(playerPosition.X+playerSize.X/2, playerPosition.Y+playerSize.Y/2, playerPosition.Z+playerSize.Z/2)), walls[i]) {
-					isWallCollision = true
 				}
 			}
 		}
@@ -600,10 +620,10 @@ func main() {
 			rl.DrawBoundingBox(resource.FloorBoundingBoxes[i], rl.Fade(rl.Black, 0.3))
 		}
 		for i := range resource.PlatformCount {
-			rl.DrawModel(resource.PlatformModels[i], resource.PlatformPositions[i], 1.0, rl.SkyBlue)                                  // Platform
-			rl.DrawBoundingBox(resource.PlatformBoundingBoxes[i], rl.DarkBlue)                                                        // Platform outline
-			rl.DrawCubeV(resource.PlatformDefaultPositions[i], rl.NewVector3(0.125, maxPlatformTravelAmplitude, 0.125), rl.LightGray) // Reference (y axis)
-			rl.DrawPlane(resource.PlatformDefaultPositions[i], rl.NewVector2(0.5, 0.5), rl.Gray)                                      // Reference (midpoint plane)
+			rl.DrawModel(resource.PlatformModels[i], resource.PlatformPositions[i], 1.0, rl.SkyBlue)                                // Platform
+			rl.DrawBoundingBox(resource.PlatformBoundingBoxes[i], rl.DarkBlue)                                                      // Platform outline
+			rl.DrawCubeV(resource.PlatformDefaultPositions[i], rl.NewVector3(0.125, maxPlatformMoveAmplitude, 0.125), rl.LightGray) // Reference (y axis)
+			rl.DrawPlane(resource.PlatformDefaultPositions[i], rl.NewVector2(0.5, 0.5), rl.Gray)                                    // Reference (midpoint plane)
 		}
 		for i := range resource.DamageSphereCount {
 			rl.DrawSphere(resource.DamageSpherePositions[i], resource.DamageSphereSizes[i], rl.Gold)
@@ -616,18 +636,6 @@ func main() {
 		for i := range resource.TrampolineBoxCount {
 			rl.DrawCubeV(resource.TrampolineBoxPositions[i], resource.TrampolineBoxSizes[i], rl.Fade(rl.Red, 1.0))
 			rl.DrawCubeWiresV(resource.TrampolineBoxPositions[i], resource.TrampolineBoxSizes[i], rl.Fade(rl.Maroon, 1.0))
-		}
-		if false {
-			// Draw walls
-			for i := range walls {
-				max := walls[i].Max
-				min := walls[i].Min
-				const t = 1 / 2 // Interpolate t==1/2
-				size := rl.NewVector3(max.X-min.X, max.Y-min.Y, max.Z-min.Z)
-				origin := rl.NewVector3(min.X+t*(max.X-min.X), min.Y+t*(max.Y-min.Y), min.Z+t*(max.Z-min.Z))
-				rl.DrawCubeV(origin, size, rl.Fade(rl.White, 0.125/2))
-				rl.DrawBoundingBox(walls[i], rl.Fade(rl.LightGray, 0.4))
-			}
 		}
 
 		// Draw player
@@ -693,13 +701,18 @@ func main() {
 		rl.EndDrawing()
 	}
 
-	{
-		jsonData, err := json.MarshalIndent(resource, "", "  ")
+	if false {
+		jsonData, err := json.Marshal(resource) // jsonData, err := json.MarshalIndent(resource, "", " ") // Debug
 		if err != nil {
 			slog.Error(err.Error())
 		}
-		if false {
-			fmt.Printf("jsonData: %b\n", jsonData)
+		if true {
+			fmt.Printf("jsonData: %+s\n", jsonData)
+		}
+		if true {
+			if err := os.WriteFile("resource_assets.json", jsonData, 0644); err != nil {
+				slog.Error(err.Error())
+			}
 		}
 	}
 
@@ -748,6 +761,14 @@ func MinI[T NumberType](x T, y T) int32   { return int32(min(float64(x), float64
 
 func manhattanV2(a, b rl.Vector2) float32 { return AbsF(b.X-a.X) + AbsF(b.Y-a.Y) }
 func manhattanV3(a, b rl.Vector3) float32 { return AbsF(b.X-a.X) + AbsF(b.Y-a.Y) + AbsF(b.Z-a.Z) }
+
+var (
+	Vector3OneLength = rl.Vector3Length(rl.Vector3One())
+	Vector2OneLength = rl.Vector2Length(rl.Vector2One())
+)
+
+func IsUnitVec3(v rl.Vector3) bool { return rl.Vector3Length(v) <= Vector3OneLength }
+func IsUnitVec2(v rl.Vector2) bool { return rl.Vector2Length(v) <= Vector2OneLength }
 
 const (
 	InvMathPhi         = 1 / math.Phi
