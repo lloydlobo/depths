@@ -120,15 +120,26 @@ func main() {
 		TrampolineBoxCount     int
 	}
 
+	type Entity struct {
+		Pos   rl.Vector3 `json:"pos"`
+		Size  rl.Vector3 `json:"size"`
+		Color color.RGBA `json:"color"`
+	}
+
 	var resource ResourceSOA
 
-	{
-		resource.HealBoxPositions[resource.HealBoxCount] = rl.NewVector3(-4, 1, 0)
-		resource.HealBoxSizes[resource.HealBoxCount] = rl.NewVector3(2, 2, 2)
-		resource.HealBoxCount++
-
-		resource.HealBoxPositions[resource.HealBoxCount] = rl.NewVector3(0, 1, -4)
-		resource.HealBoxSizes[resource.HealBoxCount] = rl.NewVector3(2, 2, 2)
+	for _, data := range []Entity{
+		{
+			Pos:  rl.NewVector3(-4, 1, 0),
+			Size: rl.NewVector3(2, 2, 2),
+		},
+		{
+			Pos:  rl.NewVector3(0, 1, -4),
+			Size: rl.NewVector3(2, 2, 2),
+		},
+	} {
+		resource.HealBoxPositions[resource.HealBoxCount] = data.Pos
+		resource.HealBoxSizes[resource.HealBoxCount] = data.Size
 		resource.HealBoxCount++
 	}
 
@@ -150,41 +161,6 @@ func main() {
 		resource.TrampolineBoxPositions[resource.TrampolineBoxCount] = rl.NewVector3(0, 1, -9)
 		resource.TrampolineBoxSizes[resource.TrampolineBoxCount] = rl.NewVector3(2, 0.25, 2)
 		resource.TrampolineBoxCount++
-	}
-
-	type Entity struct {
-		Pos   rl.Vector3 `json:"pos"`
-		Size  rl.Vector3 `json:"size"`
-		Color color.RGBA
-	}
-
-	// Setup moving platforms
-	setupPlatformResource := func(pos, size, movementNormal rl.Vector3) {
-		if !IsUnitVec3(movementNormal) {
-			panic(fmt.Sprintf("Invalid unit vector: movementNormal: %+v", movementNormal))
-		}
-		model := rl.LoadModelFromMesh(rl.GenMeshCube(size.X, size.Y, size.Z))
-		box := GetBoundingBoxFromPositionSizeV(pos, size)
-		resource.PlatformBoundingBoxes[resource.PlatformCount] = box
-		resource.PlatformDefaultPositions[resource.PlatformCount] = pos
-		resource.PlatformModels[resource.PlatformCount] = model
-		resource.PlatformPositions[resource.PlatformCount] = pos
-		resource.PlatformSizes[resource.PlatformCount] = size
-		resource.PlatformMovementNormals[resource.PlatformCount] = movementNormal // Up/Down
-		resource.PlatformCount++
-	}
-	const maxPlatformMoveAmplitude = float32(arenaWidth / 2) // Distance traveled
-	const platformThick = 1.0
-	for _, data := range []struct {
-		Entity         Entity
-		MovementNormal rl.Vector3
-	}{
-		{Entity: Entity{Pos: rl.NewVector3(0, -4, -20), Size: rl.NewVector3(4, platformThick, 4)}, MovementNormal: rl.NewVector3(0, 0, 0)}, /* Static */
-		{Entity: Entity{Pos: rl.NewVector3(0, 2, 0), Size: rl.NewVector3(4, platformThick, 4)}, MovementNormal: rl.NewVector3(1, 0, 0)},
-		{Entity: Entity{Pos: rl.NewVector3(-8, 4, -8), Size: rl.NewVector3(4, platformThick, 4)}, MovementNormal: rl.NewVector3(0, 1, 0)},
-		{Entity: Entity{Pos: rl.NewVector3(4, -8, -12), Size: rl.NewVector3(4, platformThick, 4)}, MovementNormal: rl.NewVector3(0, 0, 1)},
-	} {
-		setupPlatformResource(data.Entity.Pos, data.Entity.Size, data.MovementNormal)
 	}
 
 	// Setup floors
@@ -221,6 +197,59 @@ func main() {
 		},
 	} {
 		setupFloorResource(data.Pos, data.Size)
+	}
+
+	// Setup moving platforms
+	setupPlatformResource := func(pos, size, movementNormal rl.Vector3) {
+		if !IsUnitVec3(movementNormal) {
+			panic(fmt.Sprintf("Invalid unit vector: movementNormal: %+v", movementNormal))
+		}
+		model := rl.LoadModelFromMesh(rl.GenMeshCube(size.X, size.Y, size.Z))
+		box := GetBoundingBoxFromPositionSizeV(pos, size)
+		resource.PlatformBoundingBoxes[resource.PlatformCount] = box
+		resource.PlatformDefaultPositions[resource.PlatformCount] = pos
+		resource.PlatformModels[resource.PlatformCount] = model
+		resource.PlatformPositions[resource.PlatformCount] = pos
+		resource.PlatformSizes[resource.PlatformCount] = size
+		resource.PlatformMovementNormals[resource.PlatformCount] = movementNormal // Up/Down
+		resource.PlatformCount++
+	}
+	const maxPlatformMoveAmplitude = float32(arenaWidth / 2) // Distance traveled
+	const platformThick = 1.0
+	for _, data := range []struct {
+		Entity         Entity
+		MovementNormal rl.Vector3
+	}{
+		{
+			Entity: Entity{
+				Pos:  rl.NewVector3(0, -4, -20),
+				Size: rl.NewVector3(4, platformThick, 4),
+			},
+			MovementNormal: rl.NewVector3(0, 0, 0), /* Static */
+		},
+		{
+			Entity: Entity{
+				Pos:  rl.NewVector3(0, 2, 0),
+				Size: rl.NewVector3(4, platformThick, 4),
+			},
+			MovementNormal: rl.NewVector3(1, 0, 0),
+		},
+		{
+			Entity: Entity{
+				Pos:  rl.NewVector3(-8, 4, -8),
+				Size: rl.NewVector3(4, platformThick, 4),
+			},
+			MovementNormal: rl.NewVector3(0, 1, 0),
+		},
+		{
+			Entity: Entity{
+				Pos:  rl.NewVector3(4, -8, -12),
+				Size: rl.NewVector3(4, platformThick, 4),
+			},
+			MovementNormal: rl.NewVector3(0, 0, 1),
+		},
+	} {
+		setupPlatformResource(data.Entity.Pos, data.Entity.Size, data.MovementNormal)
 	}
 
 	var (
