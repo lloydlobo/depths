@@ -2,7 +2,9 @@ package main
 
 import (
 	"cmp"
+	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math"
 
 	"github.com/gen2brain/raylib-go/easings"
@@ -29,28 +31,28 @@ func main() {
 
 	const (
 		arenaWallHeight  = 1
-		arenaWidth       = float32(20) * math.Phi // X
-		arenaLength      = float32(20) * 1        // Z
+		arenaWidth       = float32(15) * math.Phi // X
+		arenaLength      = float32(15) * 1        // Z
 		arenaWidthRatio  = (arenaWidth / (arenaWidth + arenaLength))
 		arenaLengthRatio = (arenaLength / (arenaWidth + arenaLength))
 		camPosW          = (arenaWidth * (math.Phi + arenaLengthRatio)) * (1 - OneMinusInvMathPhi)
 		camPosL          = (arenaLength * (math.Phi + arenaWidthRatio)) * (1 - OneMinusInvMathPhi)
 	)
 
+	camScrollEase := float32((float32(1.0) / float32(fps)) * 2.0) // 0.033
+
 	camera := rl.Camera{
-		Position:   rl.NewVector3(0.0, camPosW, camPosL),
+		Position:   rl.NewVector3(0.0, RoundEvenF(camPosW), RoundEvenF(camPosL)),
 		Target:     rl.NewVector3(0.0, -1.0, 0.0),
 		Up:         rl.NewVector3(0.0, 1.0, 0.0),
-		Fovy:       float32(cmp.Or(60.0, 45.0, 30.0)), // Use higher Fovy to zoom out if following a target
+		Fovy:       float32(cmp.Or(45.0, 60.0, 30.0)), // Use higher Fovy to zoom out if following a target
 		Projection: rl.CameraPerspective,
 	}
 
-	defaultCameraTarget := rl.NewVector3(0.0, -1.0, 0.0)
-	defaultCameraPosition := rl.NewVector3(0.0, camPosW, camPosL)
-	defaultCameraPositionTargetVector := rl.NewVector3(defaultCameraPosition.X-defaultCameraTarget.X,
-		defaultCameraPosition.Y-defaultCameraTarget.Y,
-		defaultCameraPosition.Z-defaultCameraTarget.Z,
-	)
+	// Save initial settings for stabilizing custom naïve camera movement
+	defaultCameraPosition := camera.Position
+	defaultCameraTarget := camera.Target
+	defaultCameraPositionTargetVector := rl.Vector3Subtract(defaultCameraPosition, defaultCameraTarget)
 	defaultCameraPositionTargetDistance := rl.Vector3Distance(defaultCameraPosition, defaultCameraTarget)
 
 	const sphereModelRadius = arenaWidth / math.Phi
@@ -82,49 +84,73 @@ func main() {
 
 	// FEAT: See also https://github.com/Pakz001/Raylib-Examples/blob/master/ai/Example_-_Pattern_Movement.c
 	// Like Arrow shooter crazyggame,,, fruit dispenser
-	// rl.QuaternionFromEuler()
-	// rl.QuaternionToEuler()
 
-	safeRechargeBoxCount := 0
-	var safeRechargeBoxPositions []rl.Vector3
-	var safeRechargeBoxSizes []rl.Vector3
-	{
-		safeRechargeBoxPositions = append(safeRechargeBoxPositions, rl.NewVector3(-4, 1, 0))
-		safeRechargeBoxSizes = append(safeRechargeBoxSizes, rl.NewVector3(2, 2, 2))
-		safeRechargeBoxCount++
-	}
-	{
-		safeRechargeBoxPositions = append(safeRechargeBoxPositions, rl.NewVector3(0, 1, -4))
-		safeRechargeBoxSizes = append(safeRechargeBoxSizes, rl.NewVector3(2, 2, 2))
-		safeRechargeBoxCount++
+	// MaxResourceSOACapacity is the hardcoded capacity limit of each batch
+	// items for ease of development and to avoid runtime heap allocation.
+	const MaxResourceSOACapacity = 16
+
+	// ResourceSOA is a struct of arrays that holds game components.
+	type ResourceSOA struct { // size=6824 (0x1aa8)
+		PlatformBoundingBoxes    [MaxResourceSOACapacity]rl.BoundingBox
+		PlatformDefaultPositions [MaxResourceSOACapacity]rl.Vector3
+		PlatformModels           [MaxResourceSOACapacity]rl.Model
+		PlatformPositions        [MaxResourceSOACapacity]rl.Vector3
+		PlatformSizes            [MaxResourceSOACapacity]rl.Vector3
+		PlatformMoveNormals      [MaxResourceSOACapacity]rl.Vector3
+		PlatformCount            int
+
+		FloorBoundingBoxes [MaxResourceSOACapacity]rl.BoundingBox
+		FloorPositions     [MaxResourceSOACapacity]rl.Vector3
+		FloorModels        [MaxResourceSOACapacity]rl.Model
+		FloorSizes         [MaxResourceSOACapacity]rl.Vector3
+		FloorCount         int
+
+		HealBoxPositions [MaxResourceSOACapacity]rl.Vector3
+		HealBoxSizes     [MaxResourceSOACapacity]rl.Vector3
+		HealBoxCount     int
+
+		DamageSpherePositions [MaxResourceSOACapacity]rl.Vector3
+		DamageSphereSizes     [MaxResourceSOACapacity]float32
+		DamageSphereCount     int
+
+		TrampolineBoxPositions [MaxResourceSOACapacity]rl.Vector3
+		TrampolineBoxSizes     [MaxResourceSOACapacity]rl.Vector3
+		TrampolineBoxCount     int
 	}
 
-	unsafeDischargeSphereCount := 0
-	var unsafeDischargeSpherePositions []rl.Vector3
-	var unsafeRedSphereSizes []float32
+	var resource ResourceSOA
+
 	{
-		unsafeDischargeSpherePositions = append(unsafeDischargeSpherePositions, rl.NewVector3(4, 0, 0))
-		unsafeRedSphereSizes = append(unsafeRedSphereSizes, 1.5)
-		unsafeDischargeSphereCount++
+		resource.HealBoxPositions[resource.HealBoxCount] = rl.NewVector3(-4, 1, 0)
+		resource.HealBoxSizes[resource.HealBoxCount] = rl.NewVector3(2, 2, 2)
+		resource.HealBoxCount++
 	}
 	{
-		unsafeDischargeSpherePositions = append(unsafeDischargeSpherePositions, rl.NewVector3(0, 0, 6))
-		unsafeRedSphereSizes = append(unsafeRedSphereSizes, 1.5)
-		unsafeDischargeSphereCount++
+		resource.HealBoxPositions[resource.HealBoxCount] = rl.NewVector3(0, 1, -4)
+		resource.HealBoxSizes[resource.HealBoxCount] = rl.NewVector3(2, 2, 2)
+		resource.HealBoxCount++
 	}
 
-	trampolineBoxCount := 0
-	var trampolineBoxPositions []rl.Vector3
-	var trampolineBoxSizes []rl.Vector3
 	{
-		trampolineBoxPositions = append(trampolineBoxPositions, rl.NewVector3(-9, 1, 0))
-		trampolineBoxSizes = append(trampolineBoxSizes, rl.NewVector3(2, 0.25, 2))
-		trampolineBoxCount++
+		resource.DamageSpherePositions[resource.DamageSphereCount] = rl.NewVector3(4, 0, 0)
+		resource.DamageSphereSizes[resource.DamageSphereCount] = 1.5
+		resource.DamageSphereCount++
 	}
 	{
-		trampolineBoxPositions = append(trampolineBoxPositions, rl.NewVector3(0, 1, -9))
-		trampolineBoxSizes = append(trampolineBoxSizes, rl.NewVector3(2, 0.25, 2))
-		trampolineBoxCount++
+		resource.DamageSpherePositions[resource.DamageSphereCount] = rl.NewVector3(0, 0, 6)
+		resource.DamageSphereSizes[resource.DamageSphereCount] = 1.5
+		resource.DamageSphereCount++
+	}
+
+	{
+		resource.TrampolineBoxPositions[resource.TrampolineBoxCount] = rl.NewVector3(0, 3, 6)
+		resource.TrampolineBoxSizes[resource.TrampolineBoxCount] = rl.NewVector3(2, 0.25, 2)
+		resource.TrampolineBoxCount++
+	}
+	{
+		resource.TrampolineBoxPositions[resource.TrampolineBoxCount] = rl.NewVector3(0, 1, -9)
+		resource.TrampolineBoxSizes[resource.TrampolineBoxCount] = rl.NewVector3(2, 0.25, 2)
+		resource.TrampolineBoxCount++
 	}
 
 	// anticlockwise: 0 -> 1 -> 2 -> 3 TLBR
@@ -142,109 +168,110 @@ func main() {
 	}
 
 	// Setup moving platforms
-	platformCount := 0
 	const maxPlatformTravelAmplitude = float32(arenaWidth / 2) // Distance traveled
 	const platformThick = 0.25 * 4
-	var platformBoundingBoxes []rl.BoundingBox
-	var platformOrigins []rl.Vector3
-	var platformDefaultOrigins []rl.Vector3
-	var platformModels []rl.Model
-	var platformMeshes []rl.Mesh
-	var platformSizes []rl.Vector3
 	{
 		origin := rl.NewVector3(2*arenaWidth/3, 0, -arenaLength/2)
 		size := rl.NewVector3(CeilF(playerSize.X*PowF(math.Phi, 4)), platformThick, CeilF(playerSize.Z*PowF(math.Phi, 4)))
-		mesh := rl.GenMeshCube(size.X, size.Y, size.Z)
-		model := rl.LoadModelFromMesh(mesh)
+		model := rl.LoadModelFromMesh(rl.GenMeshCube(size.X, size.Y, size.Z))
+		box := rl.NewBoundingBox(
+			rl.NewVector3(origin.X-size.X/2, origin.Y-size.Y/2, origin.Z-size.Z/2),
+			rl.NewVector3(origin.X+size.X/2, origin.Y+size.Y/2, origin.Z+size.Z/2))
+		resource.PlatformBoundingBoxes[resource.PlatformCount] = box
+		resource.PlatformDefaultPositions[resource.PlatformCount] = origin
+		resource.PlatformModels[resource.PlatformCount] = model
+		resource.PlatformPositions[resource.PlatformCount] = origin
+		resource.PlatformSizes[resource.PlatformCount] = size
+		resource.PlatformMoveNormals[resource.PlatformCount] = rl.NewVector3(0, 1, 0) // Up/Down
+		resource.PlatformCount++
+	}
+	{
+		origin := rl.NewVector3(2*arenaWidth/3, 0, -arenaLength/2*2)
+		size := rl.NewVector3(CeilF(playerSize.X*PowF(math.Phi, 4)), platformThick, CeilF(playerSize.Z*PowF(math.Phi, 4)))
+		model := rl.LoadModelFromMesh(rl.GenMeshCube(size.X, size.Y, size.Z))
+		box := rl.NewBoundingBox(
+			rl.NewVector3(origin.X-size.X/2, origin.Y-size.Y/2, origin.Z-size.Z/2),
+			rl.NewVector3(origin.X+size.X/2, origin.Y+size.Y/2, origin.Z+size.Z/2))
+		resource.PlatformBoundingBoxes[resource.PlatformCount] = box
+		resource.PlatformDefaultPositions[resource.PlatformCount] = origin
+		resource.PlatformModels[resource.PlatformCount] = model
+		resource.PlatformPositions[resource.PlatformCount] = origin
+		resource.PlatformSizes[resource.PlatformCount] = size
+		resource.PlatformMoveNormals[resource.PlatformCount] = rl.NewVector3(0, 0, 1) // Front/Back
+		resource.PlatformCount++
+	}
+
+	// Setup floors
+	const floorThick = 0.5 * 2
+	{
+		origin := rl.NewVector3(0, (playerPosition.Y-playerSize.Y/2)-(floorThick/2), 0)
+		size := rl.NewVector3(arenaWidth, floorThick, arenaLength)
+		model := rl.LoadModelFromMesh(rl.GenMeshCube(size.X, size.Y, size.Z))
 		box := rl.NewBoundingBox(
 			rl.NewVector3(origin.X-size.X/2, origin.Y-size.Y/2, origin.Z-size.Z/2),
 			rl.NewVector3(origin.X+size.X/2, origin.Y+size.Y/2, origin.Z+size.Z/2),
 		)
-		platformOrigins = append(platformOrigins, origin)
-		platformDefaultOrigins = append(platformDefaultOrigins, origin)
-		platformBoundingBoxes = append(platformBoundingBoxes, box)
-		platformModels = append(platformModels, model)
-		platformMeshes = append(platformMeshes, mesh)
-		platformSizes = append(platformSizes, size)
-		platformCount++
-	}
-
-	// Setup floors
-	floorCount := 0
-	const floorThick = 0.5 * 2
-	var floorBoundingBoxes []rl.BoundingBox
-	var floorOrigins []rl.Vector3
-	var floorModels []rl.Model
-	var floorMeshes []rl.Mesh
-	{
-		origin := rl.NewVector3(0, (playerPosition.Y-playerSize.Y/2)-(floorThick/2), 0)
-		mesh := rl.GenMeshCube(arenaWidth, floorThick, arenaLength)
-		model := rl.LoadModelFromMesh(mesh)
-		box := rl.NewBoundingBox(
-			rl.NewVector3(origin.X-arenaWidth/2, origin.Y-floorThick/2, origin.Z-arenaLength/2),
-			rl.NewVector3(origin.X+arenaWidth/2, origin.Y+floorThick/2, origin.Z+arenaLength/2),
-		)
-		floorOrigins = append(floorOrigins, origin)
-		floorBoundingBoxes = append(floorBoundingBoxes, box)
-		floorModels = append(floorModels, model)
-		floorMeshes = append(floorMeshes, mesh)
-		floorCount++
+		resource.FloorBoundingBoxes[resource.FloorCount] = box
+		resource.FloorModels[resource.FloorCount] = model
+		resource.FloorPositions[resource.FloorCount] = origin
+		resource.FloorSizes[resource.FloorCount] = size
+		resource.FloorCount++
 	}
 	{
 		origin := rl.NewVector3(arenaWidth/math.Phi, (playerPosition.Y-playerSize.Y/2)-(floorThick/2)-arenaWidth*1, arenaLength/8)
-		mesh := rl.GenMeshCube(arenaWidth, floorThick, arenaLength)
-		model := rl.LoadModelFromMesh(mesh)
+		size := rl.NewVector3(arenaWidth, floorThick, arenaLength)
+		model := rl.LoadModelFromMesh(rl.GenMeshCube(size.X, size.Y, size.Z))
 		box := rl.NewBoundingBox(
 			rl.NewVector3(origin.X-arenaWidth/2, origin.Y-floorThick/2, origin.Z-arenaLength/2),
 			rl.NewVector3(origin.X+arenaWidth/2, origin.Y+floorThick/2, origin.Z+arenaLength/2),
 		)
-		floorOrigins = append(floorOrigins, origin)
-		floorBoundingBoxes = append(floorBoundingBoxes, box)
-		floorModels = append(floorModels, model)
-		floorMeshes = append(floorMeshes, mesh)
-		floorCount++
+		resource.FloorBoundingBoxes[resource.FloorCount] = box
+		resource.FloorModels[resource.FloorCount] = model
+		resource.FloorPositions[resource.FloorCount] = origin
+		resource.FloorSizes[resource.FloorCount] = size
+		resource.FloorCount++
 	}
 	{
 		origin := rl.NewVector3(-3*arenaWidth/4, (playerPosition.Y-playerSize.Y/2)-(floorThick/2)-(playerSize.Y*1), (arenaLength/1)+(playerSize.Z*2))
-		mesh := rl.GenMeshCube(arenaWidth, floorThick, arenaLength)
-		model := rl.LoadModelFromMesh(mesh)
+		size := rl.NewVector3(arenaWidth, floorThick, arenaLength)
+		model := rl.LoadModelFromMesh(rl.GenMeshCube(size.X, size.Y, size.Z))
 		box := rl.NewBoundingBox(
 			rl.NewVector3(origin.X-arenaWidth/2, origin.Y-floorThick/2, origin.Z-arenaLength/2),
 			rl.NewVector3(origin.X+arenaWidth/2, origin.Y+floorThick/2, origin.Z+arenaLength/2),
 		)
-		floorOrigins = append(floorOrigins, origin)
-		floorBoundingBoxes = append(floorBoundingBoxes, box)
-		floorModels = append(floorModels, model)
-		floorMeshes = append(floorMeshes, mesh)
-		floorCount++
+		resource.FloorBoundingBoxes[resource.FloorCount] = box
+		resource.FloorModels[resource.FloorCount] = model
+		resource.FloorPositions[resource.FloorCount] = origin
+		resource.FloorSizes[resource.FloorCount] = size
+		resource.FloorCount++
 	}
 	{
 		origin := rl.NewVector3(3*arenaWidth/4, (playerPosition.Y-playerSize.Y/2-floorThick/2)-arenaWidth/2, -4*arenaLength/3.5)
-		mesh := rl.GenMeshCube(arenaWidth, floorThick, arenaLength)
-		model := rl.LoadModelFromMesh(mesh)
+		size := rl.NewVector3(arenaWidth, floorThick, arenaLength)
+		model := rl.LoadModelFromMesh(rl.GenMeshCube(size.X, size.Y, size.Z))
 		box := rl.NewBoundingBox(
 			rl.NewVector3(origin.X-arenaWidth/2, origin.Y-floorThick/2, origin.Z-arenaLength/2),
 			rl.NewVector3(origin.X+arenaWidth/2, origin.Y+floorThick/2, origin.Z+arenaLength/2),
 		)
-		floorOrigins = append(floorOrigins, origin)
-		floorBoundingBoxes = append(floorBoundingBoxes, box)
-		floorModels = append(floorModels, model)
-		floorMeshes = append(floorMeshes, mesh)
-		floorCount++
+		resource.FloorBoundingBoxes[resource.FloorCount] = box
+		resource.FloorModels[resource.FloorCount] = model
+		resource.FloorPositions[resource.FloorCount] = origin
+		resource.FloorSizes[resource.FloorCount] = size
+		resource.FloorCount++
 	}
 	{
 		origin := rl.NewVector3(-2*arenaWidth/3, (playerPosition.Y-playerSize.Y/2)-(floorThick/2)-((arenaWidth/2)+(playerSize.Y*4)), (-arenaLength/2)+(playerSize.Z*2))
-		mesh := rl.GenMeshCube(arenaWidth, floorThick, arenaLength)
-		model := rl.LoadModelFromMesh(mesh)
+		size := rl.NewVector3(arenaWidth, floorThick, arenaLength)
+		model := rl.LoadModelFromMesh(rl.GenMeshCube(size.X, size.Y, size.Z))
 		box := rl.NewBoundingBox(
 			rl.NewVector3(origin.X-arenaWidth/2, origin.Y-floorThick/2, origin.Z-arenaLength/2),
 			rl.NewVector3(origin.X+arenaWidth/2, origin.Y+floorThick/2, origin.Z+arenaLength/2),
 		)
-		floorOrigins = append(floorOrigins, origin)
-		floorBoundingBoxes = append(floorBoundingBoxes, box)
-		floorModels = append(floorModels, model)
-		floorMeshes = append(floorMeshes, mesh)
-		floorCount++
+		resource.FloorBoundingBoxes[resource.FloorCount] = box
+		resource.FloorModels[resource.FloorCount] = model
+		resource.FloorPositions[resource.FloorCount] = origin
+		resource.FloorSizes[resource.FloorCount] = size
+		resource.FloorCount++
 	}
 
 	var (
@@ -322,8 +349,20 @@ func main() {
 		oldCamTarget := camera.Target
 
 		// Follow player center
-		camera.Target = rl.Vector3Lerp(oldCamTarget, playerPosition, progressRate*(float32(fps)/3.0))
-		camera.Position = rl.Vector3Add(camera.Target, defaultCameraPositionTargetVector)
+		const smooth = 0.034
+		camScrollEase = dt * 2.0
+		camScrollEase = MinF(camScrollEase, smooth)
+		if isQuickMovementYAxis := false; isQuickMovementYAxis {
+			camera.Target.X = rl.Lerp(oldCamTarget.X, playerPosition.X, camScrollEase)
+			camera.Target.Y = rl.Lerp(oldCamTarget.Y, playerPosition.Y, smooth*2)
+			camera.Target.Z = rl.Lerp(oldCamTarget.Z, playerPosition.Z, camScrollEase)
+			camera.Position.X = rl.Lerp(camera.Position.X, camera.Target.X+defaultCameraPositionTargetVector.X, 0.5+camScrollEase)
+			camera.Position.Y = rl.Lerp(camera.Position.Y, camera.Target.Y+defaultCameraPositionTargetVector.Y, 0.8+camScrollEase/2)
+			camera.Position.Z = rl.Lerp(camera.Position.Z, camera.Target.Z+defaultCameraPositionTargetVector.Z, 0.5+camScrollEase)
+		} else {
+			camera.Position = rl.Vector3Add(camera.Target, defaultCameraPositionTargetVector)
+			camera.Target = rl.Vector3Lerp(oldCamTarget, playerPosition, camScrollEase)
+		}
 
 		_ = oldPlayerPos
 		_ = oldCamPos
@@ -364,8 +403,8 @@ func main() {
 
 		// Check if player is safely standing on the floor
 		// NOTE: SHOULD REARRANGE ORDER OF COLLISION CHECKS FOR FLOOR AND PLATFORM AND PLAYER.COLLISIONSTHISFRAME.W/Y
-		for i := range floorCount {
-			if rl.CheckCollisionBoxes(floorBoundingBoxes[i], GetBoundingBoxFromPositionSizeV(playerPosition, playerSize)) {
+		for i := range resource.FloorCount {
+			if rl.CheckCollisionBoxes(resource.FloorBoundingBoxes[i], GetBoundingBoxFromPositionSizeV(playerPosition, playerSize)) {
 				isFloorCollision = true
 
 				// Only push floor down if player just jumped and landed on the floor
@@ -373,13 +412,13 @@ func main() {
 					isJumpLandingOnFloor := playerAirTimer >= maxPlayerAirTime
 					isFallingWithFloor := playerAirTimer > 0
 					if isJumpLandingOnFloor || isFallingWithFloor {
-						floorOrigins[i].Y += playerVelocity.Y * terminalVelocityLimiterAirFrictionY
-						floorBoundingBoxes[i].Min.Y += playerVelocity.Y * terminalVelocityLimiterAirFrictionY
-						floorBoundingBoxes[i].Max.Y += playerVelocity.Y * terminalVelocityLimiterAirFrictionY
+						resource.FloorPositions[i].Y += playerVelocity.Y * terminalVelocityLimiterAirFrictionY
+						resource.FloorBoundingBoxes[i].Min.Y += playerVelocity.Y * terminalVelocityLimiterAirFrictionY
+						resource.FloorBoundingBoxes[i].Max.Y += playerVelocity.Y * terminalVelocityLimiterAirFrictionY
 					}
 				}
 
-				playerPosition.Y = playerSize.Y/2 + floorBoundingBoxes[i].Max.Y // HACK: Allow player to stand on the floor
+				playerPosition.Y = playerSize.Y/2 + resource.FloorBoundingBoxes[i].Max.Y // HACK: Allow player to stand on the floor
 				playerCollisionsThisFrame.W = 1
 			}
 		}
@@ -399,70 +438,71 @@ func main() {
 			playerVelocity.Z = MinF(0, playerVelocity.Z+terminalVelocityLimiterAirFriction)
 		}
 
-		for i := range platformCount {
+		for i := range resource.PlatformCount {
 			if isMovePlatformVerticaly := true; isMovePlatformVerticaly {
-				t := float32(framesCounter)                                                // Current Time
-				b := float32(platformDefaultOrigins[i].Y + maxPlatformTravelAmplitude/2.0) // Top(Beginning)
-				c := float32(-maxPlatformTravelAmplitude)                                  // Bottom(Change)
-				d := float32(fps) * 4                                                      // Duration
+				t := float32(framesCounter)                                                           // Current Time
+				b := float32(resource.PlatformDefaultPositions[i].Y + maxPlatformTravelAmplitude/2.0) // Top(Beginning)
+				c := float32(-maxPlatformTravelAmplitude)                                             // Bottom(Change)
+				d := float32(fps) * 4                                                                 // Duration
 				dy := easings.SineInOut(t, b, c, d)
-				platformOrigins[i].Y = dy
-				platformBoundingBoxes[i].Min.Y = platformOrigins[i].Y - platformThick/2
-				platformBoundingBoxes[i].Max.Y = platformOrigins[i].Y + platformThick/2
+				resource.PlatformPositions[i].Y = dy
+				resource.PlatformBoundingBoxes[i].Min.Y = resource.PlatformPositions[i].Y - platformThick/2
+				resource.PlatformBoundingBoxes[i].Max.Y = resource.PlatformPositions[i].Y + platformThick/2
 			}
-			isInsideXRange := playerPosition.X+playerSize.X/2 < platformBoundingBoxes[i].Max.X && playerPosition.X-playerSize.X/2 > platformBoundingBoxes[i].Min.X
-			isInsideZRange := playerPosition.Z+playerSize.Z/2 < platformBoundingBoxes[i].Max.Z && playerPosition.Z-playerSize.Z/2 > platformBoundingBoxes[i].Min.Z
-			isAboveYRange := playerPosition.Y+playerSize.Y/2 >= platformBoundingBoxes[i].Max.Y && playerPosition.Y-playerSize.Y/2 >= platformBoundingBoxes[i].Min.Y
+			box := resource.PlatformBoundingBoxes
+			isInsideXRange := playerPosition.X+playerSize.X/2 < box[i].Max.X && playerPosition.X-playerSize.X/2 > box[i].Min.X
+			isInsideZRange := playerPosition.Z+playerSize.Z/2 < box[i].Max.Z && playerPosition.Z-playerSize.Z/2 > box[i].Min.Z
+			isAboveYRange := playerPosition.Y+playerSize.Y/2 >= box[i].Max.Y && playerPosition.Y-playerSize.Y/2 >= box[i].Min.Y
 			const tolerance = platformThick // Avoid spamming isPlatformCollision as pure player size calculation does not handle changing bound tolerance in the same loop
 			if isInsideXRange && isInsideZRange && isAboveYRange {
 				isPlatformCollision = true
 				if rl.CheckCollisionBoxes(
 					GetBoundingBoxFromPositionSizeV(playerPosition, rl.Vector3AddValue(playerSize, tolerance)),
-					platformBoundingBoxes[i],
+					box[i],
 				) {
-					playerPosition.Y = playerSize.Y/2 + platformBoundingBoxes[i].Max.Y
+					playerPosition.Y = playerSize.Y/2 + box[i].Max.Y
 					playerCollisionsThisFrame.W = 1
 				}
 			} else if isPassFromUnderOrTouchEdges := rl.CheckCollisionBoxes(
 				GetBoundingBoxFromPositionSizeV(playerPosition, playerSize),
-				platformBoundingBoxes[i],
+				box[i],
 			); isPassFromUnderOrTouchEdges {
 				isPlatformCollision = true
 				playerCollisionsThisFrame.Y = 1
-				playerPosition.Y = playerSize.Y/2 + platformBoundingBoxes[i].Max.Y
+				playerPosition.Y = playerSize.Y/2 + box[i].Max.Y
 				playerCollisionsThisFrame.Y = 0
 				playerCollisionsThisFrame.W = 1
 			}
 		}
-		for i := range unsafeDischargeSphereCount {
+		for i := range resource.DamageSphereCount {
 			if rl.CheckCollisionBoxSphere(
 				GetBoundingBoxFromPositionSizeV(playerPosition, playerSize),
-				unsafeDischargeSpherePositions[i],
-				unsafeRedSphereSizes[i],
+				resource.DamageSpherePositions[i],
+				resource.DamageSphereSizes[i],
 			) {
 				isUnsafeCollision = true
 				// Find perpendicular curve to XZ plane, i.e slope of circumference
 				// WARN: Expect wonky animation, as bottom of player box when on a slope of sphere, may not collide with top tangent to sphere surface.
-				height := unsafeRedSphereSizes[i]/2 + playerSize.Y
-				dx := CosF(AbsF(playerPosition.X - unsafeDischargeSpherePositions[i].X))
-				dz := CosF(AbsF(playerPosition.Z - unsafeDischargeSpherePositions[i].Z))
+				height := resource.DamageSphereSizes[i]/2 + playerSize.Y
+				dx := CosF(AbsF(playerPosition.X - resource.DamageSpherePositions[i].X))
+				dz := CosF(AbsF(playerPosition.Z - resource.DamageSpherePositions[i].Z))
 				dy := (dx*dx + dz*dz) * height
 				dy = SqrtF(dy)
 				dy = rl.Clamp(dy, 0, height)
-				playerPosition.Y = unsafeDischargeSpherePositions[i].Y + dy
+				playerPosition.Y = resource.DamageSpherePositions[i].Y + dy
 				playerCollisionsThisFrame.W = 1
 			}
 		}
-		for i := range safeRechargeBoxCount {
-			box := GetBoundingBoxFromPositionSizeV(safeRechargeBoxPositions[i], safeRechargeBoxSizes[i])
+		for i := range resource.HealBoxCount {
+			box := GetBoundingBoxFromPositionSizeV(resource.HealBoxPositions[i], resource.HealBoxSizes[i])
 			if rl.CheckCollisionBoxes(box, GetBoundingBoxFromPositionSizeV(playerPosition, playerSize)) {
 				playerCollisionsThisFrame.W = 1
 				isSafeSpotCollision = true
 				playerPosition.Y = playerSize.Y/2 + box.Max.Y // HACK: Allow player to stand on the floor
 			}
 		}
-		for i := range trampolineBoxCount {
-			box := GetBoundingBoxFromPositionSizeV(trampolineBoxPositions[i], trampolineBoxSizes[i])
+		for i := range resource.TrampolineBoxCount {
+			box := GetBoundingBoxFromPositionSizeV(resource.TrampolineBoxPositions[i], resource.TrampolineBoxSizes[i])
 			if rl.CheckCollisionBoxes(box, GetBoundingBoxFromPositionSizeV(playerPosition, playerSize)) {
 				isTrampolineCollision = true
 				playerPosition.Y = playerSize.Y/2 + box.Max.Y // HACK: Allow player to stand on the floor
@@ -523,11 +563,11 @@ func main() {
 			shieldProgress -= progressRate
 		}
 		if isSafeSpotCollision {
-			shieldProgress += progressRate / 2
+			shieldProgress += progressRate * 2
 			if shieldProgress >= 1.0 {
 				shieldProgress = 1.0
 			}
-			fuelProgress += progressRate / 2
+			fuelProgress += progressRate * 2
 			if fuelProgress >= 1.0 {
 				fuelProgress = 1.0
 			}
@@ -553,35 +593,29 @@ func main() {
 
 		rl.BeginMode3D(camera)
 
-		// Draw floors
-		for i := range floorCount {
+		// Draw interactive game resource objects
+		for i := range resource.FloorCount {
 			col := rl.ColorLerp(rl.Fade(rl.RayWhite, PowF(shieldProgress, 0.33)), rl.White, SqrtF(shieldProgress))
-			rl.DrawModel(floorModels[i], floorOrigins[i], 1.0, col)
-			rl.DrawBoundingBox(floorBoundingBoxes[i], rl.Black)
+			rl.DrawModel(resource.FloorModels[i], resource.FloorPositions[i], 1.0, col)
+			rl.DrawBoundingBox(resource.FloorBoundingBoxes[i], rl.Fade(rl.Black, 0.3))
 		}
-
-		// Draw interactive objects
-		for i := range platformCount {
-			rl.DrawModel(platformModels[i], platformOrigins[i], 1.0, rl.SkyBlue)                                           // Platform
-			rl.DrawBoundingBox(platformBoundingBoxes[i], rl.DarkBlue)                                                      // Platform outline
-			rl.DrawCubeV(platformDefaultOrigins[i], rl.NewVector3(0.125, maxPlatformTravelAmplitude, 0.125), rl.LightGray) // Reference (y axis)
-			rl.DrawPlane(platformDefaultOrigins[i], rl.NewVector2(0.5, 0.5), rl.Gray)                                      // Reference (midpoint plane)
+		for i := range resource.PlatformCount {
+			rl.DrawModel(resource.PlatformModels[i], resource.PlatformPositions[i], 1.0, rl.SkyBlue)                                  // Platform
+			rl.DrawBoundingBox(resource.PlatformBoundingBoxes[i], rl.DarkBlue)                                                        // Platform outline
+			rl.DrawCubeV(resource.PlatformDefaultPositions[i], rl.NewVector3(0.125, maxPlatformTravelAmplitude, 0.125), rl.LightGray) // Reference (y axis)
+			rl.DrawPlane(resource.PlatformDefaultPositions[i], rl.NewVector2(0.5, 0.5), rl.Gray)                                      // Reference (midpoint plane)
 		}
-		for i := range unsafeDischargeSphereCount {
-			rl.DrawSphere(unsafeDischargeSpherePositions[i], unsafeRedSphereSizes[i], rl.Gold)
-			rl.DrawSphereWires(unsafeDischargeSpherePositions[i], unsafeRedSphereSizes[i], 8, 8, rl.Orange)
+		for i := range resource.DamageSphereCount {
+			rl.DrawSphere(resource.DamageSpherePositions[i], resource.DamageSphereSizes[i], rl.Gold)
+			rl.DrawSphereWires(resource.DamageSpherePositions[i], resource.DamageSphereSizes[i], 8, 8, rl.Orange)
 		}
-		for i := range safeRechargeBoxCount {
-			pos := safeRechargeBoxPositions[i]
-			size := safeRechargeBoxSizes[i]
-			rl.DrawCubeV(pos, size, rl.Fade(rl.Green, 1.0))
-			rl.DrawCubeWiresV(pos, size, rl.Fade(rl.DarkGreen, 1.0))
+		for i := range resource.HealBoxCount {
+			rl.DrawCubeV(resource.HealBoxPositions[i], resource.HealBoxSizes[i], rl.Fade(rl.Green, 1.0))
+			rl.DrawCubeWiresV(resource.HealBoxPositions[i], resource.HealBoxSizes[i], rl.Fade(rl.DarkGreen, 1.0))
 		}
-		for i := range trampolineBoxCount {
-			pos := trampolineBoxPositions[i]
-			size := trampolineBoxSizes[i]
-			rl.DrawCubeV(pos, size, rl.Fade(rl.Red, 1.0))
-			rl.DrawCubeWiresV(pos, size, rl.Fade(rl.Maroon, 1.0))
+		for i := range resource.TrampolineBoxCount {
+			rl.DrawCubeV(resource.TrampolineBoxPositions[i], resource.TrampolineBoxSizes[i], rl.Fade(rl.Red, 1.0))
+			rl.DrawCubeWiresV(resource.TrampolineBoxPositions[i], resource.TrampolineBoxSizes[i], rl.Fade(rl.Maroon, 1.0))
 		}
 		if false {
 			// Draw walls
@@ -643,10 +677,14 @@ func main() {
 		// Quick debug zone
 		{
 			text := fmt.Sprintf("playerAirTimer: %.2f\nplayerJumpsLeft: %d\n"+
+				"playerPosition: %.2f\n"+
 				"camera.Position: %.2f\ncamera.Target: %.2f\ncameraPositionTargetDistance: %.2f\n"+
+				"cameraScrollEase: %.4f\n"+
 				"defaultCameraPosition: %.2f\ndefaultCameraTarget: %.2f\ndefaultCameraPositionTargetDistance: %.2f\n",
 				playerAirTimer, playerJumpsLeft,
+				playerPosition,
 				camera.Position, camera.Target, rl.Vector3Distance(camera.Position, camera.Target),
+				camScrollEase,
 				defaultCameraPosition, defaultCameraTarget, defaultCameraPositionTargetDistance,
 			)
 			rl.DrawText(text, int32(rl.GetScreenWidth())-10-rl.MeasureText(text, 10), 10, 10, rl.DarkGray)
@@ -655,13 +693,24 @@ func main() {
 		rl.EndDrawing()
 	}
 
+	{
+		jsonData, err := json.MarshalIndent(resource, "", "  ")
+		if err != nil {
+			slog.Error(err.Error())
+		}
+		if false {
+			fmt.Printf("jsonData: %b\n", jsonData)
+		}
+	}
+
 	rl.CloseWindow()
 }
 
-func GetBoundingBoxFromPositionSizeV(pos rl.Vector3, size rl.Vector3) rl.BoundingBox {
+func GetBoundingBoxFromPositionSizeV(pos, size rl.Vector3) rl.BoundingBox {
 	return rl.NewBoundingBox(
 		rl.NewVector3(pos.X-size.X/2, pos.Y-size.Y/2, pos.Z-size.Z/2),
-		rl.NewVector3(pos.X+size.X/2, pos.Y+size.Y/2, pos.Z+size.Z/2))
+		rl.NewVector3(pos.X+size.X/2, pos.Y+size.Y/2, pos.Z+size.Z/2),
+	)
 }
 
 // Copied from Go's cmp.Ordered
@@ -677,22 +726,25 @@ type OrderedNumber interface {
 		~float32 | ~float64
 }
 
-// To avoid casting each time `OrderedNumber` interface it is used
+// NumberType typecast to avoid casting `OrderedNumber` interface when used.
 type NumberType OrderedNumber
 
-func AbsF[T NumberType](x T) float32      { return float32(math.Abs(float64(x))) }
+func AbsF[T NumberType](x T) float32       { return float32(math.Abs(float64(x))) }
+func SqrtF[T NumberType](x T) float32      { return float32(math.Sqrt(float64(x))) }
+func CosF[T NumberType](x T) float32       { return float32(math.Cos(float64(x))) }
+func SinF[T NumberType](x T) float32       { return float32(math.Sin(float64(x))) }
+func SignF[T NumberType](x T) float32      { return cmp.Or(float32(math.Abs(float64(x))/float64(x)), 0) }
+func FloorF[T NumberType](x T) float32     { return float32(math.Floor(float64(x))) }
+func CeilF[T NumberType](x T) float32      { return float32(math.Ceil(float64(x))) }
+func RoundI[T NumberType](x T) int32       { return int32(math.Round(float64(x))) }
+func RoundF[T NumberType](x T) float32     { return float32(math.Round(float64(x))) }
+func RoundEvenF[T NumberType](x T) float32 { return float32(math.RoundToEven(float64(x))) }
+
 func MaxF[T NumberType](x T, y T) float32 { return float32(max(float64(x), float64(y))) }
 func MinF[T NumberType](x T, y T) float32 { return float32(min(float64(x), float64(y))) }
 func PowF[T NumberType](x T, y T) float32 { return float32(math.Pow(float64(x), float64(y))) }
-func SqrtF[T NumberType](x T) float32     { return float32(math.Sqrt(float64(x))) }
-func CosF[T NumberType](x T) float32      { return float32(math.Cos(float64(x))) }
-func SinF[T NumberType](x T) float32      { return float32(math.Sin(float64(x))) }
-func FloorF[T NumberType](x T) float32    { return float32(math.Floor(float64(x))) }
-func CeilF[T NumberType](x T) float32     { return float32(math.Ceil(float64(x))) }
-func SignF[T NumberType](x T) float32     { return cmp.Or(float32(math.Abs(float64(x))/float64(x)), 0) }
 func MaxI[T NumberType](x T, y T) int32   { return int32(max(float64(x), float64(y))) }
 func MinI[T NumberType](x T, y T) int32   { return int32(min(float64(x), float64(y))) }
-func RoundI[T NumberType](x T) int32      { return int32(math.Round(float64(x))) }
 
 func manhattanV2(a, b rl.Vector2) float32 { return AbsF(b.X-a.X) + AbsF(b.Y-a.Y) }
 func manhattanV3(a, b rl.Vector3) float32 { return AbsF(b.X-a.X) + AbsF(b.Y-a.Y) + AbsF(b.Z-a.Z) }
