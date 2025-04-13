@@ -10,7 +10,6 @@ import (
 	"os"
 
 	"github.com/gen2brain/raylib-go/easings"
-	_ "github.com/gen2brain/raylib-go/easings"
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
@@ -160,9 +159,6 @@ func main() {
 	}
 
 	// Setup moving platforms
-	const maxPlatformMoveAmplitude = float32(arenaWidth / 2) // Distance traveled
-	const platformThick = 0.25 * 1
-
 	setupPlatformResource := func(pos, size, movementNormal rl.Vector3) {
 		if !IsUnitVec3(movementNormal) {
 			panic(fmt.Sprintf("Invalid unit vector: movementNormal: %+v", movementNormal))
@@ -177,7 +173,8 @@ func main() {
 		resource.PlatformMovementNormals[resource.PlatformCount] = movementNormal // Up/Down
 		resource.PlatformCount++
 	}
-
+	const maxPlatformMoveAmplitude = float32(arenaWidth / 2) // Distance traveled
+	const platformThick = 1.0
 	for _, data := range []struct {
 		Entity         Entity
 		MovementNormal rl.Vector3
@@ -191,76 +188,39 @@ func main() {
 	}
 
 	// Setup floors
-	const floorThick = 0.5 * 2
-	{
-		origin := rl.NewVector3(0, (playerPosition.Y-playerSize.Y/2)-(floorThick/2), 0)
-		size := rl.NewVector3(arenaWidth, floorThick, arenaLength)
+	setupFloorResource := func(pos, size rl.Vector3) {
 		model := rl.LoadModelFromMesh(rl.GenMeshCube(size.X, size.Y, size.Z))
-		box := rl.NewBoundingBox(
-			rl.NewVector3(origin.X-size.X/2, origin.Y-size.Y/2, origin.Z-size.Z/2),
-			rl.NewVector3(origin.X+size.X/2, origin.Y+size.Y/2, origin.Z+size.Z/2),
-		)
+		box := GetBoundingBoxFromPositionSizeV(pos, size)
 		resource.FloorBoundingBoxes[resource.FloorCount] = box
 		resource.FloorModels[resource.FloorCount] = model
-		resource.FloorPositions[resource.FloorCount] = origin
+		resource.FloorPositions[resource.FloorCount] = pos
 		resource.FloorSizes[resource.FloorCount] = size
 		resource.FloorCount++
 	}
-	{
-		origin := rl.NewVector3(arenaWidth/math.Phi, (playerPosition.Y-playerSize.Y/2)-(floorThick/2)-arenaWidth*1, arenaLength/8)
-		size := rl.NewVector3(arenaWidth, floorThick, arenaLength)
-		model := rl.LoadModelFromMesh(rl.GenMeshCube(size.X, size.Y, size.Z))
-		box := rl.NewBoundingBox(
-			rl.NewVector3(origin.X-arenaWidth/2, origin.Y-floorThick/2, origin.Z-arenaLength/2),
-			rl.NewVector3(origin.X+arenaWidth/2, origin.Y+floorThick/2, origin.Z+arenaLength/2),
-		)
-		resource.FloorBoundingBoxes[resource.FloorCount] = box
-		resource.FloorModels[resource.FloorCount] = model
-		resource.FloorPositions[resource.FloorCount] = origin
-		resource.FloorSizes[resource.FloorCount] = size
-		resource.FloorCount++
-	}
-	{
-		origin := rl.NewVector3(-3*arenaWidth/4, (playerPosition.Y-playerSize.Y/2)-(floorThick/2)-(playerSize.Y*1), (arenaLength/1)+(playerSize.Z*2))
-		size := rl.NewVector3(arenaWidth, floorThick, arenaLength)
-		model := rl.LoadModelFromMesh(rl.GenMeshCube(size.X, size.Y, size.Z))
-		box := rl.NewBoundingBox(
-			rl.NewVector3(origin.X-arenaWidth/2, origin.Y-floorThick/2, origin.Z-arenaLength/2),
-			rl.NewVector3(origin.X+arenaWidth/2, origin.Y+floorThick/2, origin.Z+arenaLength/2),
-		)
-		resource.FloorBoundingBoxes[resource.FloorCount] = box
-		resource.FloorModels[resource.FloorCount] = model
-		resource.FloorPositions[resource.FloorCount] = origin
-		resource.FloorSizes[resource.FloorCount] = size
-		resource.FloorCount++
-	}
-	{
-		origin := rl.NewVector3(3*arenaWidth/4, (playerPosition.Y-playerSize.Y/2-floorThick/2)-arenaWidth/2, -4*arenaLength/3.5)
-		size := rl.NewVector3(arenaWidth, floorThick, arenaLength)
-		model := rl.LoadModelFromMesh(rl.GenMeshCube(size.X, size.Y, size.Z))
-		box := rl.NewBoundingBox(
-			rl.NewVector3(origin.X-arenaWidth/2, origin.Y-floorThick/2, origin.Z-arenaLength/2),
-			rl.NewVector3(origin.X+arenaWidth/2, origin.Y+floorThick/2, origin.Z+arenaLength/2),
-		)
-		resource.FloorBoundingBoxes[resource.FloorCount] = box
-		resource.FloorModels[resource.FloorCount] = model
-		resource.FloorPositions[resource.FloorCount] = origin
-		resource.FloorSizes[resource.FloorCount] = size
-		resource.FloorCount++
-	}
-	{
-		origin := rl.NewVector3(-2*arenaWidth/3, (playerPosition.Y-playerSize.Y/2)-(floorThick/2)-((arenaWidth/2)+(playerSize.Y*4)), (-arenaLength/2)+(playerSize.Z*2))
-		size := rl.NewVector3(arenaWidth, floorThick, arenaLength)
-		model := rl.LoadModelFromMesh(rl.GenMeshCube(size.X, size.Y, size.Z))
-		box := rl.NewBoundingBox(
-			rl.NewVector3(origin.X-arenaWidth/2, origin.Y-floorThick/2, origin.Z-arenaLength/2),
-			rl.NewVector3(origin.X+arenaWidth/2, origin.Y+floorThick/2, origin.Z+arenaLength/2),
-		)
-		resource.FloorBoundingBoxes[resource.FloorCount] = box
-		resource.FloorModels[resource.FloorCount] = model
-		resource.FloorPositions[resource.FloorCount] = origin
-		resource.FloorSizes[resource.FloorCount] = size
-		resource.FloorCount++
+	const floorThick = 1.0
+	for _, data := range []Entity{
+		{
+			Pos:  rl.NewVector3(0, (playerPosition.Y-playerSize.Y/2)-(floorThick/2), 0),
+			Size: rl.NewVector3(arenaWidth, floorThick, arenaLength),
+		},
+		{
+			Pos:  rl.NewVector3(arenaWidth/math.Phi, -arenaWidth*1, arenaLength/8),
+			Size: rl.NewVector3(arenaWidth/2, floorThick, arenaLength/2),
+		},
+		{
+			Pos:  rl.NewVector3(-3*arenaWidth/4, -(playerSize.Y * 1), (arenaLength/1)+(playerSize.Z*2)),
+			Size: rl.NewVector3(arenaWidth/2, floorThick, arenaLength/2),
+		},
+		{
+			Pos:  rl.NewVector3(3*arenaWidth/4, -arenaWidth/2, -4*arenaLength/3.5),
+			Size: rl.NewVector3(arenaWidth/2, floorThick, arenaLength/2),
+		},
+		{
+			Pos:  rl.NewVector3(-2*arenaWidth/3, -((arenaWidth / 2) + (playerSize.Y * 4)), (-arenaLength/2)+(playerSize.Z*2)),
+			Size: rl.NewVector3(arenaWidth/2, floorThick, arenaLength/2),
+		},
+	} {
+		setupFloorResource(data.Pos, data.Size)
 	}
 
 	var (
@@ -395,9 +355,7 @@ func main() {
 		for i := range resource.FloorCount {
 			if rl.CheckCollisionBoxes(resource.FloorBoundingBoxes[i], GetBoundingBoxFromPositionSizeV(playerPosition, playerSize)) {
 				isFloorCollision = true
-
-				// Only push floor down if player just jumped and landed on the floor
-				if isFloorSinking := false; isFloorSinking {
+				if canFloorSink := false; canFloorSink { // Only push floor down if player just jumped and landed on the floor
 					isJumpLandingOnFloor := playerAirTimer >= maxPlayerAirTime
 					isFallingWithFloor := playerAirTimer > 0
 					if isJumpLandingOnFloor || isFallingWithFloor {
@@ -406,7 +364,6 @@ func main() {
 						resource.FloorBoundingBoxes[i].Max.Y += playerVelocity.Y * terminalVelocityLimiterAirFrictionY
 					}
 				}
-
 				playerPosition.Y = playerSize.Y/2 + resource.FloorBoundingBoxes[i].Max.Y // HACK: Allow player to stand on the floor
 				playerCollisionsThisFrame.W = 1
 			}
