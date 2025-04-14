@@ -222,30 +222,22 @@ func main() {
 			MovementNormal:    rl.NewVector3(0, 1, 0),
 			MovementAmplitude: _maxPlatformMoveAmplitude * 4,
 		},
-		// {
-		// 	Entity: Entity{
-		// 		Pos:  rl.NewVector3(-arenaWidth/4, -arenaHeight/2, -arenaLength),
-		// 		Size: rl.NewVector3(8, platformThick, 8),
-		// 	},
-		// 	MovementNormal:    rl.NewVector3(0, 1, 0),
-		// 	MovementAmplitude: _maxPlatformMoveAmplitude * 4,
-		// },
-		// {
-		// 	Entity: Entity{
-		// 		Pos:  rl.NewVector3(-8, 4, -8),
-		// 		Size: rl.NewVector3(10, platformThick, 10),
-		// 	},
-		// 	MovementNormal:    rl.NewVector3(1, 0, 0),
-		// 	MovementAmplitude: _maxPlatformMoveAmplitude,
-		// },
-		// {
-		// 	Entity: Entity{
-		// 		Pos:  rl.NewVector3(4, -8, -12),
-		// 		Size: rl.NewVector3(10, platformThick, 10),
-		// 	},
-		// 	MovementNormal:    rl.NewVector3(0, 0, 1),
-		// 	MovementAmplitude: _maxPlatformMoveAmplitude,
-		// },
+		{
+			Entity: Entity{
+				Pos:  rl.NewVector3(-8, 4, -8),
+				Size: rl.NewVector3(10, platformThick, 10),
+			},
+			MovementNormal:    rl.NewVector3(1, 0, 0),
+			MovementAmplitude: _maxPlatformMoveAmplitude,
+		},
+		{
+			Entity: Entity{
+				Pos:  rl.NewVector3(4, -8, -12),
+				Size: rl.NewVector3(10, platformThick, 10),
+			},
+			MovementNormal:    rl.NewVector3(0, 0, 1),
+			MovementAmplitude: _maxPlatformMoveAmplitude,
+		},
 	} {
 		setupPlatformResource(data.Entity.Pos, data.Entity.Size, data.MovementNormal, data.MovementAmplitude)
 	}
@@ -254,31 +246,29 @@ func main() {
 			Pos:  rl.NewVector3(-4, 1, 0),
 			Size: rl.NewVector3(2, 2, 2),
 		},
-		{
-			Pos:  rl.NewVector3(W/4, -H/2, -L*2),
-			Size: rl.NewVector3(2, 2, 2),
-		},
+		// {
+		// 	Pos:  rl.NewVector3(W/4, -H/2, -L*2),
+		// 	Size: rl.NewVector3(2, 2, 2),
+		// },
 	} {
 		resource.HealBoxPositions[resource.HealBoxCount] = data.Pos
 		resource.HealBoxSizes[resource.HealBoxCount] = data.Size
 		resource.HealBoxCount++
 	}
-
 	for _, data := range []Entity{
 		{
 			Pos:  rl.NewVector3(4.0, 0.0, 0.0),
 			Size: rl.NewVector3(1.5, 1.5, 1.5),
 		},
-		{
-			Pos:  rl.NewVector3(0.0, -H/4, -L),
-			Size: rl.NewVector3(3.0, 3.0, 3.0),
-		},
+		// {
+		// 	Pos:  rl.NewVector3(0.0, -H/4, -L),
+		// 	Size: rl.NewVector3(3.0, 3.0, 3.0),
+		// },
 	} {
 		resource.DamageSpherePositions[resource.DamageSphereCount] = data.Pos
 		resource.DamageSphereSizes[resource.DamageSphereCount] = data.Size.Y // Radius
 		resource.DamageSphereCount++
 	}
-
 	for _, data := range []Entity{
 		{
 			Pos:  rl.NewVector3(0.0, 3.0, 6.0),
