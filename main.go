@@ -46,13 +46,22 @@ func main() {
 		rayMouseCollision rl.RayCollision
 	)
 
+	isPlayerBoost := false
+	isPlayerStrafe := false
+	playerColor := rl.RayWhite
+	playerJumpsLeft := 1
+	playerPosition := rl.NewVector3(0.0, 1.0, 2.0)
+	playerSize := rl.NewVector3(1.0, 2.0, 1.0)
+	playerVelocity := rl.Vector3{}
+	playerAirTimer := float32(0)
+
 	camScrollEase := float32((float32(1.0) / float32(fps)) * 2.0) // 0.033
 
 	camera := rl.Camera{
-		Position:   rl.NewVector3(0.0, RoundEvenF(camPosW), RoundEvenF(camPosL)),
-		Target:     rl.NewVector3(0.0, -1.0, 0.0),
+		Position:   cmp.Or(rl.NewVector3(0.0, camPosW/math.Phi, camPosL/math.Phi), rl.NewVector3(0., 10., 10.)),
+		Target:     rl.NewVector3(0., 0., 0.), // rl.NewVector3(0.0, -1.0, 0.0),
 		Up:         rl.NewVector3(0.0, 1.0, 0.0),
-		Fovy:       float32(cmp.Or(45.0, 30.0, 60.0)), // Use higher Fovy to zoom out if following a target
+		Fovy:       float32(cmp.Or(60.0, 30.0, 45.0)), // Use higher Fovy to zoom out if following a target
 		Projection: rl.CameraPerspective,
 	}
 
@@ -68,15 +77,6 @@ func main() {
 
 	fuelProgress := float32(1.0)
 	shieldProgress := float32(1.0)
-
-	isPlayerBoost := false
-	isPlayerStrafe := false
-	playerColor := rl.RayWhite
-	playerJumpsLeft := 1
-	playerPosition := rl.NewVector3(0.0, 1.0, 2.0)
-	playerSize := rl.NewVector3(1.0, 2.0, 1.0)
-	playerVelocity := rl.Vector3{}
-	playerAirTimer := float32(0)
 
 	_ = isPlayerBoost
 	_ = isPlayerStrafe
@@ -106,25 +106,30 @@ func main() {
 		PlatformSizes              [MaxResourceSOACapacity]rl.Vector3
 		PlatformMovementNormals    [MaxResourceSOACapacity]rl.Vector3
 		PlatformMovementAmplitudes [MaxResourceSOACapacity]float32 // World units maxPlatformMoveAmplitude
+		PlatformAtIsActive         [MaxResourceSOACapacity]bool
 		PlatformCount              int
 
 		FloorBoundingBoxes [MaxResourceSOACapacity]rl.BoundingBox
 		FloorPositions     [MaxResourceSOACapacity]rl.Vector3
 		FloorModels        [MaxResourceSOACapacity]rl.Model
 		FloorSizes         [MaxResourceSOACapacity]rl.Vector3
+		FloorAtIsActive    [MaxResourceSOACapacity]bool
 		FloorCount         int
 
-		HealBoxPositions [MaxResourceSOACapacity]rl.Vector3
-		HealBoxSizes     [MaxResourceSOACapacity]rl.Vector3
-		HealBoxCount     int
+		HealBoxPositions  [MaxResourceSOACapacity]rl.Vector3
+		HealBoxSizes      [MaxResourceSOACapacity]rl.Vector3
+		HealBoxAtIsActive [MaxResourceSOACapacity]bool
+		HealBoxCount      int
 
-		DamageSpherePositions [MaxResourceSOACapacity]rl.Vector3
-		DamageSphereSizes     [MaxResourceSOACapacity]float32
-		DamageSphereCount     int
+		DamageSpherePositions  [MaxResourceSOACapacity]rl.Vector3
+		DamageSphereSizes      [MaxResourceSOACapacity]float32
+		DamageSphereAtIsActive [MaxResourceSOACapacity]bool
+		DamageSphereCount      int
 
-		TrampolineBoxPositions [MaxResourceSOACapacity]rl.Vector3
-		TrampolineBoxSizes     [MaxResourceSOACapacity]rl.Vector3
-		TrampolineBoxCount     int
+		TrampolineBoxPositions  [MaxResourceSOACapacity]rl.Vector3
+		TrampolineBoxSizes      [MaxResourceSOACapacity]rl.Vector3
+		TrampolineBoxAtIsActive [MaxResourceSOACapacity]bool
+		TrampolineBoxCount      int
 	}
 
 	type Entity struct {
@@ -143,6 +148,7 @@ func main() {
 		resource.FloorModels[resource.FloorCount] = rl.LoadModelFromMesh(rl.GenMeshCube(size.X, size.Y, size.Z))
 		resource.FloorPositions[resource.FloorCount] = pos
 		resource.FloorSizes[resource.FloorCount] = size
+		resource.FloorAtIsActive[resource.FloorCount] = true
 		resource.FloorCount++
 	}
 	const floorThick = 1.0
@@ -199,6 +205,7 @@ func main() {
 		resource.PlatformSizes[resource.PlatformCount] = size
 		resource.PlatformMovementNormals[resource.PlatformCount] = movementNormal       // Up/Down
 		resource.PlatformMovementAmplitudes[resource.PlatformCount] = movementAmplitude // World unit
+		resource.PlatformAtIsActive[resource.PlatformCount] = true
 		resource.PlatformCount++
 	}
 	for _, data := range []struct {
@@ -206,14 +213,14 @@ func main() {
 		MovementNormal    rl.Vector3
 		MovementAmplitude float32
 	}{
-		{
-			Entity: Entity{
-				Pos:  rl.NewVector3(0, -H/4, L/2),
-				Size: rl.NewVector3(8, platformThick, 8),
-			},
-			MovementNormal:    rl.NewVector3(0, 0, 0),
-			MovementAmplitude: _maxPlatformMoveAmplitude,
-		},
+		// {
+		// 	Entity: Entity{
+		// 		Pos:  rl.NewVector3(0, -H/4, L/2),
+		// 		Size: rl.NewVector3(8, platformThick, 8),
+		// 	},
+		// 	MovementNormal:    rl.NewVector3(0, 0, 0),
+		// 	MovementAmplitude: _maxPlatformMoveAmplitude,
+		// },
 		{
 			Entity: Entity{
 				Pos:  rl.NewVector3(-W/4, -H/2, L/2),
@@ -253,6 +260,7 @@ func main() {
 	} {
 		resource.HealBoxPositions[resource.HealBoxCount] = data.Pos
 		resource.HealBoxSizes[resource.HealBoxCount] = data.Size
+		resource.HealBoxAtIsActive[resource.HealBoxCount] = true
 		resource.HealBoxCount++
 	}
 	for _, data := range []Entity{
@@ -267,6 +275,7 @@ func main() {
 	} {
 		resource.DamageSpherePositions[resource.DamageSphereCount] = data.Pos
 		resource.DamageSphereSizes[resource.DamageSphereCount] = data.Size.Y // Radius
+		resource.DamageSphereAtIsActive[resource.DamageSphereCount] = true
 		resource.DamageSphereCount++
 	}
 	for _, data := range []Entity{
@@ -281,6 +290,7 @@ func main() {
 	} {
 		resource.TrampolineBoxPositions[resource.TrampolineBoxCount] = data.Pos
 		resource.TrampolineBoxSizes[resource.TrampolineBoxCount] = data.Size
+		resource.TrampolineBoxAtIsActive[resource.TrampolineBoxCount] = true
 		resource.TrampolineBoxCount++
 	}
 
@@ -378,8 +388,9 @@ func main() {
 		// Follow player center
 		const smooth = 0.034
 		camScrollEase = dt * 2.0
-		camScrollEase *= 2.8 // Smooth (trying this out)
+		// camScrollEase *= 2.8 // Smooth (trying this out)
 		camScrollEase = MinF(camScrollEase, smooth)
+		camScrollEase *= 2
 		if isQuickMovementYAxis := false; isQuickMovementYAxis {
 			camera.Target.X = rl.Lerp(oldCamTarget.X, playerPosition.X, camScrollEase)
 			camera.Target.Y = rl.Lerp(oldCamTarget.Y, playerPosition.Y, smooth*2)
@@ -659,10 +670,18 @@ func main() {
 			rl.DrawBoundingBox(resource.FloorBoundingBoxes[i], rl.Fade(rl.Black, 0.3))
 		}
 		for i := range resource.PlatformCount {
-			rl.DrawModel(resource.PlatformModels[i], resource.PlatformPositions[i], 1.0, rl.SkyBlue)                                              // Platform
-			rl.DrawBoundingBox(resource.PlatformBoundingBoxes[i], rl.DarkBlue)                                                                    // Platform outline
-			rl.DrawCubeV(resource.PlatformDefaultPositions[i], rl.NewVector3(0.125, resource.PlatformMovementAmplitudes[i], 0.125), rl.LightGray) // Reference (y axis)
-			rl.DrawPlane(resource.PlatformDefaultPositions[i], rl.NewVector2(0.5, 0.5), rl.Gray)                                                  // Reference (midpoint plane)
+			rl.DrawModel(resource.PlatformModels[i], resource.PlatformPositions[i], 1.0, rl.White) // Platform
+			rl.DrawBoundingBox(resource.PlatformBoundingBoxes[i], rl.LightGray)                    // Platform outline
+
+			// rl.DrawCubeV(resource.PlatformDefaultPositions[i], rl.NewVector3(0.125, resource.PlatformMovementAmplitudes[i], 0.125), rl.LightGray) // Reference (y axis)
+			amp := resource.PlatformMovementAmplitudes[i]
+			normal := resource.PlatformMovementNormals[i]
+			normalAxis := rl.Vector3Multiply(normal, rl.NewVector3(amp, amp, amp))
+			normalAxisSize := rl.Vector3AddValue(normalAxis, 0.125*0.5)
+			rl.DrawCubeV(resource.PlatformDefaultPositions[i], normalAxisSize, rl.LightGray)     // Reference (y axis)
+			size := rl.Vector3Invert(rl.Vector3Add(normal, Vector3One))                          // [0 1 0] => [1 1 .5]
+			rl.DrawCubeV(resource.PlatformDefaultPositions[i], size, rl.Fade(rl.LightGray, 0.3)) // Reference (midpoint plane trick)
+
 		}
 		for i := range resource.DamageSphereCount {
 			rl.DrawSphere(resource.DamageSpherePositions[i], resource.DamageSphereSizes[i], rl.Gold)
@@ -689,21 +708,47 @@ func main() {
 		}
 
 		// Draw destination prop sphere
-		if true {
+		if false {
 			centerPos := rl.NewVector3(0, -sphereModelRadius-W*(8/4), -sphereModelRadius*2-L*3)
 			rl.DrawSphere(centerPos, sphereModelRadius-0.02, rl.Fade(rl.LightGray, 0.5))
 			rl.DrawModelEx(sphereModel, centerPos, rl.NewVector3(0, -1, 0), float32(framesCounter), rl.NewVector3(1, 1, 1), rl.White)
 		}
 
-		if false {
-			rl.DrawGrid(int32(MinF(W, L)), 1)
+		if !rl.IsCursorHidden() && rl.IsCursorOnScreen() {
+			pos := rl.Vector3{X: rl.GetMouseDelta().X, Y: 0., Z: rl.GetMouseDelta().Y}
+			pos = mouseRay.Position
+			rayDir := mouseRay.Direction // Ray direction
+			pos = rl.Vector3CrossProduct(pos, rayDir)
+			rl.DrawRay(mouseRay, rl.White)
+			rl.DrawModel(resource.FloorModels[0], pos, 1.0, rl.White)
+		}
+
+		if true {
+			rl.DrawGrid(int32(MinF(W, L)*InvMathPhi), 1)
 		}
 
 		// Draw XYZ origin
 		if true {
-			rl.DrawCubeV(rl.Vector3Zero(), rl.NewVector3(8.0, 0.1, 0.1), rl.Red)
-			rl.DrawCubeV(rl.Vector3Zero(), rl.NewVector3(0.1, 8.0, 0.1), rl.Green)
-			rl.DrawCubeV(rl.Vector3Zero(), rl.NewVector3(0.1, 0.1, 8.0), rl.Blue)
+			DrawXYZOrbitAxisV(Vector3Zero, 12.0, 0.05, 0.3)                     // Level Center
+			DrawXYZOrbitAxisV(playerPosition, playerSize.Y*math.Phi, 0.05, 0.3) // Player Center
+			for i := range MaxResourceSOACapacity {
+				if resource.PlatformAtIsActive[i] {
+					DrawXYZOrbitAxisV(resource.PlatformPositions[i], rl.Vector3Length(resource.PlatformSizes[i]), 0.05, 0.3)
+					DrawXYZOrbitAxisV(resource.PlatformDefaultPositions[i], rl.Vector3Length(resource.PlatformSizes[i]), 0.05, 0.3/2)
+				}
+				if resource.FloorAtIsActive[i] {
+					DrawXYZOrbitAxisV(resource.FloorPositions[i], rl.Vector3Length(resource.FloorSizes[i]), 0.05, 0.3)
+				}
+				if resource.HealBoxAtIsActive[i] {
+					DrawXYZOrbitAxisV(resource.HealBoxPositions[i], rl.Vector3Length(resource.HealBoxSizes[i]), 0.05, 0.3)
+				}
+				if resource.DamageSphereAtIsActive[i] {
+					DrawXYZOrbitAxisV(resource.DamageSpherePositions[i], resource.DamageSphereSizes[i]*2.0, 0.05, 0.3)
+				}
+				if resource.TrampolineBoxAtIsActive[i] {
+					DrawXYZOrbitAxisV(resource.TrampolineBoxPositions[i], rl.Vector3Length(resource.TrampolineBoxSizes[i]), 0.05, 0.3)
+				}
+			}
 		}
 
 		rl.EndMode3D()
@@ -760,6 +805,18 @@ func main() {
 	rl.CloseWindow()
 }
 
+// alpha goes from 0.0f to 1.0f
+func DrawXYZOrbitAxisV(pos rl.Vector3, maxSize, thick, alpha float32) {
+	var (
+		Red   = color.RGBA{R: 230, G: 41, B: 55, A: uint8(alpha * 255)} // rl.Red
+		Green = color.RGBA{R: 0, G: 228, B: 48, A: uint8(alpha * 255)}  // rl.Green
+		Blue  = color.RGBA{R: 0, G: 121, B: 241, A: uint8(alpha * 255)} // rl.Blue
+	)
+	rl.DrawCubeV(pos, rl.NewVector3(maxSize, thick, thick), Red)
+	rl.DrawCubeV(pos, rl.NewVector3(thick, maxSize, thick), Green)
+	rl.DrawCubeV(pos, rl.NewVector3(thick, thick, maxSize), Blue)
+}
+
 func GetBoundingBoxFromPositionSizeV(pos, size rl.Vector3) rl.BoundingBox {
 	return rl.NewBoundingBox(
 		rl.NewVector3(pos.X-size.X/2, pos.Y-size.Y/2, pos.Z-size.Z/2),
@@ -804,8 +861,12 @@ func manhattanV2(a, b rl.Vector2) float32 { return AbsF(b.X-a.X) + AbsF(b.Y-a.Y)
 func manhattanV3(a, b rl.Vector3) float32 { return AbsF(b.X-a.X) + AbsF(b.Y-a.Y) + AbsF(b.Z-a.Z) }
 
 var (
-	Vector3OneLength = rl.Vector3Length(rl.Vector3One())
-	Vector2OneLength = rl.Vector2Length(rl.Vector2One())
+	Vector3One       = rl.Vector3One()
+	Vector3Zero      = rl.Vector3Zero()
+	Vector2One       = rl.Vector2One()
+	Vector2Zero      = rl.Vector2Zero()
+	Vector3OneLength = rl.Vector3Length(Vector3One)
+	Vector2OneLength = rl.Vector2Length(Vector2One)
 )
 
 func IsUnitVec3(v rl.Vector3) bool { return rl.Vector3Length(v) <= Vector3OneLength }
