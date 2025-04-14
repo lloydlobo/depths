@@ -32,9 +32,9 @@ func main() {
 
 	const (
 		arenaWallHeight  = 1
-		W                = float32(20) * math.Phi               // X
-		L                = float32(20) * 1                      // Z
-		H                = float32(20) * math.Phi * (3.0 / 4.0) // Y (just for reference of screen)
+		W                = float32(8) * 1        /* math.Phi */ // X
+		L                = float32(8) * 1        // Z
+		H                = float32(8) * math.Phi // Y (just for reference of screen)
 		arenaWidthRatio  = (W / (W + L))
 		arenaLengthRatio = (L / (W + L))
 		camPosW          = (W * (math.Phi + arenaLengthRatio)) * (1 - OneMinusInvMathPhi)
@@ -44,6 +44,9 @@ func main() {
 	var (
 		mouseRay          rl.Ray
 		rayMouseCollision rl.RayCollision
+
+		playerCameraRay          rl.Ray
+		playerCameraRayCollision rl.RayCollision
 	)
 
 	isPlayerBoost := false
@@ -54,15 +57,18 @@ func main() {
 	playerSize := rl.NewVector3(1.0, 2.0, 1.0)
 	playerVelocity := rl.Vector3{}
 	playerAirTimer := float32(0)
+	playerRotationNormal := rl.NewVector3(0, -1, 0)
+	playerRotation := rl.NewVector4(0, 0, 0, 0)
+	playerModel := rl.LoadModelFromMesh(rl.GenMeshCube(playerSize.X/2, playerSize.Y/2, playerSize.Z/2))
 
 	camScrollEase := float32((float32(1.0) / float32(fps)) * 2.0) // 0.033
 
 	camera := rl.Camera{
-		Position:   cmp.Or(rl.NewVector3(0.0, camPosW/2, camPosW*math.Phi), rl.NewVector3(0., 10., 10.)),
-		Target:     rl.NewVector3(0., 0., 0.), // rl.NewVector3(0.0, -1.0, 0.0),
+		Position:   cmp.Or(rl.NewVector3(0., 20., 20.), rl.NewVector3(0., 10., 10.), rl.NewVector3(0., camPosW/2, camPosW*math.Phi)),
+		Target:     rl.NewVector3(0., 1., 0.), // rl.NewVector3(0.0, -1.0, 0.0),
 		Up:         rl.NewVector3(0.0, 1.0, 0.0),
-		Fovy:       float32(cmp.Or(21.0, 60.0, 45.0, 30.0)), // Use higher Fovy to zoom out if following a target
-		Projection: rl.CameraPerspective,                    // rl.CameraOrthographic
+		Fovy:       float32(cmp.Or(30.0, 60.0, 45.0)), // Use higher Fovy to zoom out if following a target
+		Projection: rl.CameraPerspective,              // rl.CameraOrthographic
 	}
 
 	// Save initial settings for stabilizing custom naïve camera movement
@@ -71,9 +77,81 @@ func main() {
 	defaultCameraPositionTargetVector := rl.Vector3Subtract(defaultCameraPosition, defaultCameraTarget)
 	defaultCameraPositionTargetDistance := rl.Vector3Distance(defaultCameraPosition, defaultCameraTarget)
 
-	const sphereModelRadius = W / math.Phi
-	sphereMesh := rl.GenMeshSphere(sphereModelRadius, 16, 16)
-	sphereModel := rl.LoadModelFromMesh(sphereMesh)
+	// Copied from https://github.com/lloydlobo/ChunkMinerGame/blob/main/Src/Drill.odin
+	type UpgradeType uint8
+	const (
+		UpgradeNone UpgradeType = iota
+		UpgradeFuel
+		UpgradeHull
+		UpgradeSpeed
+		UpgradePrimary
+		UpgradeCargo
+	)
+	type UpgradeProp struct {
+		Price int32
+		Value int32
+	}
+	const upgradePropCap = 5
+	var UpgradeProps = make(map[UpgradeType][upgradePropCap]UpgradeProp)
+	UpgradeProps[UpgradeNone] = [upgradePropCap]UpgradeProp{}
+	UpgradeProps[UpgradeFuel] = [upgradePropCap]UpgradeProp{
+		{Price: 0, Value: 100},
+		{Price: 200, Value: 200},
+		{Price: 4000, Value: 400},
+		{Price: 25000, Value: 8000},
+		{Price: 50000, Value: 1600},
+	}
+	UpgradeProps[UpgradeHull] = [upgradePropCap]UpgradeProp{
+		{Price: 0, Value: 100},
+		{Price: 400, Value: 200},
+		{Price: 8000, Value: 400},
+		{Price: 25000, Value: 800},
+		{Price: 50000, Value: 1600},
+	}
+	UpgradeProps[UpgradeSpeed] = [upgradePropCap]UpgradeProp{
+		// Value is move cooldown in milliseconds
+		{Price: 0, Value: 220},
+		{Price: 250, Value: 200},
+		{Price: 8000, Value: 180},
+		{Price: 25000, Value: 150},
+		{Price: 50000, Value: 120},
+	}
+	UpgradeProps[UpgradePrimary] = [upgradePropCap]UpgradeProp{
+		// Value is drill time in milliseconds to remove one voxel health
+		// Additionally at least Upgrade 1 is required to drill ROCK and Upgrda2 for ROCK2
+		{Price: 0, Value: 400},
+		{Price: 250, Value: 250},
+		{Price: 8000, Value: 100},
+		{Price: 20000, Value: 50},
+		{Price: 80000, Value: 25},
+	}
+	UpgradeProps[UpgradeCargo] = [upgradePropCap]UpgradeProp{
+		{Price: 0, Value: 10},
+		{Price: 200, Value: 20},
+		{Price: 400, Value: 60},
+		{Price: 800, Value: 80},
+		{Price: 1000, Value: 100},
+	}
+	// For balancing purposes we want more than one fuel per dollar.
+	// That would require a PRICE_PER_UNIT of <1 which we can't do with integers.
+	// Instead we just invert the meaning of the unit. UNIT_PER_DOLLAR sounds a bit weird but works.
+	type PropPrice int32
+	const (
+		fuelUnitPerDollar    = PropPrice(3)
+		repairUnitPerDollar  = PropPrice(2)
+		horizontalClimbPrice = PropPrice(20000)
+	)
+
+	// See https://ldjam.com/events/ludum-dare/57/depthshift
+	// Controls (Keyboard & Mouse / Xbox Controller):
+	//
+	// - Move => WASD / Left Stick
+	// - Look => Mouse move / Right Stick
+	// - Jump => Space / A
+	// - Pickup / Drop / Interact => Left Mouse / X
+	// - Shoot => Right Mouse / B
+	// - Change Focus depth => Scroll Wheel / LB & RB
+	// - Pause Menu => Escape / Start
 
 	fuelProgress := float32(1.0)
 	shieldProgress := float32(1.0)
@@ -153,39 +231,38 @@ func main() {
 	}
 	const floorThick = 1.0
 	playerStartPosY := (playerPosition.Y - playerSize.Y/2)
+	padH := playerStartPosY - (floorThick / 2)
+	_ = padH
+	// Layout inspired by 2D game Trench https://ldjam.com/events/ludum-dare/57/trench
 	for _, data := range []Entity{
 		{
-			Pos:  rl.NewVector3(0, playerStartPosY-(floorThick/2), 0),
-			Size: rl.NewVector3(W*4, floorThick, L*4),
+			Pos:  rl.NewVector3(0, -H*PowF(math.Phi, 0), 0),
+			Size: rl.NewVector3(W*PowF(math.Phi, 0), floorThick, L*PowF(math.Phi, 0)),
 		},
-		// {
-		// 	Pos:  rl.NewVector3(0, playerStartPosY-(floorThick/2)-H*2, 0),
-		// 	Size: rl.NewVector3(L, floorThick, L),
-		// },
-		// {
-		// 	Pos:  rl.NewVector3(0, playerStartPosY-(floorThick/2)-H*2-5, -L-2),
-		// 	Size: rl.NewVector3(L, floorThick, L),
-		// },
-		// {
-		// 	Pos:  rl.NewVector3(-W/2, -H*1, L),
-		// 	Size: rl.NewVector3(L, floorThick, L),
-		// },
-		// {
-		// 	Pos:  rl.NewVector3(W/3, -H*1, -L-L/3),
-		// 	Size: rl.NewVector3(L, floorThick, L),
-		// },
-		// {
-		// 	Pos:  rl.NewVector3(-3*arenaWidth/4, -(playerSize.Y * 1), (arenaLength/1)+(playerSize.Z*2)),
-		// 	Size: rl.NewVector3(arenaLength, floorThick, arenaLength),
-		// },
-		// {
-		// 	Pos:  rl.NewVector3(3*arenaWidth/4, -arenaWidth/2, -4*arenaLength/3.5),
-		// 	Size: rl.NewVector3(arenaLength, floorThick, arenaLength),
-		// },
-		// {
-		// 	Pos:  rl.NewVector3(-2*arenaWidth/3, -((arenaWidth / 2) + (playerSize.Y * 4)), (-arenaLength/2)+(playerSize.Z*2)),
-		// 	Size: rl.NewVector3(arenaLength, floorThick, arenaLength),
-		// },
+		{
+			Pos:  rl.NewVector3(0, -H*PowF(math.Phi, 1), 0),
+			Size: rl.NewVector3(W*PowF(math.Phi, 1), floorThick, L*PowF(math.Phi, 1)),
+		},
+		{
+			Pos:  rl.NewVector3(0, -H*PowF(math.Phi, 2), 0),
+			Size: rl.NewVector3(W*PowF(math.Phi, 2), floorThick, L*PowF(math.Phi, 2)),
+		},
+		{
+			Pos:  rl.NewVector3(0, -H*PowF(math.Phi, 3), 0),
+			Size: rl.NewVector3(W*PowF(math.Phi, 3), floorThick, L*PowF(math.Phi, 3)),
+		},
+		{
+			Pos:  rl.NewVector3(0, -H*PowF(math.Phi, 4), 0),
+			Size: rl.NewVector3(W*PowF(math.Phi, 4), floorThick, L*PowF(math.Phi, 4)),
+		},
+		{
+			Pos:  rl.NewVector3(0, -H*PowF(math.Phi, 5), 0),
+			Size: rl.NewVector3(W*PowF(math.Phi, 5), floorThick, L*PowF(math.Phi, 5)),
+		},
+		{
+			Pos:  rl.NewVector3(0, -H*PowF(math.Phi, 6), 0),
+			Size: rl.NewVector3(W*PowF(math.Phi, 6), floorThick, L*PowF(math.Phi, 6)),
+		},
 	} {
 		setupFloorResource(data.Pos, data.Size)
 	}
@@ -213,38 +290,68 @@ func main() {
 		MovementNormal    rl.Vector3
 		MovementAmplitude float32
 	}{
-		// {
-		// 	Entity: Entity{
-		// 		Pos:  rl.NewVector3(0, -H/4, L/2),
-		// 		Size: rl.NewVector3(8, platformThick, 8),
-		// 	},
-		// 	MovementNormal:    rl.NewVector3(0, 0, 0),
-		// 	MovementAmplitude: _maxPlatformMoveAmplitude,
-		// },
+		{
+			Entity:            Entity{Pos: rl.NewVector3(0, -H/4, L/2), Size: rl.NewVector3(8, platformThick, 8)},
+			MovementNormal:    rl.NewVector3(0, 0, 0),
+			MovementAmplitude: _maxPlatformMoveAmplitude,
+		},
+
 		{
 			Entity: Entity{
-				Pos:  rl.NewVector3(-W/4, -H/2, L/2),
-				Size: rl.NewVector3(8, platformThick, 8),
+				Pos:  rl.NewVector3(-W*PowF(math.Phi, 1), -H*PowF(math.Phi, 1), -L*PowF(math.Phi, 1)),
+				Size: rl.NewVector3(W*PowF(math.Phi, 1), floorThick, L*PowF(math.Phi, 1)),
 			},
 			MovementNormal:    rl.NewVector3(0, 1, 0),
-			MovementAmplitude: _maxPlatformMoveAmplitude * 4,
+			MovementAmplitude: -H * PowF(math.Phi, 1+1),
 		},
 		{
 			Entity: Entity{
-				Pos:  rl.NewVector3(-8, 4, -8),
-				Size: rl.NewVector3(10, platformThick, 10),
+				Pos:  rl.NewVector3(-W*PowF(math.Phi, 2), -H*PowF(math.Phi, 2), -L*PowF(math.Phi, 2)),
+				Size: rl.NewVector3(W*PowF(math.Phi, 2), floorThick, L*PowF(math.Phi, 2)),
 			},
-			MovementNormal:    rl.NewVector3(1, 0, 0),
-			MovementAmplitude: _maxPlatformMoveAmplitude,
+			MovementNormal:    rl.NewVector3(0, 1, 0),
+			MovementAmplitude: -H * PowF(math.Phi, 2+1),
 		},
 		{
 			Entity: Entity{
-				Pos:  rl.NewVector3(4, -8, -12),
-				Size: rl.NewVector3(10, platformThick, 10),
+				Pos:  rl.NewVector3(-W*PowF(math.Phi, 3), -H*PowF(math.Phi, 3), -L*PowF(math.Phi, 3)),
+				Size: rl.NewVector3(W*PowF(math.Phi, 3), floorThick, L*PowF(math.Phi, 3)),
 			},
-			MovementNormal:    rl.NewVector3(0, 0, 1),
-			MovementAmplitude: _maxPlatformMoveAmplitude,
+			MovementNormal:    rl.NewVector3(0, 1, 0),
+			MovementAmplitude: -H * PowF(math.Phi, 3+1),
 		},
+		{
+			Entity: Entity{
+				Pos:  rl.NewVector3(-W*PowF(math.Phi, 4), -H*PowF(math.Phi, 4), -L*PowF(math.Phi, 4)),
+				Size: rl.NewVector3(W*PowF(math.Phi, 4), floorThick, L*PowF(math.Phi, 4)),
+			},
+			MovementNormal:    rl.NewVector3(0, 1, 0),
+			MovementAmplitude: -H * PowF(math.Phi, 4+1),
+		},
+		{
+			Entity: Entity{
+				Pos:  rl.NewVector3(-W*PowF(math.Phi, 5), -H*PowF(math.Phi, 5), -L*PowF(math.Phi, 5)),
+				Size: rl.NewVector3(W*PowF(math.Phi, 5), floorThick, L*PowF(math.Phi, 5)),
+			},
+			MovementNormal:    rl.NewVector3(0, 1, 0),
+			MovementAmplitude: -H * PowF(math.Phi, 5+1),
+		},
+		// {
+		// 	Entity: Entity{
+		// 		Pos:  rl.NewVector3(-W*PowF(math.Phi, 6), -H*PowF(math.Phi, 6), -L*PowF(math.Phi, 6)),
+		// 		Size: rl.NewVector3(W*PowF(math.Phi, 6), floorThick, L*PowF(math.Phi, 6)),
+		// 	},
+		// 	MovementNormal:    rl.NewVector3(0, 1, 0),
+		// 	MovementAmplitude: -H * PowF(math.Phi, 6+1),
+		// },
+		// {
+		// 	Entity: Entity{
+		// 		Pos:  rl.NewVector3(-W*PowF(math.Phi, 7), -H*PowF(math.Phi, 7), -L*PowF(math.Phi, 7)),
+		// 		Size: rl.NewVector3(W*PowF(math.Phi, 7), floorThick, L*PowF(math.Phi, 7)),
+		// 	},
+		// 	MovementNormal:    rl.NewVector3(0, 1, 0),
+		// 	MovementAmplitude: -H * PowF(math.Phi, 7+1),
+		// },
 	} {
 		setupPlatformResource(data.Entity.Pos, data.Entity.Size, data.MovementNormal, data.MovementAmplitude)
 	}
@@ -454,7 +561,10 @@ func main() {
 		// Normalize input vector to avoid speeding up diagonally
 		if !rl.Vector3Equals(playerMovementThisFrame, rl.Vector3Zero()) {
 			playerMovementThisFrame = rl.Vector3Normalize(playerMovementThisFrame) // Vector3Length (XZ): 1.414 --diagonal-> 0.99999994
-			fuelProgress -= 0.05 / float32(fps)                                    // See also https://community.monogame.net/t/how-can-i-normalize-my-diagonal-movement/15276
+
+			if isEnable := false; isEnable {
+				fuelProgress -= 0.05 / float32(fps) // See also https://community.monogame.net/t/how-can-i-normalize-my-diagonal-movement/15276
+			}
 		}
 
 		frameMovement := rl.Vector3Add(playerMovementThisFrame, playerVelocity)
@@ -662,8 +772,11 @@ func main() {
 				fuelProgress = 1.0
 			}
 		}
-		if playerAirTimer > maxPlayerFreefallAirTime {
-			shieldProgress -= PowF(progressRate*shieldProgress, maxPlayerFreefallAirTime/playerAirTimer)
+
+		if isEnable := false; isEnable {
+			if playerAirTimer > maxPlayerFreefallAirTime {
+				shieldProgress -= PowF(progressRate*shieldProgress, maxPlayerFreefallAirTime/playerAirTimer)
+			}
 		}
 		if isDebugAllCollisions := false; isDebugAllCollisions {
 			if (playerCollisionsThisFrame.X == 1 || playerCollisionsThisFrame.Z == 1) &&
@@ -672,6 +785,15 @@ func main() {
 			}
 		}
 
+		cameraPlayerCrossProduct := rl.Vector3CrossProduct(rl.Vector3Normalize(camera.Position), rl.Vector3Normalize(playerPosition))
+		cameraPlayerDotProduct := rl.Vector3DotProduct(rl.Vector3Normalize(camera.Position), rl.Vector3Normalize(playerPosition))
+		cameraPlayerDotProductRadian := math.Acos(float64(cameraPlayerDotProduct))
+		cameraPlayerCrossProduct = rl.Vector3CrossProduct(rl.Vector3Normalize(playerPosition), rl.Vector3Normalize(camera.Position))
+		cameraPlayerDotProductRadianDegree := cameraPlayerDotProductRadian * rl.Rad2deg
+
+		playerCameraRay = rl.NewRay(playerPosition, cameraPlayerCrossProduct)
+		playerCameraRay = rl.GetScreenToWorldRay(rl.GetWorldToScreen(playerPosition, camera), camera)
+
 		// Increment global frames counter tracker
 		framesCounter++
 
@@ -679,12 +801,9 @@ func main() {
 
 		rl.BeginDrawing()
 
-		rl.ClearBackground(rl.SkyBlue)
+		rl.ClearBackground(rl.Gray)
 
 		rl.BeginMode3D(camera)
-
-		rl.DrawRay(mouseRay, rl.Gold)
-		rl.DrawCubeV(mouseRay.Position, rl.Vector3One(), rl.Gold)
 
 		// Draw interactive game resource objects
 		for i := range resource.FloorCount {
@@ -726,12 +845,25 @@ func main() {
 			rl.DrawCubeV(playerPosition, playerSize, playerColor)
 			rl.DrawCubeWiresV(playerPosition, playerSize, playerColor)
 		}
+		if true {
+			// rl.DrawModelEx(playerModel, playerEndPos, playerRotationNormal, rl.QuaternionLength(playerRotation)*0 + dt+80*rl.Deg2rad, rl.NewVector3(2,2,2), rl.SkyBlue)
+			rl.DrawModelWiresEx(
+				playerModel,
+				playerPosition,
+				playerRotationNormal,
+				rl.QuaternionLength(playerRotation)*0+dt+80*rl.Deg2rad,
+				rl.NewVector3(2, 2, 2),
+				rl.SkyBlue,
+			)
+			rl.DrawModelWiresEx(
+				playerModel,
+				rl.Vector3RotateByAxisAngle(playerPosition, playerRotationNormal, dt*100),
+				playerRotationNormal,
+				rl.QuaternionLength(playerRotation)*0+dt+80*rl.Deg2rad,
+				rl.NewVector3(2, 2, 2),
+				rl.SkyBlue,
+			)
 
-		// Draw destination prop sphere
-		if false {
-			centerPos := rl.NewVector3(0, -sphereModelRadius-W*(8/4), -sphereModelRadius*2-L*3)
-			rl.DrawSphere(centerPos, sphereModelRadius-0.02, rl.Fade(rl.LightGray, 0.5))
-			rl.DrawModelEx(sphereModel, centerPos, rl.NewVector3(0, -1, 0), float32(framesCounter), rl.NewVector3(1, 1, 1), rl.White)
 		}
 
 		if !rl.IsCursorHidden() && rl.IsCursorOnScreen() {
@@ -754,28 +886,49 @@ func main() {
 		}
 
 		// Draw XYZ origin
+		DrawXYZOrbitAxisV(Vector3Zero, 12.0, 0.05, 0.3)                     // Level Center
+		DrawXYZOrbitAxisV(playerPosition, playerSize.Y*math.Phi, 0.05, 0.3) // Player Center
 		if true {
-			DrawXYZOrbitAxisV(Vector3Zero, 12.0, 0.05, 0.3)                     // Level Center
-			DrawXYZOrbitAxisV(playerPosition, playerSize.Y*math.Phi, 0.05, 0.3) // Player Center
-			if false {
-				for i := range MaxResourceSOACapacity {
-					if resource.PlatformAtIsActive[i] {
-						DrawXYZOrbitAxisV(resource.PlatformPositions[i], rl.Vector3Length(resource.PlatformSizes[i]), 0.05, 0.3)
-						DrawXYZOrbitAxisV(resource.PlatformDefaultPositions[i], rl.Vector3Length(resource.PlatformSizes[i]), 0.05, 0.3/2)
-					}
-					if resource.FloorAtIsActive[i] {
-						DrawXYZOrbitAxisV(resource.FloorPositions[i], rl.Vector3Length(resource.FloorSizes[i]), 0.05, 0.3)
-					}
-					if resource.HealBoxAtIsActive[i] {
-						DrawXYZOrbitAxisV(resource.HealBoxPositions[i], rl.Vector3Length(resource.HealBoxSizes[i]), 0.05, 0.3)
-					}
-					if resource.DamageSphereAtIsActive[i] {
-						DrawXYZOrbitAxisV(resource.DamageSpherePositions[i], resource.DamageSphereSizes[i]*2.0, 0.05, 0.3)
-					}
-					if resource.TrampolineBoxAtIsActive[i] {
-						DrawXYZOrbitAxisV(resource.TrampolineBoxPositions[i], rl.Vector3Length(resource.TrampolineBoxSizes[i]), 0.05, 0.3)
-					}
+			for i := range MaxResourceSOACapacity {
+				if resource.PlatformAtIsActive[i] {
+					DrawXYZOrbitAxisV(resource.PlatformPositions[i], rl.Vector3Length(resource.PlatformSizes[i]), 0.05, 0.3)
+					DrawXYZOrbitAxisV(resource.PlatformDefaultPositions[i], rl.Vector3Length(resource.PlatformSizes[i]), 0.05, 0.3/2)
 				}
+				if resource.FloorAtIsActive[i] {
+					DrawXYZOrbitAxisV(resource.FloorPositions[i], rl.Vector3Length(resource.FloorSizes[i]), 0.05, 0.3)
+				}
+				if resource.HealBoxAtIsActive[i] {
+					DrawXYZOrbitAxisV(resource.HealBoxPositions[i], rl.Vector3Length(resource.HealBoxSizes[i]), 0.05, 0.3)
+				}
+				if resource.DamageSphereAtIsActive[i] {
+					DrawXYZOrbitAxisV(resource.DamageSpherePositions[i], resource.DamageSphereSizes[i]*2.0, 0.05, 0.3)
+				}
+				if resource.TrampolineBoxAtIsActive[i] {
+					DrawXYZOrbitAxisV(resource.TrampolineBoxPositions[i], rl.Vector3Length(resource.TrampolineBoxSizes[i]), 0.05, 0.3)
+				}
+			}
+		}
+
+		// DEBUG
+		{
+			rl.DrawRay(mouseRay, rl.Gold)
+			rl.DrawCubeV(mouseRay.Position, rl.Vector3One(), rl.Gold)
+
+			// projectDir := float32(cameraPlayerDotProductRadian) * 5
+			// playerDirVector3 := rl.Vector3Multiply(cameraPlayerCrossProduct, rl.NewVector3(projectDir, projectDir, projectDir))
+			// rl.DrawSphere(rl.Vector3Add(playerPosition, playerDirVector3), 0.5, rl.Orange)
+			// rl.DrawSphere(rl.Vector3Add(playerPosition, cameraPlayerCrossProduct), 0.5, rl.Purple)
+			// rl.DrawSphere(rl.Vector3AddValue(playerPosition, cameraPlayerDotProduct), 0.5, rl.Pink)
+
+			rl.DrawCapsuleWires(playerPosition, rl.Vector3Lerp(camera.Position, playerPosition, 0.5), 0.25, 4, 4, rl.Fade(rl.SkyBlue, .3))
+			// rl.DrawRay(playerCameraRay, rl.Blue)
+			// rl.DrawLine3D(Vector3Zero, playerCameraRay.Position, rl.Blue)
+			// rl.DrawCapsule(rl.Vector3Scale(playerCameraRay.Position, 0.5), Vector3One, 0.5, 8, 8, rl.Fade(rl.SkyBlue, 0.3))
+			// rl.DrawCapsule(rl.Vector3Scale(playerCameraRay.Position, 0.5), Vector3One, 0.025, 8, 8, rl.SkyBlue)
+			// rl.DrawCapsuleWires(rl.Vector3Scale(playerCameraRay.Position, 0.5), rl.Vector3Scale(camera.Position, 0.5), 0.025, 8, 8, rl.SkyBlue)
+
+			if playerCameraRayCollision.Hit {
+				rl.DrawCubeV(playerCameraRay.Position, rl.Vector3One(), rl.SkyBlue)
 			}
 		}
 
@@ -819,6 +972,10 @@ func main() {
 		debugXPos := int32(rl.GetScreenWidth()) - 10 - debugWidth
 		rl.DrawRectangle(debugXPos-5, 10-5, debugWidth+5*2, debugWidth*2/3, rl.Fade(rl.Blue, 0.3))
 		rl.DrawText(text, debugXPos, 10, 10, rl.DarkGray)
+
+		{
+			rl.DrawText(fmt.Sprintf("cross: %.2f\n"+"degree: %.2f\n", cameraPlayerCrossProduct, cameraPlayerDotProductRadianDegree), 200, 200, 10, rl.Green)
+		}
 
 		rl.EndDrawing()
 	}
