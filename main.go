@@ -16,6 +16,7 @@ import (
 // Checklist
 //   - Ensure on fullscreen toggle, the proportion stays same, and the world is
 //     scaled by Raylib 3d camera mode
+//   - Uncovering the covers of Sun.
 func main() {
 	fps := int32(60)
 	screenWidth := int32(800)
@@ -55,13 +56,13 @@ func main() {
 
 	camera := rl.Camera{
 		Position: cmp.Or(
+			rl.NewVector3(0., 10., 10.),
 			rl.NewVector3(0., 20., 20.),
 			rl.NewVector3(0., camPosW/2, camPosW*Phi),
-			rl.NewVector3(0., 10., 10.),
 		),
 		Target:     rl.NewVector3(0., -1., 0.),
 		Up:         rl.NewVector3(0., 1., 0.),
-		Fovy:       float32(cmp.Or(60., 30., 45.)),
+		Fovy:       float32(cmp.Or(80.0, 60., 30., 45.)),
 		Projection: rl.CameraPerspective,
 	}
 
@@ -72,17 +73,106 @@ func main() {
 	_ = defaultCameraPositionTargetVector
 	defaultCameraPositionTargetDistance := rl.Vector3Distance(defaultCameraPosition, defaultCameraTarget)
 
-	playerPosition := rl.NewVector3(0.0, 1.0, 2.0)
 	playerSize := rl.NewVector3(playerSizeX, playerSizeY, playerSizeZ)
 	playerJumpsLeft := 1
 	playerVelocity := rl.Vector3{}
 	playerAirTimer := float32(0)
-	playerRotationNormal := rl.NewVector3(0, -1, 0)
-	playerRotation := rl.NewVector4(0, 0, 0, 0)
 	playerModel := rl.LoadModelFromMesh(rl.GenMeshCube(playerSize.X/2, playerSize.Y/2, playerSize.Z/2))
 	playerColor := rl.RayWhite
 	isPlayerBoost := false
 	isPlayerStrafe := false
+
+	var (
+		playerPosition    rl.Vector3
+		playerRotation    rl.Quaternion
+		playerForward     rl.Vector3
+		playerRight       rl.Vector3
+		playerUp          rl.Vector3
+		playerSensitivity float32 = 0.2
+		playerMoveSpeed   float32 = 0.1
+	)
+
+	// initPlayer initializes player.
+	initPlayer := func() {
+		playerPosition = rl.NewVector3(0.0, 1.0, 0.0) // Starting position
+		playerRotation = rl.QuaternionIdentity()
+		playerForward = rl.NewVector3(0.0, 0.0, 1.0) // Initial forward direction (looking along Z+ axis)
+		playerUp = rl.NewVector3(0.0, 1.0, 0.0)      // Initial up direction (Y+)
+		playerRight = rl.NewVector3(1.0, 0.0, 0.0)   // Initial right direction (X+)
+	}
+	initPlayer() // Do it every level change or InitGame()
+
+	// Update rotation based on mouse input.
+	updatePlayerRotation := func() {
+		// Get mouse movements
+		mouseDeltaX := rl.GetMouseDelta().X * playerSensitivity
+		mouseDeltaY := rl.GetMouseDelta().Y * playerSensitivity
+
+		mouseDeltaX *= -1 // Flip
+		mouseDeltaY *= -1 // Flip
+
+		// Create rotation quats for each axis
+		yawQuat := rl.QuaternionFromAxisAngle(rl.Vector3{X: 0.0, Y: 1.0, Z: 0.0}, rl.Deg2rad*mouseDeltaX)
+		pitchQuat := rl.QuaternionFromAxisAngle(playerRight, -rl.Deg2rad*mouseDeltaY)
+
+		// Apply rotations
+		playerRotation = rl.QuaternionMultiply(yawQuat, playerRotation)
+		playerRotation = rl.QuaternionMultiply(playerRotation, pitchQuat)
+		playerRotation = rl.QuaternionNormalize(playerRotation)
+
+		// Extract forward and up vectors
+		playerForward = rl.Vector3RotateByQuaternion(rl.Vector3{X: 0, Y: 0, Z: 1}, playerRotation)
+		playerUp = rl.Vector3RotateByQuaternion(rl.Vector3{X: 0, Y: 1, Z: 0}, playerRotation)
+		playerRight = rl.Vector3CrossProduct(playerForward, playerUp)
+	}
+
+	updatePlayerPosition := func() { // For movement, we typically want to move along the horizontal plane
+		// So we zero out the Y component of the forward vector
+		moveForward := rl.NewVector3(playerForward.X, 0, playerForward.Z)
+		moveForward = rl.Vector3Normalize(moveForward)
+
+		// moveRight := rl.NewVector3(playerRight.X, 0, playerRight.Z)
+		// moveRight = rl.Vector3Normalize(moveRight)
+		moveRight := rl.Vector3CrossProduct(playerForward, rl.Vector3{X: 0, Y: 1, Z: 0})
+
+		movement := rl.Vector3Zero()
+
+		// Calculate movement based on key presses
+		if rl.IsKeyDown(rl.KeyW) { // Move forward
+			movement = rl.Vector3Add(movement, rl.Vector3Scale(moveForward, playerMoveSpeed))
+		}
+		if rl.IsKeyDown(rl.KeyS) { // Move back
+			movement = rl.Vector3Add(movement, rl.Vector3Scale(moveForward, -playerMoveSpeed))
+		}
+		if rl.IsKeyDown(rl.KeyA) { // Strafe left
+			movement = rl.Vector3Add(movement, rl.Vector3Scale(moveRight, -playerMoveSpeed))
+		}
+		if rl.IsKeyDown(rl.KeyD) { // Strafe right
+			movement = rl.Vector3Add(movement, rl.Vector3Scale(moveRight, playerMoveSpeed))
+		}
+
+		// Apply vertical movement
+		if rl.IsKeyPressed(rl.KeySpace) { // Jump or move up
+			movement.Y += playerMoveSpeed * 100
+		}
+		if rl.IsKeyPressed(rl.KeyLeftShift) { // Crouch or move down
+			movement.Y -= playerMoveSpeed * 10
+		}
+
+		// Apply movement to position
+		playerPosition = rl.Vector3Add(playerPosition, movement)
+	}
+
+	// updatePlayer update player rotation and position.
+	// It also update the camera targeting the player going forwards.
+	updatePlayer := func() {
+		updatePlayerRotation()
+		updatePlayerPosition()
+
+		camera.Position = playerPosition
+		camera.Target = rl.Vector3Add(playerPosition, playerForward)
+		rl.UpdateCamera(&camera, rl.CameraCustom)
+	}
 
 	camScrollEase := float32((float32(1.0) / float32(fps)) * 2.0) // 0.033
 
@@ -511,27 +601,29 @@ func main() {
 		playerMovementThisFrame := rl.Vector3{}
 		playerCollisionsThisFrame := rl.Vector4{}
 
-		if rl.IsKeyDown(rl.KeyD) || /* rl.IsKeyDown(rl.KeyRight) || */ rl.IsKeyDown(rl.KeyL) {
-			playerMovementThisFrame.X += 1 // Right
-		}
-		if rl.IsKeyDown(rl.KeyA) || /* rl.IsKeyDown(rl.KeyLeft) ||  */ rl.IsKeyDown(rl.KeyJ) {
-			playerMovementThisFrame.X -= 1 // Left
-		}
-		if rl.IsKeyDown(rl.KeyS) || /* rl.IsKeyDown(rl.KeyDown) || */ rl.IsKeyDown(rl.KeyK) {
-			playerMovementThisFrame.Z += 1 // Backward
-		}
-		if rl.IsKeyDown(rl.KeyW) || /* rl.IsKeyDown(rl.KeyUp) ||  */ rl.IsKeyDown(rl.KeyI) {
-			playerMovementThisFrame.Z -= 1 // Forward
-		}
-		if rl.IsKeyDown(rl.KeyLeftShift) {
-			isPlayerBoost = true
-		}
-		if rl.IsKeyDown(rl.KeyLeftAlt) {
-			isPlayerStrafe = true
-		}
-		if rl.IsKeyDown(rl.KeySpace) { // Jump
-			if playerJumpsLeft > 0 {
-				handlePlayerJump(playerJumpVelocity)
+		if false {
+			if rl.IsKeyDown(rl.KeyD) || /* rl.IsKeyDown(rl.KeyRight) || */ rl.IsKeyDown(rl.KeyL) {
+				playerMovementThisFrame.X += 1 // Right
+			}
+			if rl.IsKeyDown(rl.KeyA) || /* rl.IsKeyDown(rl.KeyLeft) ||  */ rl.IsKeyDown(rl.KeyJ) {
+				playerMovementThisFrame.X -= 1 // Left
+			}
+			if rl.IsKeyDown(rl.KeyS) || /* rl.IsKeyDown(rl.KeyDown) || */ rl.IsKeyDown(rl.KeyK) {
+				playerMovementThisFrame.Z += 1 // Backward
+			}
+			if rl.IsKeyDown(rl.KeyW) || /* rl.IsKeyDown(rl.KeyUp) ||  */ rl.IsKeyDown(rl.KeyI) {
+				playerMovementThisFrame.Z -= 1 // Forward
+			}
+			if rl.IsKeyDown(rl.KeyLeftShift) {
+				isPlayerBoost = true
+			}
+			if rl.IsKeyDown(rl.KeyLeftAlt) {
+				isPlayerStrafe = true
+			}
+			if rl.IsKeyDown(rl.KeySpace) { // Jump
+				if playerJumpsLeft > 0 {
+					handlePlayerJump(playerJumpVelocity)
+				}
 			}
 		}
 		mousePos := rl.GetMousePosition()
@@ -568,14 +660,19 @@ func main() {
 			}
 		}
 
-		// Follow player center
-		const smooth = 0.034
-		camScrollEase = dt * 2.0
-		// camScrollEase *= 2.8 // Smooth (trying this out)
-		camScrollEase = MinF(camScrollEase, smooth)
-		camScrollEase *= 2
-		camera.Target = rl.Vector3Lerp(oldCamTarget, playerPosition, camScrollEase)
-		rl.UpdateCamera(&camera, rl.CameraThirdPerson)
+		if false {
+
+			// Follow player center
+			const smooth = 0.034
+			camScrollEase = dt * 2.0
+			// camScrollEase *= 2.8 // Smooth (trying this out)
+			camScrollEase = MinF(camScrollEase, smooth)
+			camScrollEase *= 2
+			camera.Target = rl.Vector3Lerp(oldCamTarget, playerPosition, camScrollEase)
+			rl.UpdateCamera(&camera, rl.CameraThirdPerson)
+		} else {
+			updatePlayer() // Position, rotation, as camera position targeting forward vector
+		}
 
 		// rl.UpdateCamera(&camera, rl.CameraFirstPerson)
 		// playerPosition = camera.Target
@@ -774,7 +871,7 @@ func main() {
 		// Highlight player color on interactions with different world objects
 		switch {
 		case isFloorCollision:
-			playerColor = rl.Black
+			playerColor = rl.Gray
 		case isOOBCollision:
 			playerColor = rl.DarkGray
 		case isPlatformCollision:
@@ -909,12 +1006,13 @@ func main() {
 		}
 
 		// Draw player
-		{
+		if isDrawPlayer := false; isDrawPlayer {
 			playerRadius := playerSize.X / 2
 			playerStartPos := rl.NewVector3(playerPosition.X, playerPosition.Y-playerSize.Y/2+playerRadius, playerPosition.Z)
 			playerEndPos := rl.NewVector3(playerPosition.X, playerPosition.Y+playerSize.Y/2-playerRadius, playerPosition.Z)
 			rl.DrawCapsule(playerStartPos, playerEndPos, playerRadius, 4, 4, playerColor)
 			rl.DrawCapsuleWires(playerStartPos, playerEndPos, playerRadius, 4*2, 6*2, rl.ColorLerp(playerColor, rl.Fade(rl.DarkGray, 0.8), 0.5))
+			rl.DrawModelPoints(playerModel, playerPosition, 1.0, rl.Blue)
 			if isDebug := false; isDebug {
 				rl.DrawCubeV(playerPosition, playerSize, playerColor)
 				rl.DrawCubeWiresV(playerPosition, playerSize, playerColor)
@@ -925,30 +1023,6 @@ func main() {
 				rl.DrawCapsule(oldPlayerStartPos, oldPlayerEndPos, playerRadius, 16, 16, rl.DarkGray)
 				rl.DrawCapsuleWires(oldPlayerStartPos, oldPlayerEndPos, playerRadius, 4, 6, rl.ColorLerp(playerColor, rl.Fade(rl.DarkGray, 0.8), 0.5))
 			}
-			if false {
-				if false {
-					rl.DrawModelWiresEx(playerModel, playerPosition, playerRotationNormal, rl.QuaternionLength(playerRotation)*0+dt+80*rl.Deg2rad, rl.NewVector3(2, 2, 2), rl.Black)
-				}
-				rl.DrawModelEx(playerModel,
-					rl.Vector3RotateByAxisAngle(playerPosition, playerRotationNormal, dt*100),
-					playerRotationNormal,
-					rl.QuaternionLength(playerRotation)*0+dt+80*rl.Deg2rad,
-					rl.NewVector3(2, 2, 2), rl.Black)
-			}
-			if false {
-				if !rl.IsCursorHidden() && rl.IsCursorOnScreen() {
-					pos := rl.Vector3{X: rl.GetMouseDelta().X, Y: 0., Z: rl.GetMouseDelta().Y}
-					pos = mouseRay.Position
-					rayDir := mouseRay.Direction // Ray direction
-					pos = rl.Vector3CrossProduct(pos, rayDir)
-					rl.DrawRay(mouseRay, rl.White)
-					rl.DrawModel(resource.FloorModels[0], pos, 1.0, rl.White)
-				}
-			}
-			if false { // TODO: HOW TO FIND ANGLE?
-				dirUnitVector := rl.Vector3Normalize(rl.Vector3CrossProduct(camera.Position, camera.Target))
-				rl.DrawLine3D(camera.Target, dirUnitVector, rl.Gold)
-			}
 		}
 
 		if false {
@@ -956,25 +1030,27 @@ func main() {
 		}
 
 		// Draw orbital XYZ origins
-		DrawXYZOrbitAxisV(Vector3Zero, 12.0, 0.05, 0.3)                // Level Center
-		DrawXYZOrbitAxisV(playerPosition, playerSize.Y*Phi, 0.05, 0.3) // Player Center
-		for i := range MaxResourceSOACapacity {
-			if false {
-				if resource.PlatformAtIsActive[i] {
-					DrawXYZOrbitAxisV(resource.PlatformPositions[i], rl.Vector3Length(resource.PlatformSizes[i]), 0.05, 0.5)
-					DrawXYZOrbitAxisV(resource.PlatformDefaultPositions[i], rl.Vector3Length(resource.PlatformSizes[i]), 0.05, 0.5/2)
-				}
-				if resource.FloorAtIsActive[i] {
-					DrawXYZOrbitAxisV(resource.FloorPositions[i], rl.Vector3Length(resource.FloorSizes[i]), 0.05, 0.5)
-				}
-				if resource.HealBoxAtIsActive[i] {
-					DrawXYZOrbitAxisV(resource.HealBoxPositions[i], rl.Vector3Length(resource.HealBoxSizes[i]), 0.05, 0.5)
-				}
-				if resource.DamageSphereAtIsActive[i] {
-					DrawXYZOrbitAxisV(resource.DamageSpherePositions[i], resource.DamageSphereSizes[i]*2.0, 0.05, 0.5)
-				}
-				if resource.TrampolineBoxAtIsActive[i] {
-					DrawXYZOrbitAxisV(resource.TrampolineBoxPositions[i], rl.Vector3Length(resource.TrampolineBoxSizes[i]), 0.05, 0.5)
+		if false {
+			DrawXYZOrbitAxisV(Vector3Zero, 12.0, 0.05, 0.3)                // Level Center
+			DrawXYZOrbitAxisV(playerPosition, playerSize.Y*Phi, 0.05, 0.3) // Player Center
+			for i := range MaxResourceSOACapacity {
+				if false {
+					if resource.PlatformAtIsActive[i] {
+						DrawXYZOrbitAxisV(resource.PlatformPositions[i], rl.Vector3Length(resource.PlatformSizes[i]), 0.05, 0.5)
+						DrawXYZOrbitAxisV(resource.PlatformDefaultPositions[i], rl.Vector3Length(resource.PlatformSizes[i]), 0.05, 0.5/2)
+					}
+					if resource.FloorAtIsActive[i] {
+						DrawXYZOrbitAxisV(resource.FloorPositions[i], rl.Vector3Length(resource.FloorSizes[i]), 0.05, 0.5)
+					}
+					if resource.HealBoxAtIsActive[i] {
+						DrawXYZOrbitAxisV(resource.HealBoxPositions[i], rl.Vector3Length(resource.HealBoxSizes[i]), 0.05, 0.5)
+					}
+					if resource.DamageSphereAtIsActive[i] {
+						DrawXYZOrbitAxisV(resource.DamageSpherePositions[i], resource.DamageSphereSizes[i]*2.0, 0.05, 0.5)
+					}
+					if resource.TrampolineBoxAtIsActive[i] {
+						DrawXYZOrbitAxisV(resource.TrampolineBoxPositions[i], rl.Vector3Length(resource.TrampolineBoxSizes[i]), 0.05, 0.5)
+					}
 				}
 			}
 		}
