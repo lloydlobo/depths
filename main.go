@@ -32,15 +32,16 @@ func main() {
 	rl.SetWindowMinSize(800, 450)                                                      // Prevents my window manager shrinking this to 2x1 units window size
 
 	const (
-		arenaW           = float32(2 * 2)     // X
-		arenaL           = float32(2 * 2)     // Z
-		arenaH           = float32(2*2) * Phi // Y (For reference of screen)
-		floorThick       = 2.0 * 2 * InvMathPhi        // NOTE: Easier to move vertically between platforms if thicker
-		arenaWidthRatio  = (arenaW / (arenaW + arenaL))
-		arenaLengthRatio = (arenaL / (arenaW + arenaL))
-		arenaWallHeight  = 1
-		camPosW          = (arenaW * (Phi + arenaLengthRatio)) * (1 - OneMinusInvMathPhi)
-		camPosL          = (arenaL * (Phi + arenaWidthRatio)) * (1 - OneMinusInvMathPhi)
+		playerSizeY      = 2.0
+		arenaW           = float32(playerSizeY * 3)  // X
+		arenaL           = float32(playerSizeY * 3)  // Z
+		arenaH           = float32(playerSizeY * 12) // Y (For reference of screen)
+		floorThick       = float32(playerSizeY)      // NOTE: Easier to move vertically between platforms if thicker
+		arenaWidthRatio  = float32(arenaW / (arenaW + arenaL))
+		arenaLengthRatio = float32(arenaL / (arenaW + arenaL))
+		arenaWallHeight  = float32(1)
+		camPosW          = float32(arenaW*(Phi+arenaLengthRatio)) * (1 - OneMinusInvMathPhi)
+		camPosL          = float32(arenaL*(Phi+arenaWidthRatio)) * (1 - OneMinusInvMathPhi)
 	)
 
 	var (
@@ -56,7 +57,7 @@ func main() {
 	playerColor := rl.RayWhite
 	playerJumpsLeft := 1
 	playerPosition := rl.NewVector3(0.0, 1.0, 2.0)
-	playerSize := rl.NewVector3(1.0, 2.0, 1.0)
+	playerSize := rl.NewVector3(1.0, playerSizeY, 1.0)
 	playerVelocity := rl.Vector3{}
 	playerAirTimer := float32(0)
 	playerRotationNormal := rl.NewVector3(0, -1, 0)
@@ -239,120 +240,124 @@ func main() {
 	padH := playerStartPosY - (floorThick / 2)
 	_ = padH
 
-	// Layout inspired by 2D game Trench https://ldjam.com/events/ludum-dare/57/trench
-	for _, data := range []Entity{
-		/* L0: Initial floor */
-		// {Pos: rl.NewVector3(0, padH, 0), Size: rl.NewVector3(W/PowF(Phi, 1), floorThick, L/PowF(Phi, 1))},
+	{
+		offset := float32(InvMathPhi - OneMinusInvMathPhi)
+		// Layout inspired by 2D game Trench https://ldjam.com/events/ludum-dare/57/trench
+		// floor color changes on contact // like piano tiles
+		for _, data := range []Entity{
+			/* L0: Initial floor */
+			// {Pos: rl.NewVector3(0, padH, 0), Size: rl.NewVector3(W/PowF(Phi, 1), floorThick, L/PowF(Phi, 1))},
 
-		/* L1: Next depth level floor splits */
-		{
-			Pos:  rl.NewVector3(-arenaW/PowF(Phi, 1)/4, -arenaH/2, -arenaW/PowF(Phi, 1)/4),
-			Size: rl.NewVector3(arenaW/PowF(Phi, 1)/2, floorThick, arenaL/PowF(Phi, 1)/2),
-		},
-		{
-			Pos:  rl.NewVector3(arenaW/PowF(Phi, 1)/4, -arenaH/2, -arenaW/PowF(Phi, 1)/4),
-			Size: rl.NewVector3(arenaW/PowF(Phi, 1)/2, floorThick, arenaL/PowF(Phi, 1)/2),
-		},
-		{
-			Pos:  rl.NewVector3(arenaW/PowF(Phi, 1)/4, -arenaH/2, arenaW/PowF(Phi, 1)/4),
-			Size: rl.NewVector3(arenaW/PowF(Phi, 1)/2, floorThick, arenaL/PowF(Phi, 1)/2),
-		},
-		{
-			Pos:  rl.NewVector3(-arenaW/PowF(Phi, 1)/4, -arenaH/2, arenaW/PowF(Phi, 1)/4),
-			Size: rl.NewVector3(arenaW/PowF(Phi, 1)/2, floorThick, arenaL/PowF(Phi, 1)/2),
-		},
+			/* L1: Next depth level floor splits */
+			{
+				Pos:  rl.NewVector3(-offset-arenaW/PowF(Phi, 1)/4, -arenaH/2, -offset-arenaW/PowF(Phi, 1)/4),
+				Size: rl.NewVector3(arenaW/PowF(Phi, 1)/2, floorThick, arenaL/PowF(Phi, 1)/2),
+			},
+			{
+				Pos:  rl.NewVector3(offset+arenaW/PowF(Phi, 1)/4, -arenaH/2, -offset-arenaW/PowF(Phi, 1)/4),
+				Size: rl.NewVector3(arenaW/PowF(Phi, 1)/2, floorThick, arenaL/PowF(Phi, 1)/2),
+			},
+			{
+				Pos:  rl.NewVector3(offset+arenaW/PowF(Phi, 1)/4, -arenaH/2, offset+arenaW/PowF(Phi, 1)/4),
+				Size: rl.NewVector3(arenaW/PowF(Phi, 1)/2, floorThick, arenaL/PowF(Phi, 1)/2),
+			},
+			{
+				Pos:  rl.NewVector3(-offset-arenaW/PowF(Phi, 1)/4, -arenaH/2, offset+arenaW/PowF(Phi, 1)/4),
+				Size: rl.NewVector3(arenaW/PowF(Phi, 1)/2, floorThick, arenaL/PowF(Phi, 1)/2),
+			},
 
-		/* L2: Next depth level floor splits */
-		{
-			Pos:  rl.NewVector3(-arenaW*PowF(Phi, 0)/4, -arenaH*PowF(Phi, 0), -arenaW*PowF(Phi, 0)/4),
-			Size: rl.NewVector3(arenaW*PowF(Phi, 0)/2, floorThick, arenaL*PowF(Phi, 0)/2),
-		},
-		{
-			Pos:  rl.NewVector3(arenaW*PowF(Phi, 0)/4, -arenaH*PowF(Phi, 0), -arenaW*PowF(Phi, 0)/4),
-			Size: rl.NewVector3(arenaW*PowF(Phi, 0)/2, floorThick, arenaL*PowF(Phi, 0)/2),
-		},
-		{
-			Pos:  rl.NewVector3(arenaW*PowF(Phi, 0)/4, -arenaH*PowF(Phi, 0), arenaW*PowF(Phi, 0)/4),
-			Size: rl.NewVector3(arenaW*PowF(Phi, 0)/2, floorThick, arenaL*PowF(Phi, 0)/2),
-		},
-		{
-			Pos:  rl.NewVector3(-arenaW*PowF(Phi, 0)/4, -arenaH*PowF(Phi, 0), arenaW*PowF(Phi, 0)/4),
-			Size: rl.NewVector3(arenaW*PowF(Phi, 0)/2, floorThick, arenaL*PowF(Phi, 0)/2),
-		},
+			/* L2: Next depth level floor splits */
+			{
+				Pos:  rl.NewVector3(-offset-arenaW*PowF(Phi, 0)/4, -arenaH*PowF(Phi, 0), -offset-arenaW*PowF(Phi, 0)/4),
+				Size: rl.NewVector3(arenaW*PowF(Phi, 0)/2, floorThick, arenaL*PowF(Phi, 0)/2),
+			},
+			{
+				Pos:  rl.NewVector3(offset+arenaW*PowF(Phi, 0)/4, -arenaH*PowF(Phi, 0), -offset-arenaW*PowF(Phi, 0)/4),
+				Size: rl.NewVector3(arenaW*PowF(Phi, 0)/2, floorThick, arenaL*PowF(Phi, 0)/2),
+			},
+			{
+				Pos:  rl.NewVector3(offset+arenaW*PowF(Phi, 0)/4, -arenaH*PowF(Phi, 0), offset+arenaW*PowF(Phi, 0)/4),
+				Size: rl.NewVector3(arenaW*PowF(Phi, 0)/2, floorThick, arenaL*PowF(Phi, 0)/2),
+			},
+			{
+				Pos:  rl.NewVector3(-offset-arenaW*PowF(Phi, 0)/4, -arenaH*PowF(Phi, 0), offset+arenaW*PowF(Phi, 0)/4),
+				Size: rl.NewVector3(arenaW*PowF(Phi, 0)/2, floorThick, arenaL*PowF(Phi, 0)/2),
+			},
 
-		/* L3: ... */
-		{
-			Pos:  rl.NewVector3(-arenaW*PowF(Phi, 1)/4, -arenaH*PowF(Phi, 1), -arenaW*PowF(Phi, 1)/4),
-			Size: rl.NewVector3(arenaW*PowF(Phi, 1)/2, floorThick, arenaL*PowF(Phi, 1)/2),
-		},
-		{
-			Pos:  rl.NewVector3(arenaW*PowF(Phi, 1)/4, -arenaH*PowF(Phi, 1), -arenaW*PowF(Phi, 1)/4),
-			Size: rl.NewVector3(arenaW*PowF(Phi, 1)/2, floorThick, arenaL*PowF(Phi, 1)/2),
-		},
-		{
-			Pos:  rl.NewVector3(arenaW*PowF(Phi, 1)/4, -arenaH*PowF(Phi, 1), arenaW*PowF(Phi, 1)/4),
-			Size: rl.NewVector3(arenaW*PowF(Phi, 1)/2, floorThick, arenaL*PowF(Phi, 1)/2),
-		},
-		{
-			Pos:  rl.NewVector3(-arenaW*PowF(Phi, 1)/4, -arenaH*PowF(Phi, 1), arenaW*PowF(Phi, 1)/4),
-			Size: rl.NewVector3(arenaW*PowF(Phi, 1)/2, floorThick, arenaL*PowF(Phi, 1)/2),
-		},
+			/* L3: ... */
+			{
+				Pos:  rl.NewVector3(-offset-arenaW*PowF(Phi, 1)/4, -arenaH*PowF(Phi, 1), -offset-arenaW*PowF(Phi, 1)/4),
+				Size: rl.NewVector3(arenaW*PowF(Phi, 1)/2, floorThick, arenaL*PowF(Phi, 1)/2),
+			},
+			{
+				Pos:  rl.NewVector3(offset+arenaW*PowF(Phi, 1)/4, -arenaH*PowF(Phi, 1), -offset-arenaW*PowF(Phi, 1)/4),
+				Size: rl.NewVector3(arenaW*PowF(Phi, 1)/2, floorThick, arenaL*PowF(Phi, 1)/2),
+			},
+			{
+				Pos:  rl.NewVector3(offset+arenaW*PowF(Phi, 1)/4, -arenaH*PowF(Phi, 1), offset+arenaW*PowF(Phi, 1)/4),
+				Size: rl.NewVector3(arenaW*PowF(Phi, 1)/2, floorThick, arenaL*PowF(Phi, 1)/2),
+			},
+			{
+				Pos:  rl.NewVector3(-offset-arenaW*PowF(Phi, 1)/4, -arenaH*PowF(Phi, 1), offset+arenaW*PowF(Phi, 1)/4),
+				Size: rl.NewVector3(arenaW*PowF(Phi, 1)/2, floorThick, arenaL*PowF(Phi, 1)/2),
+			},
 
-		/* L4: .... */
-		{
-			Pos:  rl.NewVector3(-arenaW*PowF(Phi, 2)/4, -arenaH*PowF(Phi, 2), -arenaW*PowF(Phi, 2)/4),
-			Size: rl.NewVector3(arenaW*PowF(Phi, 2)/2, floorThick, arenaL*PowF(Phi, 2)/2),
-		},
-		{
-			Pos:  rl.NewVector3(arenaW*PowF(Phi, 2)/4, -arenaH*PowF(Phi, 2), -arenaW*PowF(Phi, 2)/4),
-			Size: rl.NewVector3(arenaW*PowF(Phi, 2)/2, floorThick, arenaL*PowF(Phi, 2)/2),
-		},
-		{
-			Pos:  rl.NewVector3(arenaW*PowF(Phi, 2)/4, -arenaH*PowF(Phi, 2), arenaW*PowF(Phi, 2)/4),
-			Size: rl.NewVector3(arenaW*PowF(Phi, 2)/2, floorThick, arenaL*PowF(Phi, 2)/2),
-		},
-		{
-			Pos:  rl.NewVector3(-arenaW*PowF(Phi, 2)/4, -arenaH*PowF(Phi, 2), arenaW*PowF(Phi, 2)/4),
-			Size: rl.NewVector3(arenaW*PowF(Phi, 2)/2, floorThick, arenaL*PowF(Phi, 2)/2),
-		},
+			/* L4: .... */
+			{
+				Pos:  rl.NewVector3(-offset-arenaW*PowF(Phi, 2)/4, -arenaH*PowF(Phi, 2), -offset-arenaW*PowF(Phi, 2)/4),
+				Size: rl.NewVector3(arenaW*PowF(Phi, 2)/2, floorThick, arenaL*PowF(Phi, 2)/2),
+			},
+			{
+				Pos:  rl.NewVector3(offset+arenaW*PowF(Phi, 2)/4, -arenaH*PowF(Phi, 2), -offset-arenaW*PowF(Phi, 2)/4),
+				Size: rl.NewVector3(arenaW*PowF(Phi, 2)/2, floorThick, arenaL*PowF(Phi, 2)/2),
+			},
+			{
+				Pos:  rl.NewVector3(offset+arenaW*PowF(Phi, 2)/4, -arenaH*PowF(Phi, 2), offset+arenaW*PowF(Phi, 2)/4),
+				Size: rl.NewVector3(arenaW*PowF(Phi, 2)/2, floorThick, arenaL*PowF(Phi, 2)/2),
+			},
+			{
+				Pos:  rl.NewVector3(-offset-arenaW*PowF(Phi, 2)/4, -arenaH*PowF(Phi, 2), offset+arenaW*PowF(Phi, 2)/4),
+				Size: rl.NewVector3(arenaW*PowF(Phi, 2)/2, floorThick, arenaL*PowF(Phi, 2)/2),
+			},
 
-		/* L5: ..... {Pos: rl.NewVector3(0, -H*PowF(Phi, 3), 0), Size: rl.NewVector3(W*PowF(Phi, 3), floorThick, L*PowF(Phi, 3))} */
-		{
-			Pos:  rl.NewVector3(-arenaW*PowF(Phi, 3)/4, -arenaH*PowF(Phi, 3), -arenaW*PowF(Phi, 3)/4),
-			Size: rl.NewVector3(arenaW*PowF(Phi, 3)/2, floorThick, arenaL*PowF(Phi, 3)/2),
-		},
-		{
-			Pos:  rl.NewVector3(arenaW*PowF(Phi, 3)/4, -arenaH*PowF(Phi, 3), -arenaW*PowF(Phi, 3)/4),
-			Size: rl.NewVector3(arenaW*PowF(Phi, 3)/2, floorThick, arenaL*PowF(Phi, 3)/2),
-		},
-		{
-			Pos:  rl.NewVector3(arenaW*PowF(Phi, 3)/4, -arenaH*PowF(Phi, 3), arenaW*PowF(Phi, 3)/4),
-			Size: rl.NewVector3(arenaW*PowF(Phi, 3)/2, floorThick, arenaL*PowF(Phi, 3)/2),
-		},
-		{
-			Pos:  rl.NewVector3(-arenaW*PowF(Phi, 3)/4, -arenaH*PowF(Phi, 3), arenaW*PowF(Phi, 3)/4),
-			Size: rl.NewVector3(arenaW*PowF(Phi, 3)/2, floorThick, arenaL*PowF(Phi, 3)/2),
-		},
+			/* L5: ..... {Pos: rl.NewVector3(0, -H*PowF(Phi, 3), 0), Size: rl.NewVector3(W*PowF(Phi, 3), floorThick, L*PowF(Phi, 3))} */
+			{
+				Pos:  rl.NewVector3(-offset-arenaW*PowF(Phi, 3)/4, -arenaH*PowF(Phi, 3), -offset-arenaW*PowF(Phi, 3)/4),
+				Size: rl.NewVector3(arenaW*PowF(Phi, 3)/2, floorThick, arenaL*PowF(Phi, 3)/2),
+			},
+			{
+				Pos:  rl.NewVector3(offset+arenaW*PowF(Phi, 3)/4, -arenaH*PowF(Phi, 3), -offset-arenaW*PowF(Phi, 3)/4),
+				Size: rl.NewVector3(arenaW*PowF(Phi, 3)/2, floorThick, arenaL*PowF(Phi, 3)/2),
+			},
+			{
+				Pos:  rl.NewVector3(offset+arenaW*PowF(Phi, 3)/4, -arenaH*PowF(Phi, 3), offset+arenaW*PowF(Phi, 3)/4),
+				Size: rl.NewVector3(arenaW*PowF(Phi, 3)/2, floorThick, arenaL*PowF(Phi, 3)/2),
+			},
+			{
+				Pos:  rl.NewVector3(-offset-arenaW*PowF(Phi, 3)/4, -arenaH*PowF(Phi, 3), offset+arenaW*PowF(Phi, 3)/4),
+				Size: rl.NewVector3(arenaW*PowF(Phi, 3)/2, floorThick, arenaL*PowF(Phi, 3)/2),
+			},
 
-		/* L6: ...... */
-		{
-			Pos:  rl.NewVector3(-arenaW*PowF(Phi, 4)/4, -arenaH*PowF(Phi, 4), -arenaW*PowF(Phi, 4)/4),
-			Size: rl.NewVector3(arenaW*PowF(Phi, 4)/2, floorThick, arenaL*PowF(Phi, 4)/2),
-		},
-		{
-			Pos:  rl.NewVector3(arenaW*PowF(Phi, 4)/4, -arenaH*PowF(Phi, 4), -arenaW*PowF(Phi, 4)/4),
-			Size: rl.NewVector3(arenaW*PowF(Phi, 4)/2, floorThick, arenaL*PowF(Phi, 4)/2),
-		},
-		{
-			Pos:  rl.NewVector3(arenaW*PowF(Phi, 4)/4, -arenaH*PowF(Phi, 4), arenaW*PowF(Phi, 4)/4),
-			Size: rl.NewVector3(arenaW*PowF(Phi, 4)/2, floorThick, arenaL*PowF(Phi, 4)/2),
-		},
-		{
-			Pos:  rl.NewVector3(-arenaW*PowF(Phi, 4)/4, -arenaH*PowF(Phi, 4), arenaW*PowF(Phi, 4)/4),
-			Size: rl.NewVector3(arenaW*PowF(Phi, 4)/2, floorThick, arenaL*PowF(Phi, 4)/2),
-		},
-	} {
-		setupFloorResource(data.Pos, data.Size)
+			/* L6: ...... */
+			{
+				Pos:  rl.NewVector3(-offset-arenaW*PowF(Phi, 4)/4, -arenaH*PowF(Phi, 4), -offset-arenaW*PowF(Phi, 4)/4),
+				Size: rl.NewVector3(arenaW*PowF(Phi, 4)/2, floorThick, arenaL*PowF(Phi, 4)/2),
+			},
+			{
+				Pos:  rl.NewVector3(arenaW*PowF(Phi, 4)/4, -arenaH*PowF(Phi, 4), -offset-arenaW*PowF(Phi, 4)/4),
+				Size: rl.NewVector3(arenaW*PowF(Phi, 4)/2, floorThick, arenaL*PowF(Phi, 4)/2),
+			},
+			{
+				Pos:  rl.NewVector3(offset+arenaW*PowF(Phi, 4)/4, -arenaH*PowF(Phi, 4), offset+arenaW*PowF(Phi, 4)/4),
+				Size: rl.NewVector3(arenaW*PowF(Phi, 4)/2, floorThick, arenaL*PowF(Phi, 4)/2),
+			},
+			{
+				Pos:  rl.NewVector3(-offset-arenaW*PowF(Phi, 4)/4, -arenaH*PowF(Phi, 4), offset+arenaW*PowF(Phi, 4)/4),
+				Size: rl.NewVector3(arenaW*PowF(Phi, 4)/2, floorThick, arenaL*PowF(Phi, 4)/2),
+			},
+		} {
+			setupFloorResource(data.Pos, data.Size)
+		}
 	}
 	// Setup moving platforms
 	// NOTE: Easier to move if they are parallel and in similar position
@@ -386,7 +391,7 @@ func main() {
 				Size: rl.NewVector3(arenaW*PowF(Phi, 0), floorThick, arenaL*PowF(Phi, 0)),
 			},
 			MovementNormal:    rl.NewVector3(0, 1, 0),
-			MovementAmplitude: -arenaH * PowF(Phi, 0+1),
+			MovementAmplitude: -arenaH*PowF(Phi, 1) - floorThick,
 		},
 		{
 			Entity: Entity{
@@ -394,7 +399,7 @@ func main() {
 				Size: rl.NewVector3(arenaW*PowF(Phi, 1), floorThick, arenaL*PowF(Phi, 1)),
 			},
 			MovementNormal:    rl.NewVector3(0, 1, 0),
-			MovementAmplitude: -arenaH * PowF(Phi, 1+1),
+			MovementAmplitude: -arenaH*PowF(Phi, 2) - floorThick,
 		},
 		{
 			Entity: Entity{
@@ -402,7 +407,7 @@ func main() {
 				Size: rl.NewVector3(arenaW*PowF(Phi, 2), floorThick, arenaL*PowF(Phi, 2)),
 			},
 			MovementNormal:    rl.NewVector3(0, 1, 0),
-			MovementAmplitude: -arenaH * PowF(Phi, 2+1),
+			MovementAmplitude: -arenaH*PowF(Phi, 3) - floorThick,
 		},
 		{
 			Entity: Entity{
@@ -410,7 +415,7 @@ func main() {
 				Size: rl.NewVector3(arenaW*PowF(Phi, 3), floorThick, arenaL*PowF(Phi, 3)),
 			},
 			MovementNormal:    rl.NewVector3(0, 1, 0),
-			MovementAmplitude: -arenaH * PowF(Phi, 3+1),
+			MovementAmplitude: -arenaH*PowF(Phi, 4) - floorThick,
 		},
 	} {
 		setupPlatformResource(data.Entity.Pos, data.Entity.Size, data.MovementNormal, data.MovementAmplitude)
