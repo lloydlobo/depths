@@ -32,16 +32,17 @@ func main() {
 	rl.SetWindowMinSize(800, 450)                                                      // Prevents my window manager shrinking this to 2x1 units window size
 
 	const (
+		playerSizeX      = 1.0
 		playerSizeY      = 2.0
-		arenaW           = float32(playerSizeY * 3)  // X
-		arenaL           = float32(playerSizeY * 3)  // Z
-		arenaH           = float32(playerSizeY * 12) // Y (For reference of screen)
-		floorThick       = float32(playerSizeY)      // NOTE: Easier to move vertically between platforms if thicker
+		playerSizeZ      = 1.0
+		arenaW           = float32(playerSizeY * 4)       // X
+		arenaL           = float32(playerSizeY * 4)       // Z
+		arenaH           = float32(playerSizeY * 4 * Phi) // Y (For reference of screen)
+		floorThick       = float32(playerSizeY * Phi)     // NOTE: Easier to move vertically between platforms if thicker
 		arenaWidthRatio  = float32(arenaW / (arenaW + arenaL))
 		arenaLengthRatio = float32(arenaL / (arenaW + arenaL))
-		arenaWallHeight  = float32(1)
-		camPosW          = float32(arenaW*(Phi+arenaLengthRatio)) * (1 - OneMinusInvMathPhi)
-		camPosL          = float32(arenaL*(Phi+arenaWidthRatio)) * (1 - OneMinusInvMathPhi)
+		camPosW          = float32(arenaW*(Phi+arenaLengthRatio)) * (1 - OneMinusInvPhi)
+		camPosL          = float32(arenaL*(Phi+arenaWidthRatio)) * (1 - OneMinusInvPhi)
 	)
 
 	var (
@@ -51,20 +52,6 @@ func main() {
 		playerCameraRay          rl.Ray
 		playerCameraRayCollision rl.RayCollision
 	)
-
-	isPlayerBoost := false
-	isPlayerStrafe := false
-	playerColor := rl.RayWhite
-	playerJumpsLeft := 1
-	playerPosition := rl.NewVector3(0.0, 1.0, 2.0)
-	playerSize := rl.NewVector3(1.0, playerSizeY, 1.0)
-	playerVelocity := rl.Vector3{}
-	playerAirTimer := float32(0)
-	playerRotationNormal := rl.NewVector3(0, -1, 0)
-	playerRotation := rl.NewVector4(0, 0, 0, 0)
-	playerModel := rl.LoadModelFromMesh(rl.GenMeshCube(playerSize.X/2, playerSize.Y/2, playerSize.Z/2))
-
-	camScrollEase := float32((float32(1.0) / float32(fps)) * 2.0) // 0.033
 
 	camera := rl.Camera{
 		Position: cmp.Or(
@@ -84,6 +71,20 @@ func main() {
 	defaultCameraPositionTargetVector := rl.Vector3Subtract(defaultCameraPosition, defaultCameraTarget)
 	_ = defaultCameraPositionTargetVector
 	defaultCameraPositionTargetDistance := rl.Vector3Distance(defaultCameraPosition, defaultCameraTarget)
+
+	playerPosition := rl.NewVector3(0.0, 1.0, 2.0)
+	playerSize := rl.NewVector3(playerSizeX, playerSizeY, playerSizeZ)
+	playerJumpsLeft := 1
+	playerVelocity := rl.Vector3{}
+	playerAirTimer := float32(0)
+	playerRotationNormal := rl.NewVector3(0, -1, 0)
+	playerRotation := rl.NewVector4(0, 0, 0, 0)
+	playerModel := rl.LoadModelFromMesh(rl.GenMeshCube(playerSize.X/2, playerSize.Y/2, playerSize.Z/2))
+	playerColor := rl.RayWhite
+	isPlayerBoost := false
+	isPlayerStrafe := false
+
+	camScrollEase := float32((float32(1.0) / float32(fps)) * 2.0) // 0.033
 
 	// Copied from https://github.com/lloydlobo/ChunkMinerGame/blob/main/Src/Drill.odin
 	type UpgradeType uint8
@@ -236,14 +237,36 @@ func main() {
 		resource.FloorAtIsActive[resource.FloorCount] = true
 		resource.FloorCount++
 	}
+
 	playerStartPosY := (playerPosition.Y - playerSize.Y/2)
 	padH := playerStartPosY - (floorThick / 2)
 	_ = padH
 
-	{
-		offset := float32(InvMathPhi - OneMinusInvMathPhi)
+	// Generate levels programmatically instead of hardcoding
+	if true {
+		offset := float32(InvPhi - OneMinusInvPhi)
+		numLevels := 6
+		for i := -1; i < numLevels-1; i++ {
+			scaleFactor := PowF(Phi, float32(i)) // Level 0 uses PowF(Phi, -1), Level 1 uses PowF(Phi, 0), etc.
+			if isInvert := false; isInvert {
+				scaleFactor = 1 / scaleFactor
+			}
+			levelHeight := -arenaH * PowF(Phi, float32(i))                                // Height from origin for this level
+			cornerOffsets := []struct{ X, Z float32 }{{-1, -1}, {1, -1}, {1, 1}, {-1, 1}} // For each level, create 4 floor platforms in the corners (bottom-left bottom-right top-right top-left)
+			for _, corner := range cornerOffsets {
+				posX := corner.X * (offset + arenaW*scaleFactor/4)
+				posZ := corner.Z * (offset + arenaL*scaleFactor/4)
+				pos := rl.NewVector3(posX, levelHeight, posZ)
+				size := rl.NewVector3(arenaW*scaleFactor/2, floorThick, arenaL*scaleFactor/2)
+				setupFloorResource(pos, size)
+			}
+		}
+	} else {
+		offset := float32(InvPhi - OneMinusInvPhi)
+
 		// Layout inspired by 2D game Trench https://ldjam.com/events/ludum-dare/57/trench
-		// floor color changes on contact // like piano tiles
+
+		// TODO: Floor color changes on contact // like piano tiles
 		for _, data := range []Entity{
 			/* L0: Initial floor */
 			// {Pos: rl.NewVector3(0, padH, 0), Size: rl.NewVector3(W/PowF(Phi, 1), floorThick, L/PowF(Phi, 1))},
@@ -380,7 +403,7 @@ func main() {
 		resource.PlatformAtIsActive[resource.PlatformCount] = true
 		resource.PlatformCount++
 	}
-	for _, data := range []struct {
+	for i, data := range []struct {
 		Entity            Entity
 		MovementNormal    rl.Vector3
 		MovementAmplitude float32
@@ -418,7 +441,12 @@ func main() {
 			MovementAmplitude: -arenaH*PowF(Phi, 4) - floorThick,
 		},
 	} {
-		setupPlatformResource(data.Entity.Pos, data.Entity.Size, data.MovementNormal, data.MovementAmplitude)
+		difficulty := 2 // 0->2 | less difficult -> more difficult
+		sizes := []float32{1, InvPhi, OneMinusInvPhi}
+		size := rl.Vector3Scale(data.Entity.Size, sizes[MaxI(0, MinI(difficulty, len(sizes)-1))])
+		// More Y size => easier to not fall, by clipping through middle of moving platform
+		size.Y *= arenaH * PowF(float32(i+1), 1/float32(difficulty+1)) // Line up when oscillate to top
+		setupPlatformResource(data.Entity.Pos, size, data.MovementNormal, data.MovementAmplitude)
 	}
 	for _, data := range []Entity{
 		{rl.NewVector3(-4, -arenaH*2, 0), rl.NewVector3(2, 2, 2)},
@@ -924,7 +952,7 @@ func main() {
 		}
 
 		if false {
-			rl.DrawGrid(int32(MinF(arenaW, arenaL)*InvMathPhi), 1)
+			rl.DrawGrid(int32(MinF(arenaW, arenaL)*InvPhi), 1)
 		}
 
 		// Draw orbital XYZ origins
@@ -1088,7 +1116,7 @@ func IsUnitVec3(v rl.Vector3) bool { return rl.Vector3Length(v) <= Vector3OneLen
 func IsUnitVec2(v rl.Vector2) bool { return rl.Vector2Length(v) <= Vector2OneLength }
 
 const (
-	Phi                = math.Phi
-	InvMathPhi         = 1 / Phi
-	OneMinusInvMathPhi = 1 - InvMathPhi
+	Phi            = math.Phi
+	InvPhi         = 1 / Phi
+	OneMinusInvPhi = 1 - InvPhi
 )
