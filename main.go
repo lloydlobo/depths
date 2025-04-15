@@ -24,21 +24,23 @@ func main() {
 	screenWidth = int32(rl.GetScreenWidth())
 	screenHeight = int32(rl.GetScreenHeight())
 
-	rl.SetConfigFlags(rl.FlagMsaa4xHint | rl.FlagWindowResizable)                        // Config flags must be set before InitWindow
+	rl.SetConfigFlags(rl.FlagMsaa4xHint | rl.FlagWindowResizable) // Config flags must be set before InitWindow
+
 	rl.InitWindow(screenWidth, screenHeight, "raylib [models] example - box collisions") // Initialize Window and OpenGL Graphics
-	rl.SetWindowState(rl.FlagVsyncHint | rl.FlagInterlacedHint | rl.FlagWindowHighdpi)   // Window state must be set after InitWindow
-	// rl.ToggleFullscreen()
-	rl.SetWindowMinSize(800, 450) // Prevents my window manager shrinking this to 2x1 units window size
+
+	rl.SetWindowState(rl.FlagVsyncHint | rl.FlagInterlacedHint | rl.FlagWindowHighdpi) // Window state must be set after InitWindow
+	rl.SetWindowMinSize(800, 450)                                                      // Prevents my window manager shrinking this to 2x1 units window size
 
 	const (
+		arenaW           = float32(2 * 2)     // X
+		arenaL           = float32(2 * 2)     // Z
+		arenaH           = float32(2*2) * Phi // Y (For reference of screen)
+		floorThick       = 2.0 * 2 * InvMathPhi        // NOTE: Easier to move vertically between platforms if thicker
+		arenaWidthRatio  = (arenaW / (arenaW + arenaL))
+		arenaLengthRatio = (arenaL / (arenaW + arenaL))
 		arenaWallHeight  = 1
-		W                = float32(8) * 1   /* Phi */ // X
-		L                = float32(8) * 1   // Z
-		H                = float32(8) * Phi // Y (just for reference of screen)
-		arenaWidthRatio  = (W / (W + L))
-		arenaLengthRatio = (L / (W + L))
-		camPosW          = (W * (Phi + arenaLengthRatio)) * (1 - OneMinusInvMathPhi)
-		camPosL          = (L * (Phi + arenaWidthRatio)) * (1 - OneMinusInvMathPhi)
+		camPosW          = (arenaW * (Phi + arenaLengthRatio)) * (1 - OneMinusInvMathPhi)
+		camPosL          = (arenaL * (Phi + arenaWidthRatio)) * (1 - OneMinusInvMathPhi)
 	)
 
 	var (
@@ -64,17 +66,22 @@ func main() {
 	camScrollEase := float32((float32(1.0) / float32(fps)) * 2.0) // 0.033
 
 	camera := rl.Camera{
-		Position:   cmp.Or(rl.NewVector3(0., 20., 20.), rl.NewVector3(0., 10., 10.), rl.NewVector3(0., camPosW/2, camPosW*Phi)),
-		Target:     rl.NewVector3(0., 1., 0.), // rl.NewVector3(0.0, -1.0, 0.0),
-		Up:         rl.NewVector3(0.0, 1.0, 0.0),
-		Fovy:       float32(cmp.Or(30.0, 60.0, 45.0)), // Use higher Fovy to zoom out if following a target
-		Projection: rl.CameraPerspective,              // rl.CameraOrthographic
+		Position: cmp.Or(
+			rl.NewVector3(0., 20., 20.),
+			rl.NewVector3(0., camPosW/2, camPosW*Phi),
+			rl.NewVector3(0., 10., 10.),
+		),
+		Target:     rl.NewVector3(0., -1., 0.),
+		Up:         rl.NewVector3(0., 1., 0.),
+		Fovy:       float32(cmp.Or(60., 30., 45.)),
+		Projection: rl.CameraPerspective,
 	}
 
 	// Save initial settings for stabilizing custom naïve camera movement
 	defaultCameraPosition := camera.Position
 	defaultCameraTarget := camera.Target
 	defaultCameraPositionTargetVector := rl.Vector3Subtract(defaultCameraPosition, defaultCameraTarget)
+	_ = defaultCameraPositionTargetVector
 	defaultCameraPositionTargetDistance := rl.Vector3Distance(defaultCameraPosition, defaultCameraTarget)
 
 	// Copied from https://github.com/lloydlobo/ChunkMinerGame/blob/main/Src/Drill.odin
@@ -211,9 +218,8 @@ func main() {
 	}
 
 	type Entity struct {
-		Pos   rl.Vector3 `json:"pos"`
-		Size  rl.Vector3 `json:"size"`
-		Color color.RGBA `json:"color"`
+		Pos  rl.Vector3 `json:"pos"`
+		Size rl.Vector3 `json:"size"`
 	}
 
 	var resource GameResourceSOA
@@ -229,132 +235,130 @@ func main() {
 		resource.FloorAtIsActive[resource.FloorCount] = true
 		resource.FloorCount++
 	}
-	const floorThick = 1.0
 	playerStartPosY := (playerPosition.Y - playerSize.Y/2)
 	padH := playerStartPosY - (floorThick / 2)
 	_ = padH
 
 	// Layout inspired by 2D game Trench https://ldjam.com/events/ludum-dare/57/trench
 	for _, data := range []Entity{
-		// /* L0: Initial floor */
-		// {
-		// 	Pos:  rl.NewVector3(0, padH, 0),
-		// 	Size: rl.NewVector3(W/PowF(Phi, 1), floorThick, L/PowF(Phi, 1)),
-		// },
+		/* L0: Initial floor */
+		// {Pos: rl.NewVector3(0, padH, 0), Size: rl.NewVector3(W/PowF(Phi, 1), floorThick, L/PowF(Phi, 1))},
 
 		/* L1: Next depth level floor splits */
 		{
-			Pos:  rl.NewVector3(-W/PowF(Phi, 1)/4, -H/2, -W/PowF(Phi, 1)/4),
-			Size: rl.NewVector3(W/PowF(Phi, 1)/2, floorThick, L/PowF(Phi, 1)/2),
+			Pos:  rl.NewVector3(-arenaW/PowF(Phi, 1)/4, -arenaH/2, -arenaW/PowF(Phi, 1)/4),
+			Size: rl.NewVector3(arenaW/PowF(Phi, 1)/2, floorThick, arenaL/PowF(Phi, 1)/2),
 		},
 		{
-			Pos:  rl.NewVector3(W/PowF(Phi, 1)/4, -H/2, -W/PowF(Phi, 1)/4),
-			Size: rl.NewVector3(W/PowF(Phi, 1)/2, floorThick, L/PowF(Phi, 1)/2),
+			Pos:  rl.NewVector3(arenaW/PowF(Phi, 1)/4, -arenaH/2, -arenaW/PowF(Phi, 1)/4),
+			Size: rl.NewVector3(arenaW/PowF(Phi, 1)/2, floorThick, arenaL/PowF(Phi, 1)/2),
 		},
 		{
-			Pos:  rl.NewVector3(W/PowF(Phi, 1)/4, -H/2, W/PowF(Phi, 1)/4),
-			Size: rl.NewVector3(W/PowF(Phi, 1)/2, floorThick, L/PowF(Phi, 1)/2),
+			Pos:  rl.NewVector3(arenaW/PowF(Phi, 1)/4, -arenaH/2, arenaW/PowF(Phi, 1)/4),
+			Size: rl.NewVector3(arenaW/PowF(Phi, 1)/2, floorThick, arenaL/PowF(Phi, 1)/2),
 		},
 		{
-			Pos:  rl.NewVector3(-W/PowF(Phi, 1)/4, -H/2, W/PowF(Phi, 1)/4),
-			Size: rl.NewVector3(W/PowF(Phi, 1)/2, floorThick, L/PowF(Phi, 1)/2),
+			Pos:  rl.NewVector3(-arenaW/PowF(Phi, 1)/4, -arenaH/2, arenaW/PowF(Phi, 1)/4),
+			Size: rl.NewVector3(arenaW/PowF(Phi, 1)/2, floorThick, arenaL/PowF(Phi, 1)/2),
 		},
 
 		/* L2: Next depth level floor splits */
 		{
-			Pos:  rl.NewVector3(-W*PowF(Phi, 0)/4, -H*PowF(Phi, 0), -W*PowF(Phi, 0)/4),
-			Size: rl.NewVector3(W*PowF(Phi, 0)/2, floorThick, L*PowF(Phi, 0)/2),
+			Pos:  rl.NewVector3(-arenaW*PowF(Phi, 0)/4, -arenaH*PowF(Phi, 0), -arenaW*PowF(Phi, 0)/4),
+			Size: rl.NewVector3(arenaW*PowF(Phi, 0)/2, floorThick, arenaL*PowF(Phi, 0)/2),
 		},
 		{
-			Pos:  rl.NewVector3(W*PowF(Phi, 0)/4, -H*PowF(Phi, 0), -W*PowF(Phi, 0)/4),
-			Size: rl.NewVector3(W*PowF(Phi, 0)/2, floorThick, L*PowF(Phi, 0)/2),
+			Pos:  rl.NewVector3(arenaW*PowF(Phi, 0)/4, -arenaH*PowF(Phi, 0), -arenaW*PowF(Phi, 0)/4),
+			Size: rl.NewVector3(arenaW*PowF(Phi, 0)/2, floorThick, arenaL*PowF(Phi, 0)/2),
 		},
 		{
-			Pos:  rl.NewVector3(W*PowF(Phi, 0)/4, -H*PowF(Phi, 0), W*PowF(Phi, 0)/4),
-			Size: rl.NewVector3(W*PowF(Phi, 0)/2, floorThick, L*PowF(Phi, 0)/2),
+			Pos:  rl.NewVector3(arenaW*PowF(Phi, 0)/4, -arenaH*PowF(Phi, 0), arenaW*PowF(Phi, 0)/4),
+			Size: rl.NewVector3(arenaW*PowF(Phi, 0)/2, floorThick, arenaL*PowF(Phi, 0)/2),
 		},
 		{
-			Pos:  rl.NewVector3(-W*PowF(Phi, 0)/4, -H*PowF(Phi, 0), W*PowF(Phi, 0)/4),
-			Size: rl.NewVector3(W*PowF(Phi, 0)/2, floorThick, L*PowF(Phi, 0)/2),
+			Pos:  rl.NewVector3(-arenaW*PowF(Phi, 0)/4, -arenaH*PowF(Phi, 0), arenaW*PowF(Phi, 0)/4),
+			Size: rl.NewVector3(arenaW*PowF(Phi, 0)/2, floorThick, arenaL*PowF(Phi, 0)/2),
 		},
 
 		/* L3: ... */
 		{
-			Pos:  rl.NewVector3(-W*PowF(Phi, 1)/4, -H*PowF(Phi, 1), -W*PowF(Phi, 1)/4),
-			Size: rl.NewVector3(W*PowF(Phi, 1)/2, floorThick, L*PowF(Phi, 1)/2),
+			Pos:  rl.NewVector3(-arenaW*PowF(Phi, 1)/4, -arenaH*PowF(Phi, 1), -arenaW*PowF(Phi, 1)/4),
+			Size: rl.NewVector3(arenaW*PowF(Phi, 1)/2, floorThick, arenaL*PowF(Phi, 1)/2),
 		},
 		{
-			Pos:  rl.NewVector3(W*PowF(Phi, 1)/4, -H*PowF(Phi, 1), -W*PowF(Phi, 1)/4),
-			Size: rl.NewVector3(W*PowF(Phi, 1)/2, floorThick, L*PowF(Phi, 1)/2),
+			Pos:  rl.NewVector3(arenaW*PowF(Phi, 1)/4, -arenaH*PowF(Phi, 1), -arenaW*PowF(Phi, 1)/4),
+			Size: rl.NewVector3(arenaW*PowF(Phi, 1)/2, floorThick, arenaL*PowF(Phi, 1)/2),
 		},
 		{
-			Pos:  rl.NewVector3(W*PowF(Phi, 1)/4, -H*PowF(Phi, 1), W*PowF(Phi, 1)/4),
-			Size: rl.NewVector3(W*PowF(Phi, 1)/2, floorThick, L*PowF(Phi, 1)/2),
+			Pos:  rl.NewVector3(arenaW*PowF(Phi, 1)/4, -arenaH*PowF(Phi, 1), arenaW*PowF(Phi, 1)/4),
+			Size: rl.NewVector3(arenaW*PowF(Phi, 1)/2, floorThick, arenaL*PowF(Phi, 1)/2),
 		},
 		{
-			Pos:  rl.NewVector3(-W*PowF(Phi, 1)/4, -H*PowF(Phi, 1), W*PowF(Phi, 1)/4),
-			Size: rl.NewVector3(W*PowF(Phi, 1)/2, floorThick, L*PowF(Phi, 1)/2),
+			Pos:  rl.NewVector3(-arenaW*PowF(Phi, 1)/4, -arenaH*PowF(Phi, 1), arenaW*PowF(Phi, 1)/4),
+			Size: rl.NewVector3(arenaW*PowF(Phi, 1)/2, floorThick, arenaL*PowF(Phi, 1)/2),
 		},
 
 		/* L4: .... */
 		{
-			Pos:  rl.NewVector3(-W*PowF(Phi, 2)/4, -H*PowF(Phi, 2), -W*PowF(Phi, 2)/4),
-			Size: rl.NewVector3(W*PowF(Phi, 2)/2, floorThick, L*PowF(Phi, 2)/2),
+			Pos:  rl.NewVector3(-arenaW*PowF(Phi, 2)/4, -arenaH*PowF(Phi, 2), -arenaW*PowF(Phi, 2)/4),
+			Size: rl.NewVector3(arenaW*PowF(Phi, 2)/2, floorThick, arenaL*PowF(Phi, 2)/2),
 		},
 		{
-			Pos:  rl.NewVector3(W*PowF(Phi, 2)/4, -H*PowF(Phi, 2), -W*PowF(Phi, 2)/4),
-			Size: rl.NewVector3(W*PowF(Phi, 2)/2, floorThick, L*PowF(Phi, 2)/2),
+			Pos:  rl.NewVector3(arenaW*PowF(Phi, 2)/4, -arenaH*PowF(Phi, 2), -arenaW*PowF(Phi, 2)/4),
+			Size: rl.NewVector3(arenaW*PowF(Phi, 2)/2, floorThick, arenaL*PowF(Phi, 2)/2),
 		},
 		{
-			Pos:  rl.NewVector3(W*PowF(Phi, 2)/4, -H*PowF(Phi, 2), W*PowF(Phi, 2)/4),
-			Size: rl.NewVector3(W*PowF(Phi, 2)/2, floorThick, L*PowF(Phi, 2)/2),
+			Pos:  rl.NewVector3(arenaW*PowF(Phi, 2)/4, -arenaH*PowF(Phi, 2), arenaW*PowF(Phi, 2)/4),
+			Size: rl.NewVector3(arenaW*PowF(Phi, 2)/2, floorThick, arenaL*PowF(Phi, 2)/2),
 		},
 		{
-			Pos:  rl.NewVector3(-W*PowF(Phi, 2)/4, -H*PowF(Phi, 2), W*PowF(Phi, 2)/4),
-			Size: rl.NewVector3(W*PowF(Phi, 2)/2, floorThick, L*PowF(Phi, 2)/2),
+			Pos:  rl.NewVector3(-arenaW*PowF(Phi, 2)/4, -arenaH*PowF(Phi, 2), arenaW*PowF(Phi, 2)/4),
+			Size: rl.NewVector3(arenaW*PowF(Phi, 2)/2, floorThick, arenaL*PowF(Phi, 2)/2),
 		},
 
 		/* L5: ..... {Pos: rl.NewVector3(0, -H*PowF(Phi, 3), 0), Size: rl.NewVector3(W*PowF(Phi, 3), floorThick, L*PowF(Phi, 3))} */
 		{
-			Pos:  rl.NewVector3(-W*PowF(Phi, 3)/4, -H*PowF(Phi, 3), -W*PowF(Phi, 3)/4),
-			Size: rl.NewVector3(W*PowF(Phi, 3)/2, floorThick, L*PowF(Phi, 3)/2),
+			Pos:  rl.NewVector3(-arenaW*PowF(Phi, 3)/4, -arenaH*PowF(Phi, 3), -arenaW*PowF(Phi, 3)/4),
+			Size: rl.NewVector3(arenaW*PowF(Phi, 3)/2, floorThick, arenaL*PowF(Phi, 3)/2),
 		},
 		{
-			Pos:  rl.NewVector3(W*PowF(Phi, 3)/4, -H*PowF(Phi, 3), -W*PowF(Phi, 3)/4),
-			Size: rl.NewVector3(W*PowF(Phi, 3)/2, floorThick, L*PowF(Phi, 3)/2),
+			Pos:  rl.NewVector3(arenaW*PowF(Phi, 3)/4, -arenaH*PowF(Phi, 3), -arenaW*PowF(Phi, 3)/4),
+			Size: rl.NewVector3(arenaW*PowF(Phi, 3)/2, floorThick, arenaL*PowF(Phi, 3)/2),
 		},
 		{
-			Pos:  rl.NewVector3(W*PowF(Phi, 3)/4, -H*PowF(Phi, 3), W*PowF(Phi, 3)/4),
-			Size: rl.NewVector3(W*PowF(Phi, 3)/2, floorThick, L*PowF(Phi, 3)/2),
+			Pos:  rl.NewVector3(arenaW*PowF(Phi, 3)/4, -arenaH*PowF(Phi, 3), arenaW*PowF(Phi, 3)/4),
+			Size: rl.NewVector3(arenaW*PowF(Phi, 3)/2, floorThick, arenaL*PowF(Phi, 3)/2),
 		},
 		{
-			Pos:  rl.NewVector3(-W*PowF(Phi, 3)/4, -H*PowF(Phi, 3), W*PowF(Phi, 3)/4),
-			Size: rl.NewVector3(W*PowF(Phi, 3)/2, floorThick, L*PowF(Phi, 3)/2),
+			Pos:  rl.NewVector3(-arenaW*PowF(Phi, 3)/4, -arenaH*PowF(Phi, 3), arenaW*PowF(Phi, 3)/4),
+			Size: rl.NewVector3(arenaW*PowF(Phi, 3)/2, floorThick, arenaL*PowF(Phi, 3)/2),
 		},
 
 		/* L6: ...... */
 		{
-			Pos:  rl.NewVector3(-W*PowF(Phi, 4)/4, -H*PowF(Phi, 4), -W*PowF(Phi, 4)/4),
-			Size: rl.NewVector3(W*PowF(Phi, 4)/2, floorThick, L*PowF(Phi, 4)/2),
+			Pos:  rl.NewVector3(-arenaW*PowF(Phi, 4)/4, -arenaH*PowF(Phi, 4), -arenaW*PowF(Phi, 4)/4),
+			Size: rl.NewVector3(arenaW*PowF(Phi, 4)/2, floorThick, arenaL*PowF(Phi, 4)/2),
 		},
 		{
-			Pos:  rl.NewVector3(W*PowF(Phi, 4)/4, -H*PowF(Phi, 4), -W*PowF(Phi, 4)/4),
-			Size: rl.NewVector3(W*PowF(Phi, 4)/2, floorThick, L*PowF(Phi, 4)/2),
+			Pos:  rl.NewVector3(arenaW*PowF(Phi, 4)/4, -arenaH*PowF(Phi, 4), -arenaW*PowF(Phi, 4)/4),
+			Size: rl.NewVector3(arenaW*PowF(Phi, 4)/2, floorThick, arenaL*PowF(Phi, 4)/2),
 		},
 		{
-			Pos:  rl.NewVector3(W*PowF(Phi, 4)/4, -H*PowF(Phi, 4), W*PowF(Phi, 4)/4),
-			Size: rl.NewVector3(W*PowF(Phi, 4)/2, floorThick, L*PowF(Phi, 4)/2),
+			Pos:  rl.NewVector3(arenaW*PowF(Phi, 4)/4, -arenaH*PowF(Phi, 4), arenaW*PowF(Phi, 4)/4),
+			Size: rl.NewVector3(arenaW*PowF(Phi, 4)/2, floorThick, arenaL*PowF(Phi, 4)/2),
 		},
 		{
-			Pos:  rl.NewVector3(-W*PowF(Phi, 4)/4, -H*PowF(Phi, 4), W*PowF(Phi, 4)/4),
-			Size: rl.NewVector3(W*PowF(Phi, 4)/2, floorThick, L*PowF(Phi, 4)/2),
+			Pos:  rl.NewVector3(-arenaW*PowF(Phi, 4)/4, -arenaH*PowF(Phi, 4), arenaW*PowF(Phi, 4)/4),
+			Size: rl.NewVector3(arenaW*PowF(Phi, 4)/2, floorThick, arenaL*PowF(Phi, 4)/2),
 		},
 	} {
 		setupFloorResource(data.Pos, data.Size)
 	}
 	// Setup moving platforms
+	// NOTE: Easier to move if they are parallel and in similar position
+	// directions... laid together.. just varied y axis
 	const platformThick = 1.0
-	const _maxPlatformMoveAmplitude = float32(W / 2) // Distance traveled
+	const _maxPlatformMoveAmplitude = float32(arenaW / 2) // Distance traveled
 	setupPlatformResource := func(pos, size rl.Vector3, movementNormal rl.Vector3, movementAmplitude float32) {
 		if !IsUnitVec3(movementNormal) {
 			panic(fmt.Sprintf("Invalid unit vector: movementNormal: %+v", movementNormal))
@@ -377,81 +381,43 @@ func main() {
 		MovementAmplitude float32
 	}{
 		{
-			Entity:            Entity{Pos: rl.NewVector3(0, H, 0), Size: rl.NewVector3(8, platformThick, 8)},
-			MovementNormal:    rl.NewVector3(0, 0, 0),
-			MovementAmplitude: _maxPlatformMoveAmplitude,
-		}, /* Easter egg */
-
-		{
 			Entity: Entity{
-				Pos:  rl.NewVector3(-W*PowF(Phi, 1), -H*PowF(Phi, 1), -L*PowF(Phi, 1)),
-				Size: rl.NewVector3(W*PowF(Phi, 1), floorThick, L*PowF(Phi, 1)),
+				Pos:  rl.NewVector3(-arenaW*PowF(Phi, 0), -arenaH*PowF(Phi, 0), -arenaL*PowF(Phi, 0)),
+				Size: rl.NewVector3(arenaW*PowF(Phi, 0), floorThick, arenaL*PowF(Phi, 0)),
 			},
 			MovementNormal:    rl.NewVector3(0, 1, 0),
-			MovementAmplitude: -H * PowF(Phi, 1+1),
+			MovementAmplitude: -arenaH * PowF(Phi, 0+1),
 		},
 		{
 			Entity: Entity{
-				Pos:  rl.NewVector3(-W*PowF(Phi, 2), -H*PowF(Phi, 2), -L*PowF(Phi, 2)),
-				Size: rl.NewVector3(W*PowF(Phi, 2), floorThick, L*PowF(Phi, 2)),
+				Pos:  rl.NewVector3(-arenaW*PowF(Phi, 1), -arenaH*PowF(Phi, 1), -arenaL*PowF(Phi, 1)),
+				Size: rl.NewVector3(arenaW*PowF(Phi, 1), floorThick, arenaL*PowF(Phi, 1)),
 			},
 			MovementNormal:    rl.NewVector3(0, 1, 0),
-			MovementAmplitude: -H * PowF(Phi, 2+1),
+			MovementAmplitude: -arenaH * PowF(Phi, 1+1),
 		},
 		{
 			Entity: Entity{
-				Pos:  rl.NewVector3(-W*PowF(Phi, 3), -H*PowF(Phi, 3), -L*PowF(Phi, 3)),
-				Size: rl.NewVector3(W*PowF(Phi, 3), floorThick, L*PowF(Phi, 3)),
+				Pos:  rl.NewVector3(-arenaW*PowF(Phi, 2), -arenaH*PowF(Phi, 2), -arenaL*PowF(Phi, 2)),
+				Size: rl.NewVector3(arenaW*PowF(Phi, 2), floorThick, arenaL*PowF(Phi, 2)),
 			},
 			MovementNormal:    rl.NewVector3(0, 1, 0),
-			MovementAmplitude: -H * PowF(Phi, 3+1),
-		},
-
-		/* {
-			Entity: Entity{
-				Pos:  rl.NewVector3(-W*PowF(Phi, 4), -H*PowF(Phi, 4), -L*PowF(Phi, 4)),
-				Size: rl.NewVector3(W*PowF(Phi, 4), floorThick, L*PowF(Phi, 4)),
-			},
-			MovementNormal:    rl.NewVector3(0, 1, 0),
-			MovementAmplitude: -H * PowF(Phi, 4+1),
+			MovementAmplitude: -arenaH * PowF(Phi, 2+1),
 		},
 		{
 			Entity: Entity{
-				Pos:  rl.NewVector3(-W*PowF(Phi, 5), -H*PowF(Phi, 5), -L*PowF(Phi, 5)),
-				Size: rl.NewVector3(W*PowF(Phi, 5), floorThick, L*PowF(Phi, 5)),
+				Pos:  rl.NewVector3(-arenaW*PowF(Phi, 3), -arenaH*PowF(Phi, 3), -arenaL*PowF(Phi, 3)),
+				Size: rl.NewVector3(arenaW*PowF(Phi, 3), floorThick, arenaL*PowF(Phi, 3)),
 			},
 			MovementNormal:    rl.NewVector3(0, 1, 0),
-			MovementAmplitude: -H * PowF(Phi, 5+1),
-		}, */
-
-		// {
-		// 	Entity: Entity{
-		// 		Pos:  rl.NewVector3(-W*PowF(Phi, 6), -H*PowF(Phi, 6), -L*PowF(Phi, 6)),
-		// 		Size: rl.NewVector3(W*PowF(Phi, 6), floorThick, L*PowF(Phi, 6)),
-		// 	},
-		// 	MovementNormal:    rl.NewVector3(0, 1, 0),
-		// 	MovementAmplitude: -H * PowF(Phi, 6+1),
-		// },
-		// {
-		// 	Entity: Entity{
-		// 		Pos:  rl.NewVector3(-W*PowF(Phi, 7), -H*PowF(Phi, 7), -L*PowF(Phi, 7)),
-		// 		Size: rl.NewVector3(W*PowF(Phi, 7), floorThick, L*PowF(Phi, 7)),
-		// 	},
-		// 	MovementNormal:    rl.NewVector3(0, 1, 0),
-		// 	MovementAmplitude: -H * PowF(Phi, 7+1),
-		// },
+			MovementAmplitude: -arenaH * PowF(Phi, 3+1),
+		},
 	} {
 		setupPlatformResource(data.Entity.Pos, data.Entity.Size, data.MovementNormal, data.MovementAmplitude)
 	}
 	for _, data := range []Entity{
-		{
-			Pos:  rl.NewVector3(-4, 1, 0),
-			Size: rl.NewVector3(2, 2, 2),
-		},
-		// {
-		// 	Pos:  rl.NewVector3(W/4, -H/2, -L*2),
-		// 	Size: rl.NewVector3(2, 2, 2),
-		// },
+		{rl.NewVector3(-4, -arenaH*2, 0), rl.NewVector3(2, 2, 2)},
+		{rl.NewVector3(arenaW/4, -arenaH*8, -arenaL*2), rl.NewVector3(2, 2, 2)},
 	} {
 		resource.HealBoxPositions[resource.HealBoxCount] = data.Pos
 		resource.HealBoxSizes[resource.HealBoxCount] = data.Size
@@ -459,14 +425,8 @@ func main() {
 		resource.HealBoxCount++
 	}
 	for _, data := range []Entity{
-		{
-			Pos:  rl.NewVector3(4.0, 0.0, 0.0),
-			Size: rl.NewVector3(1.5, 1.5, 1.5),
-		},
-		// {
-		// 	Pos:  rl.NewVector3(0.0, -H/4, -L),
-		// 	Size: rl.NewVector3(3.0, 3.0, 3.0),
-		// },
+		{rl.NewVector3(4.0, -arenaH*2, 0.0), rl.NewVector3(1.5, 1.5, 1.5)},
+		{rl.NewVector3(0.0, -arenaH*5, -arenaL), rl.NewVector3(1.0, 1.0, 1.0)},
 	} {
 		resource.DamageSpherePositions[resource.DamageSphereCount] = data.Pos
 		resource.DamageSphereSizes[resource.DamageSphereCount] = data.Size.Y // Radius
@@ -474,14 +434,8 @@ func main() {
 		resource.DamageSphereCount++
 	}
 	for _, data := range []Entity{
-		{
-			Pos:  rl.NewVector3(0.0, playerStartPosY+(floorThick/2), 5.0),
-			Size: rl.NewVector3(2.0, 0.25, 2.0),
-		},
-		{
-			Pos:  rl.NewVector3(0.0, 1.0, -9.0),
-			Size: rl.NewVector3(2.0, 0.25, 2.0),
-		},
+		{rl.NewVector3(0.0, playerStartPosY+(floorThick/2), 5.0), rl.NewVector3(2.0, 0.25, 2.0)},
+		{rl.NewVector3(0.0, 1.0, -9.0), rl.NewVector3(2.0, 0.25, 2.0)},
 	} {
 		resource.TrampolineBoxPositions[resource.TrampolineBoxCount] = data.Pos
 		resource.TrampolineBoxSizes[resource.TrampolineBoxCount] = data.Size
@@ -524,16 +478,16 @@ func main() {
 		playerMovementThisFrame := rl.Vector3{}
 		playerCollisionsThisFrame := rl.Vector4{}
 
-		if rl.IsKeyDown(rl.KeyD) || rl.IsKeyDown(rl.KeyRight) || rl.IsKeyDown(rl.KeyL) {
+		if rl.IsKeyDown(rl.KeyD) || /* rl.IsKeyDown(rl.KeyRight) || */ rl.IsKeyDown(rl.KeyL) {
 			playerMovementThisFrame.X += 1 // Right
 		}
-		if rl.IsKeyDown(rl.KeyA) || rl.IsKeyDown(rl.KeyLeft) || rl.IsKeyDown(rl.KeyJ) {
+		if rl.IsKeyDown(rl.KeyA) || /* rl.IsKeyDown(rl.KeyLeft) ||  */ rl.IsKeyDown(rl.KeyJ) {
 			playerMovementThisFrame.X -= 1 // Left
 		}
-		if rl.IsKeyDown(rl.KeyS) || rl.IsKeyDown(rl.KeyDown) || rl.IsKeyDown(rl.KeyK) {
+		if rl.IsKeyDown(rl.KeyS) || /* rl.IsKeyDown(rl.KeyDown) || */ rl.IsKeyDown(rl.KeyK) {
 			playerMovementThisFrame.Z += 1 // Backward
 		}
-		if rl.IsKeyDown(rl.KeyW) || rl.IsKeyDown(rl.KeyUp) || rl.IsKeyDown(rl.KeyI) {
+		if rl.IsKeyDown(rl.KeyW) || /* rl.IsKeyDown(rl.KeyUp) ||  */ rl.IsKeyDown(rl.KeyI) {
 			playerMovementThisFrame.Z -= 1 // Forward
 		}
 		if rl.IsKeyDown(rl.KeyLeftShift) {
@@ -587,37 +541,8 @@ func main() {
 		// camScrollEase *= 2.8 // Smooth (trying this out)
 		camScrollEase = MinF(camScrollEase, smooth)
 		camScrollEase *= 2
-		if true {
-			if isQuickMovementYAxis := false; isQuickMovementYAxis {
-				camera.Target.X = rl.Lerp(oldCamTarget.X, playerPosition.X, camScrollEase)
-				camera.Target.Y = rl.Lerp(oldCamTarget.Y, playerPosition.Y, smooth*2)
-				camera.Target.Z = rl.Lerp(oldCamTarget.Z, playerPosition.Z, camScrollEase)
-				camera.Position.X = rl.Lerp(camera.Position.X, camera.Target.X+defaultCameraPositionTargetVector.X, 0.5+camScrollEase)
-				camera.Position.Y = rl.Lerp(camera.Position.Y, camera.Target.Y+defaultCameraPositionTargetVector.Y, 0.8+camScrollEase/2)
-				camera.Position.Z = rl.Lerp(camera.Position.Z, camera.Target.Z+defaultCameraPositionTargetVector.Z, 0.5+camScrollEase)
-			} else {
-				camera.Target = rl.Vector3Lerp(oldCamTarget, playerPosition, camScrollEase)
-				if canUseMouseToLook := true; canUseMouseToLook {
-					rl.UpdateCamera(&camera, rl.CameraThirdPerson)
-					// rl.UpdateCamera(&camera, rl.CameraOrbital)
-				} else {
-					if isDiagonal := false; isDiagonal {
-						camera.Position = rl.Vector3AddValue(camera.Target, defaultCameraPositionTargetDistance)
-					} else {
-						camera.Position = rl.Vector3Add(camera.Target, defaultCameraPositionTargetVector)
-					}
-				}
-				// ray:=rl.NewRayCollision()
-
-			}
-		} else {
-			if rl.IsKeyDown(rl.KeyQ) {
-				rl.CameraYaw(&camera, -rl.Deg2rad*2, 1)
-			}
-			if rl.IsKeyDown(rl.KeyE) {
-				rl.CameraYaw(&camera, rl.Deg2rad*2, 1)
-			}
-		}
+		camera.Target = rl.Vector3Lerp(oldCamTarget, playerPosition, camScrollEase)
+		rl.UpdateCamera(&camera, rl.CameraThirdPerson)
 
 		// rl.UpdateCamera(&camera, rl.CameraFirstPerson)
 		// playerPosition = camera.Target
@@ -878,9 +803,34 @@ func main() {
 		cameraPlayerDotProductRadian := math.Acos(float64(cameraPlayerDotProduct))
 		cameraPlayerCrossProduct = rl.Vector3CrossProduct(rl.Vector3Normalize(playerPosition), rl.Vector3Normalize(camera.Position))
 		cameraPlayerDotProductRadianDegree := cameraPlayerDotProductRadian * rl.Rad2deg
+		_ = cameraPlayerDotProductRadianDegree
 
 		playerCameraRay = rl.NewRay(playerPosition, cameraPlayerCrossProduct)
 		playerCameraRay = rl.GetScreenToWorldRay(rl.GetWorldToScreen(playerPosition, camera), camera)
+
+		if false {
+			// Chaos rotate on y axis... spiral down
+			// playerPosition = rl.Vector3RotateByAxisAngle(playerPosition, rl.NewVector3(playerPosition.X, 0, playerPosition.Z), dt*movementMagnitude)
+
+			playerPosition = rl.Vector3Lerp(
+				playerPosition,
+				rl.Vector3RotateByAxisAngle(
+					playerPosition,
+					rl.NewVector3(oldPlayerPos.X, 0, oldPlayerPos.Z),
+					dt*movementMagnitude,
+				),
+				1.0,
+			)
+			playerPosition = rl.Vector3Lerp(
+				playerPosition,
+				rl.Vector3RotateByAxisAngle(
+					playerPosition,
+					rl.NewVector3(oldPlayerPos.X+playerSize.X/2, oldPlayerPos.Y+playerSize.Y/2, oldPlayerPos.Z+playerSize.Z/2),
+					dt*movementMagnitude,
+				),
+				1.0,
+			)
+		}
 
 		// Increment global frames counter tracker
 		framesCounter++
@@ -889,7 +839,7 @@ func main() {
 
 		rl.BeginDrawing()
 
-		rl.ClearBackground(rl.Gray)
+		rl.ClearBackground(rl.RayWhite)
 
 		rl.BeginMode3D(camera)
 
@@ -897,18 +847,20 @@ func main() {
 		for i := range resource.FloorCount {
 			col := rl.ColorLerp(rl.Fade(rl.RayWhite, PowF(shieldProgress, 0.33)), rl.White, SqrtF(shieldProgress))
 			rl.DrawModel(resource.FloorModels[i], resource.FloorPositions[i], 1.0, col)
-			rl.DrawBoundingBox(resource.FloorBoundingBoxes[i], rl.Fade(rl.Black, 0.3))
+			rl.DrawBoundingBox(resource.FloorBoundingBoxes[i], rl.Fade(rl.LightGray, 0.3))
 		}
 		for i := range resource.PlatformCount {
 			rl.DrawModel(resource.PlatformModels[i], resource.PlatformPositions[i], 1.0, rl.Black) // Platform
-			rl.DrawBoundingBox(resource.PlatformBoundingBoxes[i], rl.LightGray)                    // Platform outline
-			magnitude := resource.PlatformMovementAmplitudes[i]
-			amplitude := rl.NewVector3(magnitude, magnitude, magnitude)
-			normalAxis := rl.Vector3Multiply(resource.PlatformMovementNormals[i], amplitude)
-			normalAxisSize := rl.Vector3AddValue(normalAxis, 0.125*0.5)
-			rl.DrawCubeV(resource.PlatformDefaultPositions[i], normalAxisSize, rl.Fade(rl.White, 0.8)) // Reference (y axis)
-			size := rl.Vector3Invert(rl.Vector3Add(resource.PlatformMovementNormals[i], Vector3One))   // [0 1 0] => [1 1 .5]
-			rl.DrawCubeV(resource.PlatformDefaultPositions[i], size, rl.Fade(rl.White, 0.8))           // Reference (midpoint plane trick)
+			rl.DrawBoundingBox(resource.PlatformBoundingBoxes[i], rl.DarkGray)                     // Platform outline
+			if false {
+				magnitude := resource.PlatformMovementAmplitudes[i]
+				amplitude := rl.NewVector3(magnitude, magnitude, magnitude)
+				normalAxis := rl.Vector3Multiply(resource.PlatformMovementNormals[i], amplitude)
+				normalAxisSize := rl.Vector3AddValue(normalAxis, 0.125*0.5)
+				rl.DrawCubeV(resource.PlatformDefaultPositions[i], normalAxisSize, rl.Fade(rl.White, 0.8)) // Reference (y axis)
+				size := rl.Vector3Invert(rl.Vector3Add(resource.PlatformMovementNormals[i], Vector3One))   // [0 1 0] => [1 1 .5]
+				rl.DrawCubeV(resource.PlatformDefaultPositions[i], size, rl.Fade(rl.White, 0.8))           // Reference (midpoint plane trick)
+			}
 		}
 		for i := range resource.DamageSphereCount {
 			rl.DrawSphere(resource.DamageSpherePositions[i], resource.DamageSphereSizes[i], rl.Gold)
@@ -924,97 +876,81 @@ func main() {
 		}
 
 		// Draw player
-		playerRadius := playerSize.X / 2
-		playerStartPos := rl.NewVector3(playerPosition.X, playerPosition.Y-playerSize.Y/2+playerRadius, playerPosition.Z)
-		playerEndPos := rl.NewVector3(playerPosition.X, playerPosition.Y+playerSize.Y/2-playerRadius, playerPosition.Z)
-		rl.DrawCapsule(playerStartPos, playerEndPos, playerRadius, 16, 16, playerColor)
-		rl.DrawCapsuleWires(playerStartPos, playerEndPos, playerRadius, 4, 6, rl.ColorLerp(playerColor, rl.Fade(rl.DarkGray, 0.8), 0.5))
-		if isDebug := false; isDebug {
-			rl.DrawCubeV(playerPosition, playerSize, playerColor)
-			rl.DrawCubeWiresV(playerPosition, playerSize, playerColor)
-		}
-		if true {
-			// rl.DrawModelEx(playerModel, playerEndPos, playerRotationNormal, rl.QuaternionLength(playerRotation)*0 + dt+80*rl.Deg2rad, rl.NewVector3(2,2,2), rl.SkyBlue)
-			rl.DrawModelWiresEx(
-				playerModel,
-				playerPosition,
-				playerRotationNormal,
-				rl.QuaternionLength(playerRotation)*0+dt+80*rl.Deg2rad,
-				rl.NewVector3(2, 2, 2),
-				rl.SkyBlue,
-			)
-			rl.DrawModelWiresEx(
-				playerModel,
-				rl.Vector3RotateByAxisAngle(playerPosition, playerRotationNormal, dt*100),
-				playerRotationNormal,
-				rl.QuaternionLength(playerRotation)*0+dt+80*rl.Deg2rad,
-				rl.NewVector3(2, 2, 2),
-				rl.SkyBlue,
-			)
-
-		}
-
-		if !rl.IsCursorHidden() && rl.IsCursorOnScreen() {
-			pos := rl.Vector3{X: rl.GetMouseDelta().X, Y: 0., Z: rl.GetMouseDelta().Y}
-			pos = mouseRay.Position
-			rayDir := mouseRay.Direction // Ray direction
-			pos = rl.Vector3CrossProduct(pos, rayDir)
-			rl.DrawRay(mouseRay, rl.White)
-			rl.DrawModel(resource.FloorModels[0], pos, 1.0, rl.White)
-		}
-
-		// HOW TO FIND ANGLE?
 		{
-			dirUnitVector := rl.Vector3Normalize(rl.Vector3CrossProduct(camera.Position, camera.Target))
-			rl.DrawLine3D(camera.Target, dirUnitVector, rl.Gold)
+			playerRadius := playerSize.X / 2
+			playerStartPos := rl.NewVector3(playerPosition.X, playerPosition.Y-playerSize.Y/2+playerRadius, playerPosition.Z)
+			playerEndPos := rl.NewVector3(playerPosition.X, playerPosition.Y+playerSize.Y/2-playerRadius, playerPosition.Z)
+			rl.DrawCapsule(playerStartPos, playerEndPos, playerRadius, 4, 4, playerColor)
+			rl.DrawCapsuleWires(playerStartPos, playerEndPos, playerRadius, 4*2, 6*2, rl.ColorLerp(playerColor, rl.Fade(rl.DarkGray, 0.8), 0.5))
+			if isDebug := false; isDebug {
+				rl.DrawCubeV(playerPosition, playerSize, playerColor)
+				rl.DrawCubeWiresV(playerPosition, playerSize, playerColor)
+			}
+			if isDebug := false; isDebug {
+				oldPlayerStartPos := rl.NewVector3(oldPlayerPos.X, oldPlayerPos.Y-playerSize.Y/2+playerRadius, oldPlayerPos.Z)
+				oldPlayerEndPos := rl.NewVector3(oldPlayerPos.X, oldPlayerPos.Y+playerSize.Y/2-playerRadius, oldPlayerPos.Z)
+				rl.DrawCapsule(oldPlayerStartPos, oldPlayerEndPos, playerRadius, 16, 16, rl.DarkGray)
+				rl.DrawCapsuleWires(oldPlayerStartPos, oldPlayerEndPos, playerRadius, 4, 6, rl.ColorLerp(playerColor, rl.Fade(rl.DarkGray, 0.8), 0.5))
+			}
+			if false {
+				if false {
+					rl.DrawModelWiresEx(playerModel, playerPosition, playerRotationNormal, rl.QuaternionLength(playerRotation)*0+dt+80*rl.Deg2rad, rl.NewVector3(2, 2, 2), rl.Black)
+				}
+				rl.DrawModelEx(playerModel,
+					rl.Vector3RotateByAxisAngle(playerPosition, playerRotationNormal, dt*100),
+					playerRotationNormal,
+					rl.QuaternionLength(playerRotation)*0+dt+80*rl.Deg2rad,
+					rl.NewVector3(2, 2, 2), rl.Black)
+			}
+			if false {
+				if !rl.IsCursorHidden() && rl.IsCursorOnScreen() {
+					pos := rl.Vector3{X: rl.GetMouseDelta().X, Y: 0., Z: rl.GetMouseDelta().Y}
+					pos = mouseRay.Position
+					rayDir := mouseRay.Direction // Ray direction
+					pos = rl.Vector3CrossProduct(pos, rayDir)
+					rl.DrawRay(mouseRay, rl.White)
+					rl.DrawModel(resource.FloorModels[0], pos, 1.0, rl.White)
+				}
+			}
+			if false { // TODO: HOW TO FIND ANGLE?
+				dirUnitVector := rl.Vector3Normalize(rl.Vector3CrossProduct(camera.Position, camera.Target))
+				rl.DrawLine3D(camera.Target, dirUnitVector, rl.Gold)
+			}
 		}
 
 		if false {
-			rl.DrawGrid(int32(MinF(W, L)*InvMathPhi), 1)
+			rl.DrawGrid(int32(MinF(arenaW, arenaL)*InvMathPhi), 1)
 		}
 
-		// Draw XYZ origin
-		DrawXYZOrbitAxisV(Vector3Zero, 12.0, 0.5, 0.3)                 // Level Center
+		// Draw orbital XYZ origins
+		DrawXYZOrbitAxisV(Vector3Zero, 12.0, 0.05, 0.3)                // Level Center
 		DrawXYZOrbitAxisV(playerPosition, playerSize.Y*Phi, 0.05, 0.3) // Player Center
-		if true {
-			for i := range MaxResourceSOACapacity {
+		for i := range MaxResourceSOACapacity {
+			if false {
 				if resource.PlatformAtIsActive[i] {
-					DrawXYZOrbitAxisV(resource.PlatformPositions[i], rl.Vector3Length(resource.PlatformSizes[i]), 0.05, 0.3)
-					DrawXYZOrbitAxisV(resource.PlatformDefaultPositions[i], rl.Vector3Length(resource.PlatformSizes[i]), 0.05, 0.3/2)
+					DrawXYZOrbitAxisV(resource.PlatformPositions[i], rl.Vector3Length(resource.PlatformSizes[i]), 0.05, 0.5)
+					DrawXYZOrbitAxisV(resource.PlatformDefaultPositions[i], rl.Vector3Length(resource.PlatformSizes[i]), 0.05, 0.5/2)
 				}
 				if resource.FloorAtIsActive[i] {
-					DrawXYZOrbitAxisV(resource.FloorPositions[i], rl.Vector3Length(resource.FloorSizes[i]), 0.05, 0.3)
+					DrawXYZOrbitAxisV(resource.FloorPositions[i], rl.Vector3Length(resource.FloorSizes[i]), 0.05, 0.5)
 				}
 				if resource.HealBoxAtIsActive[i] {
-					DrawXYZOrbitAxisV(resource.HealBoxPositions[i], rl.Vector3Length(resource.HealBoxSizes[i]), 0.05, 0.3)
+					DrawXYZOrbitAxisV(resource.HealBoxPositions[i], rl.Vector3Length(resource.HealBoxSizes[i]), 0.05, 0.5)
 				}
 				if resource.DamageSphereAtIsActive[i] {
-					DrawXYZOrbitAxisV(resource.DamageSpherePositions[i], resource.DamageSphereSizes[i]*2.0, 0.05, 0.3)
+					DrawXYZOrbitAxisV(resource.DamageSpherePositions[i], resource.DamageSphereSizes[i]*2.0, 0.05, 0.5)
 				}
 				if resource.TrampolineBoxAtIsActive[i] {
-					DrawXYZOrbitAxisV(resource.TrampolineBoxPositions[i], rl.Vector3Length(resource.TrampolineBoxSizes[i]), 0.05, 0.3)
+					DrawXYZOrbitAxisV(resource.TrampolineBoxPositions[i], rl.Vector3Length(resource.TrampolineBoxSizes[i]), 0.05, 0.5)
 				}
 			}
 		}
 
 		// DEBUG
-		{
+		if false {
 			rl.DrawRay(mouseRay, rl.Gold)
 			rl.DrawCubeV(mouseRay.Position, rl.Vector3One(), rl.Gold)
-
-			// projectDir := float32(cameraPlayerDotProductRadian) * 5
-			// playerDirVector3 := rl.Vector3Multiply(cameraPlayerCrossProduct, rl.NewVector3(projectDir, projectDir, projectDir))
-			// rl.DrawSphere(rl.Vector3Add(playerPosition, playerDirVector3), 0.5, rl.Orange)
-			// rl.DrawSphere(rl.Vector3Add(playerPosition, cameraPlayerCrossProduct), 0.5, rl.Purple)
-			// rl.DrawSphere(rl.Vector3AddValue(playerPosition, cameraPlayerDotProduct), 0.5, rl.Pink)
-
-			rl.DrawCapsuleWires(playerPosition, rl.Vector3Lerp(camera.Position, playerPosition, 0.5), 0.25, 4, 4, rl.Fade(rl.SkyBlue, .3))
-			// rl.DrawRay(playerCameraRay, rl.Blue)
-			// rl.DrawLine3D(Vector3Zero, playerCameraRay.Position, rl.Blue)
-			// rl.DrawCapsule(rl.Vector3Scale(playerCameraRay.Position, 0.5), Vector3One, 0.5, 8, 8, rl.Fade(rl.SkyBlue, 0.3))
-			// rl.DrawCapsule(rl.Vector3Scale(playerCameraRay.Position, 0.5), Vector3One, 0.025, 8, 8, rl.SkyBlue)
-			// rl.DrawCapsuleWires(rl.Vector3Scale(playerCameraRay.Position, 0.5), rl.Vector3Scale(camera.Position, 0.5), 0.025, 8, 8, rl.SkyBlue)
-
+			rl.DrawCapsuleWires(playerPosition, rl.Vector3Lerp(camera.Position, playerPosition, 0.5), 0.125, 4, 4, rl.Fade(rl.SkyBlue, .3))
 			if playerCameraRayCollision.Hit {
 				rl.DrawCubeV(playerCameraRay.Position, rl.Vector3One(), rl.SkyBlue)
 			}
@@ -1038,7 +974,7 @@ func main() {
 		rl.DrawRectangle(10, 20+20+20, 200, 20, rl.Fade(rl.Black, 0.9))
 		rl.DrawRectangleV(rl.Vector2{X: 10, Y: 20 + 20 + 20}, rl.Vector2{X: shieldProgress * 200, Y: 20}, rl.DarkGray)
 		rl.DrawText("Depth", 10+5, 21+20+20, 20, rl.White)
-		text = fmt.Sprintf("%.0f", playerEndPos.Y)
+		text = fmt.Sprintf("%.0f", playerPosition.Y)
 		rl.DrawText(text, 200-rl.MeasureText(text, 10)*2/3, 20+20+20+5*2, 10, rl.White)
 
 		rl.DrawFPS(10, int32(rl.GetScreenHeight())-25)
@@ -1056,30 +992,23 @@ func main() {
 			defaultCameraPosition, defaultCameraTarget, defaultCameraPositionTargetDistance,
 			mousePos,
 		)
+
 		debugWidth := rl.MeasureText(text, 10)
 		debugXPos := int32(rl.GetScreenWidth()) - 10 - debugWidth
 		rl.DrawRectangle(debugXPos-5, 10-5, debugWidth+5*2, debugWidth*2/3, rl.Fade(rl.Blue, 0.3))
-		rl.DrawText(text, debugXPos, 10, 10, rl.DarkGray)
-
-		{
-			rl.DrawText(fmt.Sprintf("cross: %.2f\n"+"degree: %.2f\n", cameraPlayerCrossProduct, cameraPlayerDotProductRadianDegree), 200, 200, 10, rl.Green)
-		}
+		rl.DrawText(text, debugXPos, 10, 10, rl.White)
 
 		rl.EndDrawing()
 	}
 
 	if false {
-		jsonData, err := json.Marshal(resource) // jsonData, err := json.MarshalIndent(resource, "", " ") // Debug
+		jsonData, err := json.Marshal(resource)
 		if err != nil {
 			slog.Error(err.Error())
 		}
-		if true {
-			fmt.Printf("jsonData: %+s\n", jsonData)
-		}
-		if true {
-			if err := os.WriteFile("resource_assets.json", jsonData, 0644); err != nil {
-				slog.Error(err.Error())
-			}
+		err = os.WriteFile("resource_assets.json", jsonData, 0644)
+		if err != nil {
+			slog.Error(err.Error())
 		}
 	}
 
