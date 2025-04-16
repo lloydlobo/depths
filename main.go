@@ -3,20 +3,30 @@ package main
 import (
 	"cmp"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image/color"
+	"io"
+	"log"
 	"log/slog"
 	"math"
 	"os"
 
 	"github.com/gen2brain/raylib-go/easings"
 	rl "github.com/gen2brain/raylib-go/raylib"
+
+	"example/depths/internal/storage"
 )
 
 // Checklist
 //   - Ensure on fullscreen toggle, the proportion stays same, and the world is
 //     scaled by Raylib 3d camera mode
 func main() {
+	run()
+	if true {
+		os.Exit(0)
+	}
+
 	fps := int32(60)
 	screenWidth := int32(800)
 	screenHeight := int32(450)
@@ -35,9 +45,9 @@ func main() {
 		playerSizeX      = 1.0
 		playerSizeY      = 2.0
 		playerSizeZ      = 1.0
-		arenaW           = float32(playerSizeY * 4)       // X
-		arenaL           = float32(playerSizeY * 4)       // Z
-		arenaH           = float32(playerSizeY * 4 * Phi) // Y (For reference of screen)
+		arenaW           = float32(playerSizeY * 2)       // X
+		arenaL           = float32(playerSizeY * 2)       // Z
+		arenaH           = float32(playerSizeY * 2 * Phi) // Y (For reference of screen)
 		floorThick       = float32(playerSizeY * Phi)     // NOTE: Easier to move vertically between platforms if thicker
 		arenaWidthRatio  = float32(arenaW / (arenaW + arenaL))
 		arenaLengthRatio = float32(arenaL / (arenaW + arenaL))
@@ -77,8 +87,6 @@ func main() {
 	playerJumpsLeft := 1
 	playerVelocity := rl.Vector3{}
 	playerAirTimer := float32(0)
-	playerRotationNormal := rl.NewVector3(0, -1, 0)
-	playerRotation := rl.NewVector4(0, 0, 0, 0)
 	playerModel := rl.LoadModelFromMesh(rl.GenMeshCube(playerSize.X/2, playerSize.Y/2, playerSize.Z/2))
 	playerColor := rl.RayWhite
 	isPlayerBoost := false
@@ -208,6 +216,11 @@ func main() {
 		HealBoxAtIsActive [MaxResourceSOACapacity]bool
 		HealBoxCount      int
 
+		DamageBoxPositions  [MaxResourceSOACapacity]rl.Vector3
+		DamageBoxSizes      [MaxResourceSOACapacity]rl.Vector3
+		DamageBoxAtIsActive [MaxResourceSOACapacity]bool
+		DamageBoxCount      int
+
 		DamageSpherePositions  [MaxResourceSOACapacity]rl.Vector3
 		DamageSphereSizes      [MaxResourceSOACapacity]float32
 		DamageSphereAtIsActive [MaxResourceSOACapacity]bool
@@ -244,9 +257,9 @@ func main() {
 
 	// Generate levels programmatically instead of hardcoding
 	if true {
-		offset := float32(InvPhi - OneMinusInvPhi)
-		numLevels := 6
-		for i := -1; i < numLevels-1; i++ {
+		offset := float32(InvPhi-OneMinusInvPhi) * 0
+		n := 6 // (total n*4)
+		for i := -1; i < n-1; i++ {
 			scaleFactor := PowF(Phi, float32(i)) // Level 0 uses PowF(Phi, -1), Level 1 uses PowF(Phi, 0), etc.
 			if isInvert := false; isInvert {
 				scaleFactor = 1 / scaleFactor
@@ -458,6 +471,20 @@ func main() {
 		resource.HealBoxCount++
 	}
 	for _, data := range []Entity{
+		// {rl.NewVector3(0, resource.FloorPositions[0].Y+resource.FloorSizes[0].Y, 0), rl.NewVector3(20, 1, 20)},
+		// {rl.NewVector3(0, resource.FloorPositions[1*4].Y+resource.FloorSizes[4].Y, 0), rl.NewVector3(20, 1, 20)},
+		{rl.NewVector3(0, resource.FloorPositions[2*4].Y+resource.FloorSizes[8].Y, 0), rl.Vector3Multiply(resource.FloorSizes[8], rl.NewVector3(1, arenaH, 1))},
+		{rl.NewVector3(0, resource.FloorPositions[3*4].Y+resource.FloorSizes[12].Y, 0), rl.Vector3Multiply(resource.FloorSizes[12], rl.NewVector3(1, arenaH, 1))},
+		{rl.NewVector3(0, resource.FloorPositions[4*4].Y+resource.FloorSizes[16].Y, 0), rl.Vector3Multiply(resource.FloorSizes[16], rl.NewVector3(1, arenaH, 1))},
+		{rl.NewVector3(0, resource.FloorPositions[5*4].Y+resource.FloorSizes[20].Y, 0), rl.Vector3Multiply(resource.FloorSizes[20], rl.NewVector3(1, arenaH, 1))},
+		{rl.NewVector3(0, resource.FloorPositions[6*4].Y+resource.FloorSizes[24].Y, 0), rl.Vector3Multiply(resource.FloorSizes[24], rl.NewVector3(1, arenaH, 1))},
+	} {
+		resource.DamageBoxPositions[resource.DamageBoxCount] = data.Pos
+		resource.DamageBoxSizes[resource.DamageBoxCount] = data.Size
+		resource.DamageBoxAtIsActive[resource.DamageBoxCount] = true
+		resource.DamageBoxCount++
+	}
+	for _, data := range []Entity{
 		{rl.NewVector3(4.0, -arenaH*2, 0.0), rl.NewVector3(1.5, 1.5, 1.5)},
 		{rl.NewVector3(0.0, -arenaH*5, -arenaL), rl.NewVector3(1.0, 1.0, 1.0)},
 	} {
@@ -500,6 +527,17 @@ func main() {
 		if playerJumpVelocity < 0 {
 			playerJumpsLeft = 0
 		}
+	}
+
+	levelPlaceholder, err := storage.LoadStorageLevel(1)
+	if err != nil && !errors.Is(err, io.EOF) {
+		log.Fatalln("LoadStorageLevel", err)
+	}
+	if false {
+		if levelPlaceholder == nil {
+			log.Fatalln("LoadStorageLevel", "levelPlaceholder==nil")
+		}
+		fmt.Printf("levelPlaceholder: %v\n", levelPlaceholder)
 	}
 
 	rl.DisableCursor()
@@ -757,6 +795,14 @@ func main() {
 				playerPosition.Y = playerSize.Y/2 + box.Max.Y // HACK: Allow player to stand on the floor
 			}
 		}
+		for i := range resource.DamageBoxCount {
+			box := GetBoundingBoxFromPositionSizeV(resource.DamageBoxPositions[i], resource.DamageBoxSizes[i])
+			if rl.CheckCollisionBoxes(box, GetBoundingBoxFromPositionSizeV(playerPosition, playerSize)) {
+				playerCollisionsThisFrame.W = 1
+				isUnsafeCollision = true
+				playerPosition.Y = playerSize.Y/2 + box.Max.Y // HACK: Allow player to stand on the floor
+			}
+		}
 		for i := range resource.TrampolineBoxCount {
 			box := GetBoundingBoxFromPositionSizeV(resource.TrampolineBoxPositions[i], resource.TrampolineBoxSizes[i])
 			if rl.CheckCollisionBoxes(box, GetBoundingBoxFromPositionSizeV(playerPosition, playerSize)) {
@@ -844,23 +890,19 @@ func main() {
 		if false {
 			// Chaos rotate on y axis... spiral down
 			// playerPosition = rl.Vector3RotateByAxisAngle(playerPosition, rl.NewVector3(playerPosition.X, 0, playerPosition.Z), dt*movementMagnitude)
-
 			playerPosition = rl.Vector3Lerp(
 				playerPosition,
-				rl.Vector3RotateByAxisAngle(
-					playerPosition,
+				rl.Vector3RotateByAxisAngle(playerPosition,
 					rl.NewVector3(oldPlayerPos.X, 0, oldPlayerPos.Z),
-					dt*movementMagnitude,
-				),
+					dt*movementMagnitude),
 				1.0,
 			)
 			playerPosition = rl.Vector3Lerp(
 				playerPosition,
-				rl.Vector3RotateByAxisAngle(
-					playerPosition,
-					rl.NewVector3(oldPlayerPos.X+playerSize.X/2, oldPlayerPos.Y+playerSize.Y/2, oldPlayerPos.Z+playerSize.Z/2),
-					dt*movementMagnitude,
-				),
+				rl.Vector3RotateByAxisAngle(playerPosition,
+					rl.NewVector3(oldPlayerPos.X+playerSize.X/2,
+						oldPlayerPos.Y+playerSize.Y/2,
+						oldPlayerPos.Z+playerSize.Z/2), dt*movementMagnitude),
 				1.0,
 			)
 		}
@@ -872,7 +914,7 @@ func main() {
 
 		rl.BeginDrawing()
 
-		rl.ClearBackground(rl.RayWhite)
+		rl.ClearBackground(rl.Gray)
 
 		rl.BeginMode3D(camera)
 
@@ -880,7 +922,8 @@ func main() {
 		for i := range resource.FloorCount {
 			col := rl.ColorLerp(rl.Fade(rl.RayWhite, PowF(shieldProgress, 0.33)), rl.White, SqrtF(shieldProgress))
 			rl.DrawModel(resource.FloorModels[i], resource.FloorPositions[i], 1.0, col)
-			rl.DrawBoundingBox(resource.FloorBoundingBoxes[i], rl.Fade(rl.LightGray, 0.3))
+			rl.DrawBoundingBox(resource.FloorBoundingBoxes[i], rl.Fade(rl.RayWhite, 0.3))
+			rl.DrawCubeV(resource.FloorPositions[i], Vector3One, rl.Red)
 		}
 		for i := range resource.PlatformCount {
 			rl.DrawModel(resource.PlatformModels[i], resource.PlatformPositions[i], 1.0, rl.Black) // Platform
@@ -895,13 +938,17 @@ func main() {
 				rl.DrawCubeV(resource.PlatformDefaultPositions[i], size, rl.Fade(rl.White, 0.8))           // Reference (midpoint plane trick)
 			}
 		}
-		for i := range resource.DamageSphereCount {
-			rl.DrawSphere(resource.DamageSpherePositions[i], resource.DamageSphereSizes[i], rl.Gold)
-			rl.DrawSphereWires(resource.DamageSpherePositions[i], resource.DamageSphereSizes[i], 8, 8, rl.Orange)
-		}
 		for i := range resource.HealBoxCount {
 			rl.DrawCubeV(resource.HealBoxPositions[i], resource.HealBoxSizes[i], rl.Fade(rl.Green, 1.0))
 			rl.DrawCubeWiresV(resource.HealBoxPositions[i], resource.HealBoxSizes[i], rl.Fade(rl.DarkGreen, 1.0))
+		}
+		for i := range resource.DamageBoxCount {
+			rl.DrawCubeV(resource.DamageBoxPositions[i], resource.DamageBoxSizes[i], rl.Fade(rl.Black, 0.8))
+			rl.DrawCubeWiresV(resource.DamageBoxPositions[i], resource.DamageBoxSizes[i], rl.Fade(rl.Black, 0.8))
+		}
+		for i := range resource.DamageSphereCount {
+			rl.DrawSphere(resource.DamageSpherePositions[i], resource.DamageSphereSizes[i], rl.Gold)
+			rl.DrawSphereWires(resource.DamageSpherePositions[i], resource.DamageSphereSizes[i], 8, 8, rl.Orange)
 		}
 		for i := range resource.TrampolineBoxCount {
 			rl.DrawCubeV(resource.TrampolineBoxPositions[i], resource.TrampolineBoxSizes[i], rl.Fade(rl.Red, 1.0))
@@ -915,6 +962,7 @@ func main() {
 			playerEndPos := rl.NewVector3(playerPosition.X, playerPosition.Y+playerSize.Y/2-playerRadius, playerPosition.Z)
 			rl.DrawCapsule(playerStartPos, playerEndPos, playerRadius, 4, 4, playerColor)
 			rl.DrawCapsuleWires(playerStartPos, playerEndPos, playerRadius, 4*2, 6*2, rl.ColorLerp(playerColor, rl.Fade(rl.DarkGray, 0.8), 0.5))
+			rl.DrawModelWires(playerModel, playerPosition, 1.0, rl.Red)
 			if isDebug := false; isDebug {
 				rl.DrawCubeV(playerPosition, playerSize, playerColor)
 				rl.DrawCubeWiresV(playerPosition, playerSize, playerColor)
@@ -925,35 +973,8 @@ func main() {
 				rl.DrawCapsule(oldPlayerStartPos, oldPlayerEndPos, playerRadius, 16, 16, rl.DarkGray)
 				rl.DrawCapsuleWires(oldPlayerStartPos, oldPlayerEndPos, playerRadius, 4, 6, rl.ColorLerp(playerColor, rl.Fade(rl.DarkGray, 0.8), 0.5))
 			}
-			if false {
-				if false {
-					rl.DrawModelWiresEx(playerModel, playerPosition, playerRotationNormal, rl.QuaternionLength(playerRotation)*0+dt+80*rl.Deg2rad, rl.NewVector3(2, 2, 2), rl.Black)
-				}
-				rl.DrawModelEx(playerModel,
-					rl.Vector3RotateByAxisAngle(playerPosition, playerRotationNormal, dt*100),
-					playerRotationNormal,
-					rl.QuaternionLength(playerRotation)*0+dt+80*rl.Deg2rad,
-					rl.NewVector3(2, 2, 2), rl.Black)
-			}
-			if false {
-				if !rl.IsCursorHidden() && rl.IsCursorOnScreen() {
-					pos := rl.Vector3{X: rl.GetMouseDelta().X, Y: 0., Z: rl.GetMouseDelta().Y}
-					pos = mouseRay.Position
-					rayDir := mouseRay.Direction // Ray direction
-					pos = rl.Vector3CrossProduct(pos, rayDir)
-					rl.DrawRay(mouseRay, rl.White)
-					rl.DrawModel(resource.FloorModels[0], pos, 1.0, rl.White)
-				}
-			}
-			if false { // TODO: HOW TO FIND ANGLE?
-				dirUnitVector := rl.Vector3Normalize(rl.Vector3CrossProduct(camera.Position, camera.Target))
-				rl.DrawLine3D(camera.Target, dirUnitVector, rl.Gold)
-			}
 		}
-
-		if false {
-			rl.DrawGrid(int32(MinF(arenaW, arenaL)*InvPhi), 1)
-		}
+		// rl.DrawGrid(int32(MinF(arenaW, arenaL)*InvPhi), 1)
 
 		// Draw orbital XYZ origins
 		DrawXYZOrbitAxisV(Vector3Zero, 12.0, 0.05, 0.3)                // Level Center
