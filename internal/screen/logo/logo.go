@@ -51,6 +51,12 @@ func Init() {
 }
 
 func Update() {
+	// Press enter or tap to change to title game screen (quick jump)
+	if rl.IsKeyDown(rl.KeyEnter) || rl.IsGestureDetected(rl.GestureDoubletap) {
+		finishScreen = 1
+		// rl.PlaySound(fxCoin)
+	}
+
 	if state == 0 {
 		framesCounter++
 

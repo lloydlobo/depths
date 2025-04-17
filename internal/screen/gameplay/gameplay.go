@@ -61,17 +61,17 @@ func Init() {
 }
 
 func Update() {
+	// Press enter or tap to change to ending game screen
+	if rl.IsKeyDown(rl.KeyF10) || rl.IsGestureDetected(rl.GestureDoubletap) {
+		finishScreen = 1
+		// rl.PlaySound(fxCoin)
+	}
+
 	// TODO: Update gameplay screen variables here!
 	oldCam := camera
 	dt := rl.GetFrameTime()
 
 	rl.UpdateCamera(&camera, rl.CameraThirdPerson)
-
-	// Press enter or tap to change to ENDING screen
-	if rl.IsKeyDown(rl.KeyF10) || rl.IsGestureDetected(rl.GestureDoubletap) {
-		finishScreen = 1
-		// rl.PlaySound(fxCoin)
-	}
 
 	// Project player at camera target
 	const tolerance = 1 // 1 cube unit apart
