@@ -1,6 +1,8 @@
 package title
 
 import (
+	"example/depths/internal/common"
+
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
@@ -16,24 +18,24 @@ var (
 )
 
 func Init() {
-	// TODO: Initialize TITLE screen variables here!
+	// TODO: Initialize title game screen variables here!
 	framesCounter = 0
 	finishScreen = 0
 }
 
 func Update() {
-	// TODO: Update TITLE screen variables here!
+	// TODO: Update title screen variables here!
 
 	// Press enter or tap to change to GAMEPLAY screen
 	if rl.IsKeyPressed(rl.KeyEnter) || rl.IsGestureDetected(rl.GestureDoubletap) {
 		// finishScreen=1// optionsGameScreen
 		finishScreen = 2 // gameplayGameScreen
-		// rl.PlaySound(fxCoin)
+		rl.PlaySound(common.FX.Coin)
 	}
 }
 
 func Draw() {
-	// TODO: Draw TITLE screen here!
+	// TODO: Draw title game screen here!
 	rl.DrawRectangle(0, 0, int32(rl.GetScreenWidth()), int32(rl.GetScreenHeight()), rl.Fade(rl.Black, 0.98))
 	fontThatIsInGameDotGo := rl.GetFontDefault()
 
@@ -42,18 +44,18 @@ func Draw() {
 		float32(rl.GetScreenWidth())/2-float32(rl.MeasureText(screenTitleText, int32(fontSize)))/2,
 		float32(rl.GetScreenHeight())/2.25,
 	)
-	rl.DrawTextEx(fontThatIsInGameDotGo, screenTitleText, pos, fontSize, 4, rl.Orange)
+	rl.DrawTextEx(fontThatIsInGameDotGo, screenTitleText, pos, fontSize, 4, rl.White)
 
 	posX := int32(rl.GetScreenWidth())/2 - rl.MeasureText(screenSubtitleText, 20)/2
 	posY := int32(rl.GetScreenHeight()) / 2
-	rl.DrawText(screenSubtitleText, posX, posY, 20, rl.Orange)
+	rl.DrawText(screenSubtitleText, posX, posY, 20, rl.White)
 }
 
 func Unload() {
 	// Unload LOGO screen variables here!
 }
 
-// Title screen should finish?
+// Title game screen should finish?
 func Finish() int {
 	return finishScreen
 }

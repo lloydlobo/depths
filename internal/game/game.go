@@ -1,11 +1,14 @@
-package main
+// Copied and adapted from https://github.com/raysan5/raylib-game-template/blob/main/src/raylib_game.c
+package game
 
 import (
 	"fmt"
+	"log"
 	"os"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
+	common "example/depths/internal/common"
 	endingSC "example/depths/internal/screen/ending"
 	gameplaySC "example/depths/internal/screen/gameplay"
 	logoSC "example/depths/internal/screen/logo"
@@ -13,71 +16,37 @@ import (
 	titleSC "example/depths/internal/screen/title"
 )
 
-// Copied and adapted from https://github.com/raysan5/raylib-game-template/blob/main/src/raylib_game.c
-
-type GameScreen int
-
-const (
-	unknownGameScreen  GameScreen = iota - 1 // -1
-	logoGameScreen                           // 0
-	titleGameScreen                          // 1
-	optionsGameScreen                        // 3
-	gameplayGameScreen                       // 4
-	endingGameScreen                         // 5
-)
-
-// Shared Variables Definition (global)
-
-// NOTE: Those variables are shared between modules through C equivalent of screens.h
-var (
-	currentScreen GameScreen
-	font          rl.Font
-	music         rl.Music
-	fxCoin        rl.Sound
-)
-
-// Local Variables Definition (local to this module)
-
-// Required variables to manage screen transitions (fade-in, fade-out)
-var (
-	transAlpha      float32    = float32(0.0)
-	onTransition    bool       = false
-	transFadeout    bool       = false
-	transFromScreen int        = -1
-	transToScreen   GameScreen = unknownGameScreen
-)
-
-// //----------------------------------------------------------------------------------
-// // Local Functions Declaration
-// //----------------------------------------------------------------------------------
-// static void ChangeToScreen(int screen);     // Change to screen, no transition effect
-//
-// static void TransitionToScreen(int screen); // Request transition to next screen
-// static void UpdateTransition(void);         // Update transition effect
-// static void DrawTransition(void);           // Draw transition effect (full-screen rectangle)
-//
-// static void UpdateDrawFrame(void);          // Update and draw one frame
-
 // Main entry point
-func run() {
-	// Initialization
+func Run() {
+	// Initialize
+
 	rl.InitWindow(int32(rl.GetScreenWidth()), int32(rl.GetScreenHeight()), "tiny game ─ depths")
 
 	rl.InitAudioDevice()
 
-	font = rl.GetFontDefault() // font = rl.LoadFont("res/mecha.png")
-	music = rl.LoadMusicStream("res/ambient.ogg")
-	fxCoin = rl.LoadSound("res/coin.wav")
+	// Load common assets
+	common.Font.Primary = rl.GetFontDefault()            // font = rl.LoadFont("res/mecha.png")
+	common.Font.Secondary = rl.LoadFont("res/mecha.png") // font = rl.LoadFont("res/mecha.png")
+	common.Music.Ambient = rl.LoadMusicStream("res/music/ambient.ogg")
+	common.Music.Theme = rl.LoadMusicStream("res/music/mini1111.xm")
+	common.Music.Theme.Looping = false
+	common.FX.Coin = rl.LoadSound("res/music/coin.wav")
 
-	rl.SetMusicVolume(music, 1.0)
-	rl.PauseMusicStream(music)
+	if isTemporary := false; isTemporary { // TEMPORARY
+		rl.SetMusicVolume(common.Music.Theme, 0.5)
+		rl.SetMusicPitch(common.Music.Theme, .75)
+		rl.PlayMusicStream(common.Music.Theme)
+	} else {
+		rl.SetMusicVolume(common.Music.Theme, 1.0)
+		rl.PauseMusicStream(common.Music.Theme)
+	}
 
 	currentScreen = logoGameScreen
 	logoSC.Init()
 
 	if _, ok := os.LookupEnv("PLATFORM_WEB"); ok {
-		fmt.Printf("\"PLATFORM_\": %v\n", "PLATFORM_WEB")
 		// emscripten_set_main_loop(UpdateDrawFrame, 60, 1)
+		log.Printf("env: %v\n", "PLATFORM_WEB")
 	} else {
 		rl.SetTargetFPS(60)
 
@@ -108,9 +77,11 @@ func run() {
 	}
 
 	// Unload global data loaded
-	rl.UnloadFont(font)
-	rl.UnloadMusicStream(music)
-	rl.UnloadSound(fxCoin)
+	rl.UnloadFont(common.Font.Primary)
+	rl.UnloadFont(common.Font.Secondary)
+	rl.UnloadMusicStream(common.Music.Theme)
+	rl.UnloadMusicStream(common.Music.Ambient)
+	rl.UnloadSound(common.FX.Coin)
 
 	rl.CloseAudioDevice() // Close audio context
 
@@ -321,3 +292,38 @@ func UpdateDrawFrame() {
 	rl.EndDrawing()
 	// -----------------------------------------------------------------------------
 }
+
+type GameScreen int
+
+const (
+	unknownGameScreen  GameScreen = iota - 1 // -1
+	logoGameScreen                           // 0
+	titleGameScreen                          // 1
+	optionsGameScreen                        // 3
+	gameplayGameScreen                       // 4
+	endingGameScreen                         // 5
+)
+
+// =====================================================================================
+// Shared Variables Definition (global)
+
+// NOTE: Those variables are shared between modules through C equivalent of screens.h
+var (
+	currentScreen GameScreen
+)
+
+// -------------------------------------------------------------------------------------
+
+// =====================================================================================
+// Local Variables Definition (local to this module)
+
+// Required variables to manage screen transitions (fade-in, fade-out)
+var (
+	transAlpha      float32    = float32(0.0)
+	onTransition    bool       = false
+	transFadeout    bool       = false
+	transFromScreen int        = -1
+	transToScreen   GameScreen = unknownGameScreen
+)
+
+// -------------------------------------------------------------------------------------

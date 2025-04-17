@@ -1,7 +1,9 @@
 package gameplay
 
 import (
+	"example/depths/internal/common"
 	"fmt"
+	"log"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -17,60 +19,51 @@ var (
 
 	camera rl.Camera3D
 
-	player Player
-
-	floor Floor
-
+	player          Player
+	floor           Floor
 	isWallCollision bool
 )
 
 var (
-	xCol, yCol, zCol = rl.Fade(rl.Red, .3), rl.Fade(rl.Green, .3), rl.Fade(rl.Blue, .3)
+	xCol = rl.Fade(rl.Red, .3)
+	yCol = rl.Fade(rl.Green, .3)
+	zCol = rl.Fade(rl.Green, .3)
 )
-
-type Player struct {
-	Position    rl.Vector3
-	Size        rl.Vector3
-	BoundingBox rl.BoundingBox
-	Collisions  rl.Quaternion
-}
-
-type Floor struct {
-	Position    rl.Vector3
-	Size        rl.Vector3
-	BoundingBox rl.BoundingBox
-}
 
 func Init() {
 	framesCounter = 0
 	finishScreen = 0
 
+	// See also https://github.com/raylib-extras/extras-c/blob/main/cameras/rlTPCamera/rlTPCamera.h
 	camera = rl.Camera3D{
-		Position:   rl.NewVector3(0., 10., 10.),
+		Position:   rl.NewVector3(0., 30., 30.),
 		Target:     rl.NewVector3(0., 1+0.5, 0.),
 		Up:         rl.NewVector3(0., 1., 0.),
-		Fovy:       60.0,
+		Fovy:       45.0,
 		Projection: rl.CameraPerspective,
 	}
 
 	player = Player{
-		Position: camera.Target,
-		Size:     rl.NewVector3(1, 2, 1),
-		BoundingBox: rl.NewBoundingBox(
-			rl.NewVector3(camera.Target.X-player.Size.X/2, camera.Target.Y-player.Size.Y/2, camera.Target.Z-player.Size.Z/2),
-			rl.NewVector3(camera.Target.X+player.Size.X/2, camera.Target.Y+player.Size.Y/2, camera.Target.Z+player.Size.Z/2),
-		),
+		Position:   camera.Target,
+		Size:       rl.NewVector3(1, 2, 1),
 		Collisions: rl.NewQuaternion(0, 0, 0, 0),
 	}
+	player.BoundingBox = rl.NewBoundingBox(
+		rl.NewVector3(camera.Target.X-player.Size.X/2, camera.Target.Y-player.Size.Y/2, camera.Target.Z-player.Size.Z/2),
+		rl.NewVector3(camera.Target.X+player.Size.X/2, camera.Target.Y+player.Size.Y/2, camera.Target.Z+player.Size.Z/2))
 
-	floor.Position = rl.Vector3Zero()
-	floor.Size = rl.NewVector3(20, 1, 20)
+	floor = Floor{
+		Position: rl.Vector3Zero(),
+		Size:     rl.NewVector3((20 * 2), 1, (20*2)*4/5),
+	}
 	floor.BoundingBox = rl.NewBoundingBox(
 		rl.NewVector3(-floor.Size.X/2, -floor.Size.Y/2, -floor.Size.Z/2),
-		rl.NewVector3(floor.Size.X/2, floor.Size.Y/2, floor.Size.Z/2),
-	)
+		rl.NewVector3(floor.Size.X/2, floor.Size.Y/2, floor.Size.Z/2))
 
 	isWallCollision = false
+
+	rl.SetMusicVolume(common.Music.Theme, 0.5)
+	rl.PlayMusicStream(common.Music.Theme)
 
 	rl.DisableCursor() // for ThirdPersonPerspective
 }
@@ -79,10 +72,17 @@ func Update() {
 	dt := rl.GetFrameTime()
 	_ = dt
 
+	rl.UpdateMusicStream(common.Music.Theme)
+
 	// Press enter or tap to change to ending game screen
-	if rl.IsKeyDown(rl.KeyF10) || rl.IsGestureDetected(rl.GestureDoubletap) {
+	if rl.IsKeyDown(rl.KeyF10) /* || rl.IsGestureDetected(rl.GestureDrag) */ {
 		finishScreen = 1
 		// rl.PlaySound(fxCoin)
+	}
+
+	// Pick up item
+	if rl.IsKeyDown(rl.KeyF) {
+		log.Println("Picked up ...")
 	}
 
 	// Save variables this frame
@@ -110,24 +110,29 @@ func Update() {
 }
 
 func Draw() {
-	// 3D World
 	rl.BeginMode3D(camera)
-	rl.ClearBackground(rl.RayWhite)
+	rl.ClearBackground(rl.Black)
 
-	// Floor
-	rl.DrawCubeV(floor.Position, floor.Size, rl.White)
-	rl.DrawBoundingBox(floor.BoundingBox, rl.LightGray)
-	drawWorldXYZAxis()
-	drawXYZOrbitV(rl.Vector3Zero(), 3.)
+	screenW := int32(rl.GetScreenWidth())
+	screenH := int32(rl.GetScreenHeight())
 
-	// Player
+	// 3D World
 	player.Draw()
+
+	rl.DrawCubeV(floor.Position, floor.Size, rl.DarkBrown)
+	rl.DrawBoundingBox(floor.BoundingBox, rl.Brown)
+
+	DrawXYZOrbitV(rl.Vector3Zero(), 2.)
+	DrawWorldXYZAxis()
 
 	rl.EndMode3D()
 
 	// 2D HUD
 	fontThatIsInGameDotGo := rl.GetFontDefault()
 	fontSize := float32(fontThatIsInGameDotGo.BaseSize) * 3.0
+
+	text := "[F] PICK UP"
+	rl.DrawText(text, screenW/2-rl.MeasureText(text, 20)/2, screenH-20*2, 20, rl.White)
 
 	rl.DrawFPS(10, 10)
 	rl.DrawTextEx(fontThatIsInGameDotGo, fmt.Sprintf("%.6f", rl.GetFrameTime()),
@@ -139,11 +144,25 @@ func Unload() {
 	if rl.IsCursorHidden() {
 		rl.EnableCursor() // without 3d ThirdPersonPerspective
 	}
+	// rl.UnloadMusicStream(music)
 }
 
 // Gameplay screen should finish?
 func Finish() int {
 	return finishScreen
+}
+
+type Floor struct {
+	Position    rl.Vector3
+	Size        rl.Vector3
+	BoundingBox rl.BoundingBox
+}
+
+type Player struct {
+	Position    rl.Vector3
+	Size        rl.Vector3
+	BoundingBox rl.BoundingBox
+	Collisions  rl.Quaternion
 }
 
 func (p *Player) Update() {
@@ -181,18 +200,20 @@ func (p *Player) Update() {
 }
 
 func (p Player) Draw() {
+	col := rl.Beige
 	rl.DrawCapsule(
 		rl.Vector3Add(p.Position, rl.NewVector3(0, p.Size.Y/4, 0)),
 		rl.Vector3Add(p.Position, rl.NewVector3(0, -p.Size.Y/4, 0)),
-		p.Size.X/2, 16, 16, rl.Black)
+		p.Size.X/2, 16, 16, col)
 	rl.DrawCapsuleWires(
 		rl.Vector3Add(p.Position, rl.NewVector3(0, p.Size.Y/4, 0)),
 		rl.Vector3Add(p.Position, rl.NewVector3(0, -p.Size.Y/4, 0)),
-		p.Size.X/2, 16, 16, rl.Black)
+		p.Size.X/2, 16, 16, col)
 	rl.DrawCylinderWiresEx(
 		rl.Vector3Add(p.Position, rl.NewVector3(0, p.Size.Y/2, 0)),
 		rl.Vector3Add(p.Position, rl.NewVector3(0, -p.Size.Y/2, 0)),
-		p.Size.X/2, p.Size.X/2, 16, rl.Black)
+		p.Size.X/2, p.Size.X/2, 16, col)
+
 	if isWallCollision {
 		rl.DrawBoundingBox(p.BoundingBox, rl.Red)
 	} else {
@@ -218,18 +239,19 @@ func (p Player) Draw() {
 		pos.Y += p.Collisions.W * p.Size.Y / 2
 		rl.DrawCubeV(pos, rl.Vector3Scale(p.Size, .5), yCol)
 	}
-	drawXYZOrbitV(p.Position, 1.)
+
+	DrawXYZOrbitV(p.Position, 1.)
 }
 
-// drawXYZOrbitV draws perpendicular 3D circles to all 3 (x y z) axis.
-func drawXYZOrbitV(pos rl.Vector3, radius float32) {
+// DrawXYZOrbitV draws perpendicular 3D circles to all 3 (x y z) axis.
+func DrawXYZOrbitV(pos rl.Vector3, radius float32) {
 	rl.DrawCircle3D(pos, radius, rl.NewVector3(0, 1, 0), 90, xCol)
 	rl.DrawCircle3D(pos, radius, rl.NewVector3(1, 0, 0), 90, yCol)
 	rl.DrawCircle3D(pos, radius, rl.NewVector3(0, -1, 0), 0, zCol)
 }
 
-// drawWorldXYZAxis draws all 3 (x y z) axis intersecting at (0,0,0).
-func drawWorldXYZAxis() {
+// DrawWorldXYZAxis draws all 3 (x y z) axis intersecting at (0,0,0).
+func DrawWorldXYZAxis() {
 	rl.DrawLine3D(rl.NewVector3(500, 0, 0), rl.NewVector3(-500, 0, 0), xCol)
 	rl.DrawLine3D(rl.NewVector3(0, 500, 0), rl.NewVector3(0, -500, 0), yCol)
 	rl.DrawLine3D(rl.NewVector3(0, 0, 500), rl.NewVector3(0, 0, -500), zCol)

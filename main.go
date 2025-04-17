@@ -15,6 +15,7 @@ import (
 	"github.com/gen2brain/raylib-go/easings"
 	rl "github.com/gen2brain/raylib-go/raylib"
 
+	"example/depths/internal/game"
 	"example/depths/internal/storage"
 )
 
@@ -22,7 +23,7 @@ import (
 //   - Ensure on fullscreen toggle, the proportion stays same, and the world is
 //     scaled by Raylib 3d camera mode
 func main() {
-	run()
+	game.Run()
 	if true {
 		os.Exit(0)
 	}
