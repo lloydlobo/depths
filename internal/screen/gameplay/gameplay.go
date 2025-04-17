@@ -83,6 +83,8 @@ func Update() {
 		// Or simulate snapping to the target
 		camera.Target,
 	)
+
+	framesCounter++
 }
 
 func Draw() {
@@ -108,24 +110,21 @@ func Draw() {
 		rl.Vector3Add(player.Position, rl.NewVector3(0, -player.Size.Y/2, 0)),
 		player.Size.X/2, player.Size.X/2, 16, rl.Black)
 
+	// Center orbit
+	drawWorldXYZAxis()
+	drawXYZOrbitV(rl.Vector3Zero(), 3.)
+
+	drawXYZOrbitV(player.Position, 1.)
+
 	rl.EndMode3D()
 
 	// 2D HUD
 	fontThatIsInGameDotGo := rl.GetFontDefault()
-
 	fontSize := float32(fontThatIsInGameDotGo.BaseSize) * 3.0
-	if false {
-		pos := rl.NewVector2(
-			float32(rl.GetScreenWidth())/2-float32(rl.MeasureText(screenTitleText, int32(fontSize)))/2,
-			float32(rl.GetScreenHeight())/2.25,
-		)
-		rl.DrawTextEx(fontThatIsInGameDotGo, screenTitleText, pos, fontSize, 4, rl.Orange)
 
-		posX := int32(rl.GetScreenWidth())/2 - rl.MeasureText(screenSubtitleText, 20)/2
-		posY := int32(rl.GetScreenHeight()) / 2
-		rl.DrawText(screenSubtitleText, posX, posY, 20, rl.Orange)
-	}
-	rl.DrawTextEx(fontThatIsInGameDotGo, fmt.Sprintln(rl.GetFrameTime()), rl.NewVector2(10, 10), fontSize, 4, rl.Orange)
+	rl.DrawFPS(10, 10)
+	rl.DrawTextEx(fontThatIsInGameDotGo, fmt.Sprintf("%.6f", rl.GetFrameTime()),
+		rl.NewVector2(10, 10+20*1), fontSize*2./3., 1, rl.Lime)
 
 }
 
@@ -178,3 +177,21 @@ func Finish() int {
 // 		camera.Target.Y = 1.5
 // 	}
 // }
+
+// drawXYZOrbitV draws perpendicular 3D circles to all 3 (x y z) axis.
+func drawXYZOrbitV(pos rl.Vector3, radius float32) {
+	xCol, yCol, zCol := rl.Red, rl.Green, rl.Blue
+	xCol, yCol, zCol = rl.Fade(xCol, .3), rl.Fade(yCol, .3), rl.Fade(zCol, .3)
+	rl.DrawCircle3D(pos, radius, rl.NewVector3(0, 1, 0), 90, xCol)
+	rl.DrawCircle3D(pos, radius, rl.NewVector3(1, 0, 0), 90, yCol)
+	rl.DrawCircle3D(pos, radius, rl.NewVector3(0, -1, 0), 0, zCol)
+}
+
+// drawWorldXYZAxis draws all 3 (x y z) axis intersecting at (0,0,0).
+func drawWorldXYZAxis() {
+	xCol, yCol, zCol := rl.Red, rl.Green, rl.Blue
+	xCol, yCol, zCol = rl.Fade(xCol, .3), rl.Fade(yCol, .3), rl.Fade(zCol, .3)
+	rl.DrawLine3D(rl.NewVector3(500, 0, 0), rl.NewVector3(-500, 0, 0), xCol)
+	rl.DrawLine3D(rl.NewVector3(0, 500, 0), rl.NewVector3(0, -500, 0), yCol)
+	rl.DrawLine3D(rl.NewVector3(0, 0, 500), rl.NewVector3(0, 0, -500), zCol)
+}
