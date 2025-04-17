@@ -1,33 +1,12 @@
 package gameplay
 
 import (
-	"example/depths/internal/common"
 	"fmt"
 	"log"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
-)
 
-const (
-	screenTitleText    = "GAMEPLAY SCREEN" // This should be temporary during prototype
-	screenSubtitleText = "press enter or tap to jump to ending screen"
-)
-
-var (
-	framesCounter int32
-	finishScreen  int
-
-	camera rl.Camera3D
-
-	player          Player
-	floor           Floor
-	isWallCollision bool
-)
-
-var (
-	xCol = rl.Fade(rl.Red, .3)
-	yCol = rl.Fade(rl.Green, .3)
-	zCol = rl.Fade(rl.Green, .3)
+	"example/depths/internal/common"
 )
 
 func Init() {
@@ -77,7 +56,7 @@ func Update() {
 	// Press enter or tap to change to ending game screen
 	if rl.IsKeyDown(rl.KeyF10) /* || rl.IsGestureDetected(rl.GestureDrag) */ {
 		finishScreen = 1
-		// rl.PlaySound(fxCoin)
+		rl.PlaySound(common.FX.Coin)
 	}
 
 	// Pick up item
@@ -99,8 +78,10 @@ func Update() {
 	if isWallCollision {
 		player.Position = oldPlayer.Position
 		player.BoundingBox = rl.NewBoundingBox(
-			rl.NewVector3(player.Position.X-player.Size.X/2, player.Position.Y-player.Size.Y/2, player.Position.Z-player.Size.Z/2),
-			rl.NewVector3(player.Position.X+player.Size.X/2, player.Position.Y+player.Size.Y/2, player.Position.Z+player.Size.Z/2))
+			rl.NewVector3(player.Position.X-player.Size.X/2,
+				player.Position.Y-player.Size.Y/2, player.Position.Z-player.Size.Z/2),
+			rl.NewVector3(player.Position.X+player.Size.X/2,
+				player.Position.Y+player.Size.Y/2, player.Position.Z+player.Size.Z/2))
 
 		camera.Target = oldCam.Target
 		camera.Position = oldCam.Position
@@ -168,6 +149,7 @@ type Player struct {
 func (p *Player) Update() {
 	// Project the player as the camera target
 	p.Position = camera.Target
+
 	p.BoundingBox = rl.NewBoundingBox(
 		rl.NewVector3(p.Position.X-p.Size.X/2, p.Position.Y-p.Size.Y/2, p.Position.Z-p.Size.Z/2),
 		rl.NewVector3(p.Position.X+p.Size.X/2, p.Position.Y+p.Size.Y/2, p.Position.Z+p.Size.Z/2))
@@ -219,6 +201,7 @@ func (p Player) Draw() {
 	} else {
 		rl.DrawBoundingBox(p.BoundingBox, rl.LightGray)
 	}
+
 	if p.Collisions.X != 0 {
 		pos := p.Position
 		pos.X += p.Collisions.X * p.Size.X / 2
@@ -256,3 +239,25 @@ func DrawWorldXYZAxis() {
 	rl.DrawLine3D(rl.NewVector3(0, 500, 0), rl.NewVector3(0, -500, 0), yCol)
 	rl.DrawLine3D(rl.NewVector3(0, 0, 500), rl.NewVector3(0, 0, -500), zCol)
 }
+
+const (
+	screenTitleText    = "GAMEPLAY SCREEN" // This should be temporary during prototype
+	screenSubtitleText = "continue"        // "press enter or tap to jump to ending screen"
+)
+
+var (
+	framesCounter int32
+	finishScreen  int
+
+	camera rl.Camera3D
+
+	player          Player
+	floor           Floor
+	isWallCollision bool
+)
+
+var (
+	xCol = rl.Fade(rl.Red, .3)
+	yCol = rl.Fade(rl.Green, .3)
+	zCol = rl.Fade(rl.Green, .3)
+)

@@ -1,17 +1,9 @@
 package ending
 
 import (
+	"example/depths/internal/common"
+
 	rl "github.com/gen2brain/raylib-go/raylib"
-)
-
-const (
-	screenTitleText    = "ENDING SCREEN" // This should be temporary during prototype
-	screenSubtitleText = "press enter or tap to jump to title screen"
-)
-
-var (
-	framesCounter int32 = 0
-	finishScreen  int   = 0
 )
 
 func Init() {
@@ -25,7 +17,7 @@ func Update() {
 	// Press enter or tap to change to ENDING screen
 	if rl.IsKeyDown(rl.KeyEnter) || rl.IsGestureDetected(rl.GestureDoubletap) {
 		finishScreen = 1
-		// rl.PlaySound(fxCoin)
+		rl.PlaySound(common.FX.Coin)
 	}
 }
 
@@ -39,11 +31,11 @@ func Draw() {
 		float32(rl.GetScreenWidth())/2-float32(rl.MeasureText(screenTitleText, int32(fontSize)))/2,
 		float32(rl.GetScreenHeight())/2.25,
 	)
-	rl.DrawTextEx(fontThatIsInGameDotGo, screenTitleText, pos, fontSize, 4, rl.Orange)
+	rl.DrawTextEx(fontThatIsInGameDotGo, screenTitleText, pos, fontSize, 4, rl.White)
 
 	posX := int32(rl.GetScreenWidth())/2 - rl.MeasureText(screenSubtitleText, 20)/2
 	posY := int32(rl.GetScreenHeight()) / 2
-	rl.DrawText(screenSubtitleText, posX, posY, 20, rl.Orange)
+	rl.DrawText(screenSubtitleText, posX, posY, 20, rl.White)
 }
 
 func Unload() {
@@ -54,3 +46,13 @@ func Unload() {
 func Finish() int {
 	return finishScreen
 }
+
+const (
+	screenTitleText    = "GAMEOVER" // This should be temporary during prototype
+	screenSubtitleText = "continue" // "press enter or tap to jump to title screen"
+)
+
+var (
+	framesCounter int32 = 0
+	finishScreen  int   = 0
+)

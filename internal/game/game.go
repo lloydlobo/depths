@@ -8,7 +8,7 @@ import (
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
-	common "example/depths/internal/common"
+	"example/depths/internal/common"
 	endingSC "example/depths/internal/screen/ending"
 	gameplaySC "example/depths/internal/screen/gameplay"
 	logoSC "example/depths/internal/screen/logo"
@@ -24,22 +24,16 @@ func Run() {
 
 	rl.InitAudioDevice()
 
-	// Load common assets
-	common.Font.Primary = rl.GetFontDefault()            // font = rl.LoadFont("res/mecha.png")
-	common.Font.Secondary = rl.LoadFont("res/mecha.png") // font = rl.LoadFont("res/mecha.png")
+	// Load common assets once
+	common.Font.Primary = rl.GetFontDefault()
+	common.Font.Secondary = rl.LoadFont("res/mecha.png")
 	common.Music.Ambient = rl.LoadMusicStream("res/music/ambient.ogg")
 	common.Music.Theme = rl.LoadMusicStream("res/music/mini1111.xm")
 	common.Music.Theme.Looping = false
 	common.FX.Coin = rl.LoadSound("res/music/coin.wav")
 
-	if isTemporary := false; isTemporary { // TEMPORARY
-		rl.SetMusicVolume(common.Music.Theme, 0.5)
-		rl.SetMusicPitch(common.Music.Theme, .75)
-		rl.PlayMusicStream(common.Music.Theme)
-	} else {
-		rl.SetMusicVolume(common.Music.Theme, 1.0)
-		rl.PauseMusicStream(common.Music.Theme)
-	}
+	rl.SetMusicVolume(common.Music.Theme, 1.0)
+	rl.PauseMusicStream(common.Music.Theme)
 
 	currentScreen = logoGameScreen
 	logoSC.Init()
@@ -83,9 +77,11 @@ func Run() {
 	rl.UnloadMusicStream(common.Music.Ambient)
 	rl.UnloadSound(common.FX.Coin)
 
-	rl.CloseAudioDevice() // Close audio context
+	// Close audio context
+	rl.CloseAudioDevice()
 
-	rl.CloseWindow() // Close window and OpenGL context
+	// Close window and OpenGL context
+	rl.CloseWindow()
 }
 
 // ChangeToScreen changes to next screen, no transition.
@@ -287,7 +283,7 @@ func UpdateDrawFrame() {
 		DrawTransition()
 	}
 
-	// rl.DrawFPS(10, 10)
+	rl.DrawFPS(10, 10)
 
 	rl.EndDrawing()
 	// -----------------------------------------------------------------------------
@@ -299,9 +295,9 @@ const (
 	unknownGameScreen  GameScreen = iota - 1 // -1
 	logoGameScreen                           // 0
 	titleGameScreen                          // 1
-	optionsGameScreen                        // 3
-	gameplayGameScreen                       // 4
-	endingGameScreen                         // 5
+	optionsGameScreen                        // 2
+	gameplayGameScreen                       // 3
+	endingGameScreen                         // 4
 )
 
 // =====================================================================================
@@ -311,8 +307,6 @@ const (
 var (
 	currentScreen GameScreen
 )
-
-// -------------------------------------------------------------------------------------
 
 // =====================================================================================
 // Local Variables Definition (local to this module)
@@ -325,5 +319,3 @@ var (
 	transFromScreen int        = -1
 	transToScreen   GameScreen = unknownGameScreen
 )
-
-// -------------------------------------------------------------------------------------

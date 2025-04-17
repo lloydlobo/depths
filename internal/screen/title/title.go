@@ -6,17 +6,6 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
-const (
-	screenTitleText    = "INFERNO" // "TITLE SCREEN"
-	screenSubtitleText = "press enter or tap to jump to gameplay screen"
-)
-
-// Module Variables Definition (local)
-var (
-	framesCounter int32 = 0
-	finishScreen  int   = 0
-)
-
 func Init() {
 	// TODO: Initialize title game screen variables here!
 	framesCounter = 0
@@ -59,3 +48,14 @@ func Unload() {
 func Finish() int {
 	return finishScreen
 }
+
+const (
+	screenTitleText    = "INFERNO" // "TITLE SCREEN"
+	screenSubtitleText = "enter"   //"press enter or tap to jump to gameplay screen"
+)
+
+// Module Variables Definition (local)
+var (
+	framesCounter int32 = 0
+	finishScreen  int   = 0
+)
