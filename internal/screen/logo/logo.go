@@ -7,11 +7,13 @@ import (
 )
 
 const logoText = "raylib" // "raylib"
+const transSpeed = 0.125 / 5
 
 // Module Variables Definition (local)
 var (
-	framesCounter int32 = 0
-	finishScreen  int   = 0
+	framesCounter       int32 = 0
+	state3FramesCounter int32 = 0
+	finishScreen        int   = 0
 
 	logoPositionX int32 = 0
 	logoPositionY int32 = 0
@@ -30,6 +32,7 @@ var (
 
 func Init() {
 	framesCounter = 0
+	state3FramesCounter = 0
 	finishScreen = 0
 
 	logoPositionX = int32(rl.GetScreenWidth())/2 - 128
@@ -51,7 +54,7 @@ func Update() {
 	if state == 0 {
 		framesCounter++
 
-		if framesCounter == 80 {
+		if framesCounter == 80*transSpeed {
 			state = 1
 			// Reset counter... will be used later...
 			framesCounter = 0
@@ -75,6 +78,8 @@ func Update() {
 	} else if state == 3 {
 		// State 3: "raylib" text-write animation logic
 		framesCounter++
+		// Tracks total frames elapsed since state==3 (avoid flicker when framesCounter = 0)
+		state3FramesCounter++
 
 		if lettersCount < 10 {
 			const n = int32(len(logoText) * 2) // => 12
@@ -85,7 +90,7 @@ func Update() {
 			}
 		} else {
 			// When all letters have appeared, just fade out everything
-			if framesCounter > 200 {
+			if framesCounter > 200*transSpeed {
 				alpha -= 0.02
 
 				if alpha <= 0.0 {
@@ -99,7 +104,7 @@ func Update() {
 }
 
 func Draw() {
-	rl.DrawRectangle(0, 0, int32(rl.GetScreenWidth()), int32(rl.GetScreenHeight()), rl.Fade(rl.Black, 0.98))
+	rl.DrawRectangle(0, 0, int32(rl.GetScreenWidth()), int32(rl.GetScreenHeight()), rl.Black)
 	if state == 0 {
 		// Draw blinking top-left square corner
 		if (framesCounter/10)%2 > 0 {
@@ -126,11 +131,11 @@ func Draw() {
 
 		// rl.DrawRectangle(int32(rl.GetScreenWidth())/2-112, int32(rl.GetScreenHeight())/2-112, 224, 224, rl.Fade(rl.RayWhite, alpha))
 		rl.DrawRectangle(int32(rl.GetScreenWidth())/2-112, int32(rl.GetScreenHeight())/2-112, 224, 224, rl.Fade(rl.Black, alpha))
-		rl.DrawText(textutil.Subtext(logoText, 0, lettersCount),
-			int32(rl.GetScreenWidth())/2-44, int32(rl.GetScreenHeight())/2+48,
-			50, rl.Fade(rl.White, alpha))
-		if framesCounter > 20 {
-			rl.DrawText("powered by", logoPositionX, logoPositionY-27, 20, rl.Fade(rl.LightGray, alpha))
+		rl.DrawText(textutil.Subtext(logoText, 0, lettersCount), int32(rl.GetScreenWidth())/2-44, int32(rl.GetScreenHeight())/2+48, 50, rl.Fade(rl.White, alpha))
+		if state3FramesCounter > 20*(transSpeed*2) {
+			col := rl.LightGray
+			col = rl.Fade(col, alpha)
+			rl.DrawText("powered by", logoPositionX, logoPositionY-27, 20, col)
 		}
 	}
 }
