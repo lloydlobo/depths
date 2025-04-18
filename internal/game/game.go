@@ -2,12 +2,15 @@
 package game
 
 import (
+	"cmp"
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
+	audiopro "example/depths/internal/audio/processor"
 	"example/depths/internal/common"
 	endingSC "example/depths/internal/screen/ending"
 	gameplaySC "example/depths/internal/screen/gameplay"
@@ -15,6 +18,13 @@ import (
 	optionsSC "example/depths/internal/screen/options"
 	titleSC "example/depths/internal/screen/title"
 )
+
+// XM, standing for "extended module", is an audio file type introduced by
+// Triton's FastTracker 2.[2] XM introduced multisampling-capable[3]
+// instruments with volume and panning envelopes,[4] sample looping[5] and
+// basic pattern compression. It also expanded the available effect commands
+// and channels, added 16-bit sample support, and offered an alternative
+// frequency table for portamentos.
 
 // Main entry point
 func Run() {
@@ -24,16 +34,28 @@ func Run() {
 
 	rl.InitAudioDevice()
 
+	// Disabled: distorts when no audio is playing
+	if false {
+		rl.AttachAudioMixedProcessor(audiopro.ProcessAudio)
+		defer rl.DetachAudioMixedProcessor(audiopro.ProcessAudio)
+		audiopro.InitAudioProcessor()
+	}
+
 	// Load common assets once
 	common.Font.Primary = rl.GetFontDefault()
 	common.Font.Secondary = rl.LoadFont("res/mecha.png")
-	common.Music.Ambient = rl.LoadMusicStream("res/music/ambient.ogg")
-	common.Music.Theme = rl.LoadMusicStream("res/music/mini1111.xm")
-	common.Music.Theme.Looping = false
-	common.FX.Coin = rl.LoadSound("res/music/coin.wav")
 
-	rl.SetMusicVolume(common.Music.Theme, 1.0)
-	rl.PauseMusicStream(common.Music.Theme)
+	common.Music.Ambient = rl.LoadMusicStream("res/music/ambient.ogg")
+	common.Music.Theme = rl.LoadMusicStream(filepath.Join("res", "music", cmp.Or("mini1111.xm", "infraction-moments_passed.wav")))
+	common.Music.Theme.Looping = false
+	rl.SetMusicVolume(common.Music.Theme, 0.125)
+	if false {
+		rl.PauseMusicStream(common.Music.Theme)
+	} else {
+		rl.PlayMusicStream(common.Music.Theme)
+	}
+	common.FX.Coin = rl.LoadSound("res/fx/coin.wav")
+	rl.SetSoundVolume(common.FX.Coin, 0.3)
 
 	currentScreen = logoGameScreen
 	logoSC.Init()
@@ -133,7 +155,6 @@ func TransitionToScreen(screen GameScreen) {
 	transFromScreen = int(currentScreen)
 	transToScreen = screen
 	transAlpha = float32(0.0)
-
 }
 
 // UpdateTransition updates transition effect (fade-in, fade-out).
@@ -207,6 +228,22 @@ func DrawTransition() {
 func UpdateDrawFrame() {
 	// =============================================================================
 	// Update
+
+	rl.UpdateMusicStream(common.Music.Theme)
+
+	// Modify processing variables
+	if rl.IsKeyPressed(rl.KeyLeft) {
+		audiopro.AudioExponent -= 0.05
+	}
+	if rl.IsKeyPressed(rl.KeyRight) {
+		audiopro.AudioExponent += 0.05
+	}
+	if rl.IsKeyPressed(rl.KeyDown) {
+		audiopro.AudioExponent -= 0.25
+	}
+	if rl.IsKeyPressed(rl.KeyUp) {
+		audiopro.AudioExponent += 0.25
+	}
 
 	if !onTransition {
 		switch currentScreen {

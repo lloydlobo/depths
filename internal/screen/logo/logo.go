@@ -1,9 +1,9 @@
 package logo
 
 import (
-	textutil "example/depths/internal/util/textutil"
-
 	rl "github.com/gen2brain/raylib-go/raylib"
+
+	"example/depths/internal/util/textutil"
 )
 
 func Init() {

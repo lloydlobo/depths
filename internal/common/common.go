@@ -7,7 +7,18 @@ import (
 )
 
 var (
-	Font  struct{ Primary, Secondary rl.Font }
-	Music struct{ Theme, Ambient rl.Music }
-	FX   struct{ Coin rl.Sound }
+	Font struct {
+		Primary   rl.Font
+		Secondary rl.Font
+	}
+	Music struct {
+		Theme   rl.Music
+		Ambient rl.Music
+	}
+	FX struct {
+		Coin rl.Sound
+	}
+	Shader struct {
+		PBR rl.Shader
+	}
 )

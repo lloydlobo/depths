@@ -17,6 +17,7 @@ import (
 
 	"example/depths/internal/game"
 	"example/depths/internal/storage"
+	mathutil "example/depths/internal/util/mathutil"
 )
 
 // Checklist
@@ -24,10 +25,9 @@ import (
 //     scaled by Raylib 3d camera mode
 func main() {
 	game.Run()
-	if true {
-		os.Exit(0)
-	}
+}
 
+func runPreviousVersion() {
 	fps := int32(60)
 	screenWidth := int32(800)
 	screenHeight := int32(450)
@@ -261,11 +261,11 @@ func main() {
 		offset := float32(InvPhi-OneMinusInvPhi) * 0
 		n := 6 // (total n*4)
 		for i := -1; i < n-1; i++ {
-			scaleFactor := PowF(Phi, float32(i)) // Level 0 uses PowF(Phi, -1), Level 1 uses PowF(Phi, 0), etc.
+			scaleFactor := mathutil.PowF(Phi, float32(i)) // Level 0 uses PowF(Phi, -1), Level 1 uses PowF(Phi, 0), etc.
 			if isInvert := false; isInvert {
 				scaleFactor = 1 / scaleFactor
 			}
-			levelHeight := -arenaH * PowF(Phi, float32(i))                                // Height from origin for this level
+			levelHeight := -arenaH * mathutil.PowF(Phi, float32(i))                       // Height from origin for this level
 			cornerOffsets := []struct{ X, Z float32 }{{-1, -1}, {1, -1}, {1, 1}, {-1, 1}} // For each level, create 4 floor platforms in the corners (bottom-left bottom-right top-right top-left)
 			for _, corner := range cornerOffsets {
 				posX := corner.X * (offset + arenaW*scaleFactor/4)
@@ -287,110 +287,110 @@ func main() {
 
 			/* L1: Next depth level floor splits */
 			{
-				Pos:  rl.NewVector3(-offset-arenaW/PowF(Phi, 1)/4, -arenaH/2, -offset-arenaW/PowF(Phi, 1)/4),
-				Size: rl.NewVector3(arenaW/PowF(Phi, 1)/2, floorThick, arenaL/PowF(Phi, 1)/2),
+				Pos:  rl.NewVector3(-offset-arenaW/mathutil.PowF(Phi, 1)/4, -arenaH/2, -offset-arenaW/mathutil.PowF(Phi, 1)/4),
+				Size: rl.NewVector3(arenaW/mathutil.PowF(Phi, 1)/2, floorThick, arenaL/mathutil.PowF(Phi, 1)/2),
 			},
 			{
-				Pos:  rl.NewVector3(offset+arenaW/PowF(Phi, 1)/4, -arenaH/2, -offset-arenaW/PowF(Phi, 1)/4),
-				Size: rl.NewVector3(arenaW/PowF(Phi, 1)/2, floorThick, arenaL/PowF(Phi, 1)/2),
+				Pos:  rl.NewVector3(offset+arenaW/mathutil.PowF(Phi, 1)/4, -arenaH/2, -offset-arenaW/mathutil.PowF(Phi, 1)/4),
+				Size: rl.NewVector3(arenaW/mathutil.PowF(Phi, 1)/2, floorThick, arenaL/mathutil.PowF(Phi, 1)/2),
 			},
 			{
-				Pos:  rl.NewVector3(offset+arenaW/PowF(Phi, 1)/4, -arenaH/2, offset+arenaW/PowF(Phi, 1)/4),
-				Size: rl.NewVector3(arenaW/PowF(Phi, 1)/2, floorThick, arenaL/PowF(Phi, 1)/2),
+				Pos:  rl.NewVector3(offset+arenaW/mathutil.PowF(Phi, 1)/4, -arenaH/2, offset+arenaW/mathutil.PowF(Phi, 1)/4),
+				Size: rl.NewVector3(arenaW/mathutil.PowF(Phi, 1)/2, floorThick, arenaL/mathutil.PowF(Phi, 1)/2),
 			},
 			{
-				Pos:  rl.NewVector3(-offset-arenaW/PowF(Phi, 1)/4, -arenaH/2, offset+arenaW/PowF(Phi, 1)/4),
-				Size: rl.NewVector3(arenaW/PowF(Phi, 1)/2, floorThick, arenaL/PowF(Phi, 1)/2),
+				Pos:  rl.NewVector3(-offset-arenaW/mathutil.PowF(Phi, 1)/4, -arenaH/2, offset+arenaW/mathutil.PowF(Phi, 1)/4),
+				Size: rl.NewVector3(arenaW/mathutil.PowF(Phi, 1)/2, floorThick, arenaL/mathutil.PowF(Phi, 1)/2),
 			},
 
 			/* L2: Next depth level floor splits */
 			{
-				Pos:  rl.NewVector3(-offset-arenaW*PowF(Phi, 0)/4, -arenaH*PowF(Phi, 0), -offset-arenaW*PowF(Phi, 0)/4),
-				Size: rl.NewVector3(arenaW*PowF(Phi, 0)/2, floorThick, arenaL*PowF(Phi, 0)/2),
+				Pos:  rl.NewVector3(-offset-arenaW*mathutil.PowF(Phi, 0)/4, -arenaH*mathutil.PowF(Phi, 0), -offset-arenaW*mathutil.PowF(Phi, 0)/4),
+				Size: rl.NewVector3(arenaW*mathutil.PowF(Phi, 0)/2, floorThick, arenaL*mathutil.PowF(Phi, 0)/2),
 			},
 			{
-				Pos:  rl.NewVector3(offset+arenaW*PowF(Phi, 0)/4, -arenaH*PowF(Phi, 0), -offset-arenaW*PowF(Phi, 0)/4),
-				Size: rl.NewVector3(arenaW*PowF(Phi, 0)/2, floorThick, arenaL*PowF(Phi, 0)/2),
+				Pos:  rl.NewVector3(offset+arenaW*mathutil.PowF(Phi, 0)/4, -arenaH*mathutil.PowF(Phi, 0), -offset-arenaW*mathutil.PowF(Phi, 0)/4),
+				Size: rl.NewVector3(arenaW*mathutil.PowF(Phi, 0)/2, floorThick, arenaL*mathutil.PowF(Phi, 0)/2),
 			},
 			{
-				Pos:  rl.NewVector3(offset+arenaW*PowF(Phi, 0)/4, -arenaH*PowF(Phi, 0), offset+arenaW*PowF(Phi, 0)/4),
-				Size: rl.NewVector3(arenaW*PowF(Phi, 0)/2, floorThick, arenaL*PowF(Phi, 0)/2),
+				Pos:  rl.NewVector3(offset+arenaW*mathutil.PowF(Phi, 0)/4, -arenaH*mathutil.PowF(Phi, 0), offset+arenaW*mathutil.PowF(Phi, 0)/4),
+				Size: rl.NewVector3(arenaW*mathutil.PowF(Phi, 0)/2, floorThick, arenaL*mathutil.PowF(Phi, 0)/2),
 			},
 			{
-				Pos:  rl.NewVector3(-offset-arenaW*PowF(Phi, 0)/4, -arenaH*PowF(Phi, 0), offset+arenaW*PowF(Phi, 0)/4),
-				Size: rl.NewVector3(arenaW*PowF(Phi, 0)/2, floorThick, arenaL*PowF(Phi, 0)/2),
+				Pos:  rl.NewVector3(-offset-arenaW*mathutil.PowF(Phi, 0)/4, -arenaH*mathutil.PowF(Phi, 0), offset+arenaW*mathutil.PowF(Phi, 0)/4),
+				Size: rl.NewVector3(arenaW*mathutil.PowF(Phi, 0)/2, floorThick, arenaL*mathutil.PowF(Phi, 0)/2),
 			},
 
 			/* L3: ... */
 			{
-				Pos:  rl.NewVector3(-offset-arenaW*PowF(Phi, 1)/4, -arenaH*PowF(Phi, 1), -offset-arenaW*PowF(Phi, 1)/4),
-				Size: rl.NewVector3(arenaW*PowF(Phi, 1)/2, floorThick, arenaL*PowF(Phi, 1)/2),
+				Pos:  rl.NewVector3(-offset-arenaW*mathutil.PowF(Phi, 1)/4, -arenaH*mathutil.PowF(Phi, 1), -offset-arenaW*mathutil.PowF(Phi, 1)/4),
+				Size: rl.NewVector3(arenaW*mathutil.PowF(Phi, 1)/2, floorThick, arenaL*mathutil.PowF(Phi, 1)/2),
 			},
 			{
-				Pos:  rl.NewVector3(offset+arenaW*PowF(Phi, 1)/4, -arenaH*PowF(Phi, 1), -offset-arenaW*PowF(Phi, 1)/4),
-				Size: rl.NewVector3(arenaW*PowF(Phi, 1)/2, floorThick, arenaL*PowF(Phi, 1)/2),
+				Pos:  rl.NewVector3(offset+arenaW*mathutil.PowF(Phi, 1)/4, -arenaH*mathutil.PowF(Phi, 1), -offset-arenaW*mathutil.PowF(Phi, 1)/4),
+				Size: rl.NewVector3(arenaW*mathutil.PowF(Phi, 1)/2, floorThick, arenaL*mathutil.PowF(Phi, 1)/2),
 			},
 			{
-				Pos:  rl.NewVector3(offset+arenaW*PowF(Phi, 1)/4, -arenaH*PowF(Phi, 1), offset+arenaW*PowF(Phi, 1)/4),
-				Size: rl.NewVector3(arenaW*PowF(Phi, 1)/2, floorThick, arenaL*PowF(Phi, 1)/2),
+				Pos:  rl.NewVector3(offset+arenaW*mathutil.PowF(Phi, 1)/4, -arenaH*mathutil.PowF(Phi, 1), offset+arenaW*mathutil.PowF(Phi, 1)/4),
+				Size: rl.NewVector3(arenaW*mathutil.PowF(Phi, 1)/2, floorThick, arenaL*mathutil.PowF(Phi, 1)/2),
 			},
 			{
-				Pos:  rl.NewVector3(-offset-arenaW*PowF(Phi, 1)/4, -arenaH*PowF(Phi, 1), offset+arenaW*PowF(Phi, 1)/4),
-				Size: rl.NewVector3(arenaW*PowF(Phi, 1)/2, floorThick, arenaL*PowF(Phi, 1)/2),
+				Pos:  rl.NewVector3(-offset-arenaW*mathutil.PowF(Phi, 1)/4, -arenaH*mathutil.PowF(Phi, 1), offset+arenaW*mathutil.PowF(Phi, 1)/4),
+				Size: rl.NewVector3(arenaW*mathutil.PowF(Phi, 1)/2, floorThick, arenaL*mathutil.PowF(Phi, 1)/2),
 			},
 
 			/* L4: .... */
 			{
-				Pos:  rl.NewVector3(-offset-arenaW*PowF(Phi, 2)/4, -arenaH*PowF(Phi, 2), -offset-arenaW*PowF(Phi, 2)/4),
-				Size: rl.NewVector3(arenaW*PowF(Phi, 2)/2, floorThick, arenaL*PowF(Phi, 2)/2),
+				Pos:  rl.NewVector3(-offset-arenaW*mathutil.PowF(Phi, 2)/4, -arenaH*mathutil.PowF(Phi, 2), -offset-arenaW*mathutil.PowF(Phi, 2)/4),
+				Size: rl.NewVector3(arenaW*mathutil.PowF(Phi, 2)/2, floorThick, arenaL*mathutil.PowF(Phi, 2)/2),
 			},
 			{
-				Pos:  rl.NewVector3(offset+arenaW*PowF(Phi, 2)/4, -arenaH*PowF(Phi, 2), -offset-arenaW*PowF(Phi, 2)/4),
-				Size: rl.NewVector3(arenaW*PowF(Phi, 2)/2, floorThick, arenaL*PowF(Phi, 2)/2),
+				Pos:  rl.NewVector3(offset+arenaW*mathutil.PowF(Phi, 2)/4, -arenaH*mathutil.PowF(Phi, 2), -offset-arenaW*mathutil.PowF(Phi, 2)/4),
+				Size: rl.NewVector3(arenaW*mathutil.PowF(Phi, 2)/2, floorThick, arenaL*mathutil.PowF(Phi, 2)/2),
 			},
 			{
-				Pos:  rl.NewVector3(offset+arenaW*PowF(Phi, 2)/4, -arenaH*PowF(Phi, 2), offset+arenaW*PowF(Phi, 2)/4),
-				Size: rl.NewVector3(arenaW*PowF(Phi, 2)/2, floorThick, arenaL*PowF(Phi, 2)/2),
+				Pos:  rl.NewVector3(offset+arenaW*mathutil.PowF(Phi, 2)/4, -arenaH*mathutil.PowF(Phi, 2), offset+arenaW*mathutil.PowF(Phi, 2)/4),
+				Size: rl.NewVector3(arenaW*mathutil.PowF(Phi, 2)/2, floorThick, arenaL*mathutil.PowF(Phi, 2)/2),
 			},
 			{
-				Pos:  rl.NewVector3(-offset-arenaW*PowF(Phi, 2)/4, -arenaH*PowF(Phi, 2), offset+arenaW*PowF(Phi, 2)/4),
-				Size: rl.NewVector3(arenaW*PowF(Phi, 2)/2, floorThick, arenaL*PowF(Phi, 2)/2),
+				Pos:  rl.NewVector3(-offset-arenaW*mathutil.PowF(Phi, 2)/4, -arenaH*mathutil.PowF(Phi, 2), offset+arenaW*mathutil.PowF(Phi, 2)/4),
+				Size: rl.NewVector3(arenaW*mathutil.PowF(Phi, 2)/2, floorThick, arenaL*mathutil.PowF(Phi, 2)/2),
 			},
 
 			/* L5: ..... {Pos: rl.NewVector3(0, -H*PowF(Phi, 3), 0), Size: rl.NewVector3(W*PowF(Phi, 3), floorThick, L*PowF(Phi, 3))} */
 			{
-				Pos:  rl.NewVector3(-offset-arenaW*PowF(Phi, 3)/4, -arenaH*PowF(Phi, 3), -offset-arenaW*PowF(Phi, 3)/4),
-				Size: rl.NewVector3(arenaW*PowF(Phi, 3)/2, floorThick, arenaL*PowF(Phi, 3)/2),
+				Pos:  rl.NewVector3(-offset-arenaW*mathutil.PowF(Phi, 3)/4, -arenaH*mathutil.PowF(Phi, 3), -offset-arenaW*mathutil.PowF(Phi, 3)/4),
+				Size: rl.NewVector3(arenaW*mathutil.PowF(Phi, 3)/2, floorThick, arenaL*mathutil.PowF(Phi, 3)/2),
 			},
 			{
-				Pos:  rl.NewVector3(offset+arenaW*PowF(Phi, 3)/4, -arenaH*PowF(Phi, 3), -offset-arenaW*PowF(Phi, 3)/4),
-				Size: rl.NewVector3(arenaW*PowF(Phi, 3)/2, floorThick, arenaL*PowF(Phi, 3)/2),
+				Pos:  rl.NewVector3(offset+arenaW*mathutil.PowF(Phi, 3)/4, -arenaH*mathutil.PowF(Phi, 3), -offset-arenaW*mathutil.PowF(Phi, 3)/4),
+				Size: rl.NewVector3(arenaW*mathutil.PowF(Phi, 3)/2, floorThick, arenaL*mathutil.PowF(Phi, 3)/2),
 			},
 			{
-				Pos:  rl.NewVector3(offset+arenaW*PowF(Phi, 3)/4, -arenaH*PowF(Phi, 3), offset+arenaW*PowF(Phi, 3)/4),
-				Size: rl.NewVector3(arenaW*PowF(Phi, 3)/2, floorThick, arenaL*PowF(Phi, 3)/2),
+				Pos:  rl.NewVector3(offset+arenaW*mathutil.PowF(Phi, 3)/4, -arenaH*mathutil.PowF(Phi, 3), offset+arenaW*mathutil.PowF(Phi, 3)/4),
+				Size: rl.NewVector3(arenaW*mathutil.PowF(Phi, 3)/2, floorThick, arenaL*mathutil.PowF(Phi, 3)/2),
 			},
 			{
-				Pos:  rl.NewVector3(-offset-arenaW*PowF(Phi, 3)/4, -arenaH*PowF(Phi, 3), offset+arenaW*PowF(Phi, 3)/4),
-				Size: rl.NewVector3(arenaW*PowF(Phi, 3)/2, floorThick, arenaL*PowF(Phi, 3)/2),
+				Pos:  rl.NewVector3(-offset-arenaW*mathutil.PowF(Phi, 3)/4, -arenaH*mathutil.PowF(Phi, 3), offset+arenaW*mathutil.PowF(Phi, 3)/4),
+				Size: rl.NewVector3(arenaW*mathutil.PowF(Phi, 3)/2, floorThick, arenaL*mathutil.PowF(Phi, 3)/2),
 			},
 
 			/* L6: ...... */
 			{
-				Pos:  rl.NewVector3(-offset-arenaW*PowF(Phi, 4)/4, -arenaH*PowF(Phi, 4), -offset-arenaW*PowF(Phi, 4)/4),
-				Size: rl.NewVector3(arenaW*PowF(Phi, 4)/2, floorThick, arenaL*PowF(Phi, 4)/2),
+				Pos:  rl.NewVector3(-offset-arenaW*mathutil.PowF(Phi, 4)/4, -arenaH*mathutil.PowF(Phi, 4), -offset-arenaW*mathutil.PowF(Phi, 4)/4),
+				Size: rl.NewVector3(arenaW*mathutil.PowF(Phi, 4)/2, floorThick, arenaL*mathutil.PowF(Phi, 4)/2),
 			},
 			{
-				Pos:  rl.NewVector3(arenaW*PowF(Phi, 4)/4, -arenaH*PowF(Phi, 4), -offset-arenaW*PowF(Phi, 4)/4),
-				Size: rl.NewVector3(arenaW*PowF(Phi, 4)/2, floorThick, arenaL*PowF(Phi, 4)/2),
+				Pos:  rl.NewVector3(arenaW*mathutil.PowF(Phi, 4)/4, -arenaH*mathutil.PowF(Phi, 4), -offset-arenaW*mathutil.PowF(Phi, 4)/4),
+				Size: rl.NewVector3(arenaW*mathutil.PowF(Phi, 4)/2, floorThick, arenaL*mathutil.PowF(Phi, 4)/2),
 			},
 			{
-				Pos:  rl.NewVector3(offset+arenaW*PowF(Phi, 4)/4, -arenaH*PowF(Phi, 4), offset+arenaW*PowF(Phi, 4)/4),
-				Size: rl.NewVector3(arenaW*PowF(Phi, 4)/2, floorThick, arenaL*PowF(Phi, 4)/2),
+				Pos:  rl.NewVector3(offset+arenaW*mathutil.PowF(Phi, 4)/4, -arenaH*mathutil.PowF(Phi, 4), offset+arenaW*mathutil.PowF(Phi, 4)/4),
+				Size: rl.NewVector3(arenaW*mathutil.PowF(Phi, 4)/2, floorThick, arenaL*mathutil.PowF(Phi, 4)/2),
 			},
 			{
-				Pos:  rl.NewVector3(-offset-arenaW*PowF(Phi, 4)/4, -arenaH*PowF(Phi, 4), offset+arenaW*PowF(Phi, 4)/4),
-				Size: rl.NewVector3(arenaW*PowF(Phi, 4)/2, floorThick, arenaL*PowF(Phi, 4)/2),
+				Pos:  rl.NewVector3(-offset-arenaW*mathutil.PowF(Phi, 4)/4, -arenaH*mathutil.PowF(Phi, 4), offset+arenaW*mathutil.PowF(Phi, 4)/4),
+				Size: rl.NewVector3(arenaW*mathutil.PowF(Phi, 4)/2, floorThick, arenaL*mathutil.PowF(Phi, 4)/2),
 			},
 		} {
 			setupFloorResource(data.Pos, data.Size)
@@ -424,42 +424,42 @@ func main() {
 	}{
 		{
 			Entity: Entity{
-				Pos:  rl.NewVector3(-arenaW*PowF(Phi, 0), -arenaH*PowF(Phi, 0), -arenaL*PowF(Phi, 0)),
-				Size: rl.NewVector3(arenaW*PowF(Phi, 0), floorThick, arenaL*PowF(Phi, 0)),
+				Pos:  rl.NewVector3(-arenaW*mathutil.PowF(Phi, 0), -arenaH*mathutil.PowF(Phi, 0), -arenaL*mathutil.PowF(Phi, 0)),
+				Size: rl.NewVector3(arenaW*mathutil.PowF(Phi, 0), floorThick, arenaL*mathutil.PowF(Phi, 0)),
 			},
 			MovementNormal:    rl.NewVector3(0, 1, 0),
-			MovementAmplitude: -arenaH*PowF(Phi, 1) - floorThick,
+			MovementAmplitude: -arenaH*mathutil.PowF(Phi, 1) - floorThick,
 		},
 		{
 			Entity: Entity{
-				Pos:  rl.NewVector3(-arenaW*PowF(Phi, 1), -arenaH*PowF(Phi, 1), -arenaL*PowF(Phi, 1)),
-				Size: rl.NewVector3(arenaW*PowF(Phi, 1), floorThick, arenaL*PowF(Phi, 1)),
+				Pos:  rl.NewVector3(-arenaW*mathutil.PowF(Phi, 1), -arenaH*mathutil.PowF(Phi, 1), -arenaL*mathutil.PowF(Phi, 1)),
+				Size: rl.NewVector3(arenaW*mathutil.PowF(Phi, 1), floorThick, arenaL*mathutil.PowF(Phi, 1)),
 			},
 			MovementNormal:    rl.NewVector3(0, 1, 0),
-			MovementAmplitude: -arenaH*PowF(Phi, 2) - floorThick,
+			MovementAmplitude: -arenaH*mathutil.PowF(Phi, 2) - floorThick,
 		},
 		{
 			Entity: Entity{
-				Pos:  rl.NewVector3(-arenaW*PowF(Phi, 2), -arenaH*PowF(Phi, 2), -arenaL*PowF(Phi, 2)),
-				Size: rl.NewVector3(arenaW*PowF(Phi, 2), floorThick, arenaL*PowF(Phi, 2)),
+				Pos:  rl.NewVector3(-arenaW*mathutil.PowF(Phi, 2), -arenaH*mathutil.PowF(Phi, 2), -arenaL*mathutil.PowF(Phi, 2)),
+				Size: rl.NewVector3(arenaW*mathutil.PowF(Phi, 2), floorThick, arenaL*mathutil.PowF(Phi, 2)),
 			},
 			MovementNormal:    rl.NewVector3(0, 1, 0),
-			MovementAmplitude: -arenaH*PowF(Phi, 3) - floorThick,
+			MovementAmplitude: -arenaH*mathutil.PowF(Phi, 3) - floorThick,
 		},
 		{
 			Entity: Entity{
-				Pos:  rl.NewVector3(-arenaW*PowF(Phi, 3), -arenaH*PowF(Phi, 3), -arenaL*PowF(Phi, 3)),
-				Size: rl.NewVector3(arenaW*PowF(Phi, 3), floorThick, arenaL*PowF(Phi, 3)),
+				Pos:  rl.NewVector3(-arenaW*mathutil.PowF(Phi, 3), -arenaH*mathutil.PowF(Phi, 3), -arenaL*mathutil.PowF(Phi, 3)),
+				Size: rl.NewVector3(arenaW*mathutil.PowF(Phi, 3), floorThick, arenaL*mathutil.PowF(Phi, 3)),
 			},
 			MovementNormal:    rl.NewVector3(0, 1, 0),
-			MovementAmplitude: -arenaH*PowF(Phi, 4) - floorThick,
+			MovementAmplitude: -arenaH*mathutil.PowF(Phi, 4) - floorThick,
 		},
 	} {
 		difficulty := 2 // 0->2 | less difficult -> more difficult
 		sizes := []float32{1, InvPhi, OneMinusInvPhi}
-		size := rl.Vector3Scale(data.Entity.Size, sizes[MaxI(0, MinI(difficulty, len(sizes)-1))])
+		size := rl.Vector3Scale(data.Entity.Size, sizes[mathutil.MaxI(0, mathutil.MinI(difficulty, len(sizes)-1))])
 		// More Y size => easier to not fall, by clipping through middle of moving platform
-		size.Y *= arenaH * PowF(float32(i+1), 1/float32(difficulty+1)) // Line up when oscillate to top
+		size.Y *= arenaH * mathutil.PowF(float32(i+1), 1/float32(difficulty+1)) // Line up when oscillate to top
 		setupPlatformResource(data.Entity.Pos, size, data.MovementNormal, data.MovementAmplitude)
 	}
 	for _, data := range []Entity{
@@ -611,7 +611,7 @@ func main() {
 		const smooth = 0.034
 		camScrollEase = dt * 2.0
 		// camScrollEase *= 2.8 // Smooth (trying this out)
-		camScrollEase = MinF(camScrollEase, smooth)
+		camScrollEase = mathutil.MinF(camScrollEase, smooth)
 		camScrollEase *= 2
 		camera.Target = rl.Vector3Lerp(oldCamTarget, playerPosition, camScrollEase)
 		rl.UpdateCamera(&camera, rl.CameraThirdPerson)
@@ -683,14 +683,14 @@ func main() {
 
 		// Normalize velocity along XZ plane (width and length) Only for player (remove for other entities)!!!!!
 		if playerVelocity.X > 0 {
-			playerVelocity.X = MaxF(0, playerVelocity.X-terminalVelocityLimiterAirFriction)
+			playerVelocity.X = mathutil.MaxF(0, playerVelocity.X-terminalVelocityLimiterAirFriction)
 		} else {
-			playerVelocity.X = MinF(0, playerVelocity.X+terminalVelocityLimiterAirFriction)
+			playerVelocity.X = mathutil.MinF(0, playerVelocity.X+terminalVelocityLimiterAirFriction)
 		}
 		if playerVelocity.Z > 0 {
-			playerVelocity.Z = MaxF(0, playerVelocity.Z-terminalVelocityLimiterAirFriction)
+			playerVelocity.Z = mathutil.MaxF(0, playerVelocity.Z-terminalVelocityLimiterAirFriction)
 		} else {
-			playerVelocity.Z = MinF(0, playerVelocity.Z+terminalVelocityLimiterAirFriction)
+			playerVelocity.Z = mathutil.MinF(0, playerVelocity.Z+terminalVelocityLimiterAirFriction)
 		}
 
 		for i := range resource.PlatformCount {
@@ -779,10 +779,10 @@ func main() {
 				// Find perpendicular curve to XZ plane, i.e slope of circumference
 				// WARN: Expect wonky animation, as bottom of player box when on a slope of sphere, may not collide with top tangent to sphere surface.
 				height := resource.DamageSphereSizes[i]/2 + playerSize.Y
-				dx := CosF(AbsF(playerPosition.X - resource.DamageSpherePositions[i].X))
-				dz := CosF(AbsF(playerPosition.Z - resource.DamageSpherePositions[i].Z))
+				dx := mathutil.CosF(mathutil.AbsF(playerPosition.X - resource.DamageSpherePositions[i].X))
+				dz := mathutil.CosF(mathutil.AbsF(playerPosition.Z - resource.DamageSpherePositions[i].Z))
 				dy := (dx*dx + dz*dz) * height
-				dy = SqrtF(dy)
+				dy = mathutil.SqrtF(dy)
 				dy = rl.Clamp(dy, 0, height)
 				playerPosition.Y = resource.DamageSpherePositions[i].Y + dy
 				playerCollisionsThisFrame.W = 1
@@ -840,7 +840,7 @@ func main() {
 
 		// Update player entity collisions
 		// Entity: Update velocity
-		playerVelocity.Y = MinF(terminalVelocityY, playerVelocity.Y-terminalVelocityLimiterAirFrictionY) // Decelerate if in air
+		playerVelocity.Y = mathutil.MinF(terminalVelocityY, playerVelocity.Y-terminalVelocityLimiterAirFrictionY) // Decelerate if in air
 		if playerCollisionsThisFrame.Y == 1 || playerCollisionsThisFrame.W == 1 {
 			playerVelocity.Y = 0
 		}
@@ -868,7 +868,7 @@ func main() {
 		}
 		if isEnable := true; isEnable {
 			if playerAirTimer > maxPlayerFreefallAirTime {
-				shieldProgress -= PowF(progressRate*shieldProgress, maxPlayerFreefallAirTime/playerAirTimer)
+				shieldProgress -= mathutil.PowF(progressRate*shieldProgress, maxPlayerFreefallAirTime/playerAirTimer)
 			}
 		}
 		if isDebugAllCollisions := false; isDebugAllCollisions {
@@ -921,7 +921,7 @@ func main() {
 
 		// Draw interactive game resource objects
 		for i := range resource.FloorCount {
-			col := rl.ColorLerp(rl.Fade(rl.RayWhite, PowF(shieldProgress, 0.33)), rl.White, SqrtF(shieldProgress))
+			col := rl.ColorLerp(rl.Fade(rl.RayWhite, mathutil.PowF(shieldProgress, 0.33)), rl.White, mathutil.SqrtF(shieldProgress))
 			rl.DrawModel(resource.FloorModels[i], resource.FloorPositions[i], 1.0, col)
 			rl.DrawBoundingBox(resource.FloorBoundingBoxes[i], rl.Fade(rl.RayWhite, 0.3))
 			rl.DrawCubeV(resource.FloorPositions[i], Vector3One, rl.Red)
@@ -1089,41 +1089,10 @@ func GetBoundingBoxFromPositionSizeV(pos, size rl.Vector3) rl.BoundingBox {
 	)
 }
 
-// Copied from Go's cmp.Ordered
-// Ordered is a constraint that permits any ordered type: any type
-// that supports the operators < <= >= >.
-// Note that floating-point types may contain NaN ("not-a-number") values.
-// An operator such as == or < will always report false when
-// comparing a NaN value with any other value, NaN or not.
-// See the [Compare] function for a consistent way to compare NaN values.
-type OrderedNumber interface {
-	~int | ~int8 | ~int16 | ~int32 | ~int64 |
-		~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr |
-		~float32 | ~float64
+func manhattanV2(a, b rl.Vector2) float32 { return mathutil.AbsF(b.X-a.X) + mathutil.AbsF(b.Y-a.Y) }
+func manhattanV3(a, b rl.Vector3) float32 {
+	return mathutil.AbsF(b.X-a.X) + mathutil.AbsF(b.Y-a.Y) + mathutil.AbsF(b.Z-a.Z)
 }
-
-// NumberType typecast to avoid casting `OrderedNumber` interface when used.
-type NumberType OrderedNumber
-
-func AbsF[T NumberType](x T) float32       { return float32(math.Abs(float64(x))) }
-func SqrtF[T NumberType](x T) float32      { return float32(math.Sqrt(float64(x))) }
-func CosF[T NumberType](x T) float32       { return float32(math.Cos(float64(x))) }
-func SinF[T NumberType](x T) float32       { return float32(math.Sin(float64(x))) }
-func SignF[T NumberType](x T) float32      { return cmp.Or(float32(math.Abs(float64(x))/float64(x)), 0) }
-func FloorF[T NumberType](x T) float32     { return float32(math.Floor(float64(x))) }
-func CeilF[T NumberType](x T) float32      { return float32(math.Ceil(float64(x))) }
-func RoundI[T NumberType](x T) int32       { return int32(math.Round(float64(x))) }
-func RoundF[T NumberType](x T) float32     { return float32(math.Round(float64(x))) }
-func RoundEvenF[T NumberType](x T) float32 { return float32(math.RoundToEven(float64(x))) }
-
-func MaxF[T NumberType](x T, y T) float32 { return float32(max(float64(x), float64(y))) }
-func MinF[T NumberType](x T, y T) float32 { return float32(min(float64(x), float64(y))) }
-func PowF[T NumberType](x T, y T) float32 { return float32(math.Pow(float64(x), float64(y))) }
-func MaxI[T NumberType](x T, y T) int32   { return int32(max(float64(x), float64(y))) }
-func MinI[T NumberType](x T, y T) int32   { return int32(min(float64(x), float64(y))) }
-
-func manhattanV2(a, b rl.Vector2) float32 { return AbsF(b.X-a.X) + AbsF(b.Y-a.Y) }
-func manhattanV3(a, b rl.Vector3) float32 { return AbsF(b.X-a.X) + AbsF(b.Y-a.Y) + AbsF(b.Z-a.Z) }
 
 var (
 	Vector3One       = rl.Vector3One()

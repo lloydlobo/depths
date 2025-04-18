@@ -2,6 +2,8 @@ package options
 
 import (
 	rl "github.com/gen2brain/raylib-go/raylib"
+
+	"example/depths/internal/common"
 )
 
 func Init() {
@@ -15,7 +17,7 @@ func Update() {
 	// Press enter or tap to change to ENDING screen
 	if rl.IsKeyDown(rl.KeyEnter) || rl.IsGestureDetected(rl.GestureDoubletap) {
 		finishScreen = 1
-		// rl.PlaySound(fxCoin)
+		rl.PlaySound(common.FX.Coin)
 	}
 }
 
@@ -46,8 +48,8 @@ func Finish() int {
 }
 
 const (
-	screenTitleText    = "OPTIONS SCREEN" // This should be temporary during prototype
-	screenSubtitleText = "press enter or tap to jump to title screen"
+	screenTitleText    = "OPTIONS" // This should be temporary during prototype
+	screenSubtitleText = "return"
 )
 
 var (

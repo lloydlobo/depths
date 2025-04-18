@@ -1,9 +1,9 @@
 package ending
 
 import (
-	"example/depths/internal/common"
-
 	rl "github.com/gen2brain/raylib-go/raylib"
+
+	"example/depths/internal/common"
 )
 
 func Init() {
