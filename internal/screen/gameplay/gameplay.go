@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"log"
+	"log/slog"
 	"path/filepath"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -17,9 +18,9 @@ var (
 
 	camera rl.Camera3D
 
-	player          Player
-	floor           Floor
-	isWallCollision bool
+	player                Player
+	floor                 Floor
+	isPlayerWallCollision bool
 )
 
 var (
@@ -58,60 +59,45 @@ func Init() {
 		Projection: rl.CameraPerspective,
 	}
 
-	common.Shader.PBR = rl.LoadShader(filepath.Join("res", "shader", "glsl330_"+"pbr.vs"), filepath.Join("res", "shader", "glsl330_"+"pbr.fs"))
+	common.Shader.PBR = rl.LoadShader(
+		filepath.Join("res", "shader", "glsl330_"+"pbr.vs"),
+		filepath.Join("res", "shader", "glsl330_"+"pbr.fs"))
 
-	player = Player{
-		Position:   camera.Target,
-		Size:       rl.NewVector3(1, 2, 1),
-		Collisions: rl.NewQuaternion(0, 0, 0, 0),
-	}
-	player.BoundingBox = rl.NewBoundingBox(
-		rl.NewVector3(camera.Target.X-player.Size.X/2, camera.Target.Y-player.Size.Y/2, camera.Target.Z-player.Size.Z/2),
-		rl.NewVector3(camera.Target.X+player.Size.X/2, camera.Target.Y+player.Size.Y/2, camera.Target.Z+player.Size.Z/2))
+	// Load cubeTexture to be applied to the cubes sides (256x256 png)
+	cubeTexture = rl.LoadTexture("res/cubicmap_atlas.png")
 
-	floor = Floor{Position: rl.NewVector3(0, -0.5, 0), Size: rl.NewVector3(30, 1, 30)} // Load floor model mesh and assign material parameters
-	floor.BoundingBox = rl.NewBoundingBox(
-		rl.NewVector3(floor.Position.X-floor.Size.X/2, floor.Position.Y-floor.Size.Y/2, floor.Position.Z-floor.Size.Z/2),
-		rl.NewVector3(floor.Position.X+floor.Size.X/2, floor.Position.Y+floor.Size.Y/2, floor.Position.Z+floor.Size.Z/2))
-	floorMesh := rl.GenMeshPlane(floor.Size.X/5, floor.Size.Z/5, 10, 10) // [Scale up to 5x on draw] NOTE: A basic plane shape can be generated instead of being loaded from a model file
-	floorModel = rl.LoadModelFromMesh(floorMesh)                         // rl.GenMeshTangents(&floorMesh) // TODO: Review tangents generation
-	if isEnableLight := false; isEnableLight {
-		floorModel.Materials.Shader = common.Shader.PBR
-		floorModel.Materials.GetMap(rl.MapAlbedo).Color = rl.White
-		floorModel.Materials.GetMap(rl.MapMetalness).Value = 0.0
-		floorModel.Materials.GetMap(rl.MapRoughness).Value = 0.0
-		floorModel.Materials.GetMap(rl.MapOcclusion).Value = 1.0
-		floorModel.Materials.GetMap(rl.MapEmission).Color = rl.Black
-	}
-	floorModel.Materials.GetMap(rl.MapAlbedo).Texture = rl.LoadTexture(filepath.Join("res", "texture", "road_a.png"))
-	floorModel.Materials.GetMap(rl.MapMetalness).Texture = rl.LoadTexture(filepath.Join("res", "texture", "road_mra.png"))
-	floorModel.Materials.GetMap(rl.MapNormal).Texture = rl.LoadTexture(filepath.Join("res", "texture", "road_n.png"))
+	InitFloor() // Init floor and friends
 
-	isWallCollision = false
+	player = NewPlayer()
+
+	isPlayerWallCollision = false
 
 	rl.SetMusicVolume(common.Music.Theme, float32(cmp.Or(0.125, 1.0)))
+
 	rl.PlayMusicStream(common.Music.Theme)
-	cubeTexture = rl.LoadTexture("res/cubicmap_atlas.png") // 256x256 Load cubeTexture to be applied to the cubes sides
 
 	rl.DisableCursor() // for ThirdPersonPerspective
 }
 
-func Update() {
-	dt := rl.GetFrameTime()
-	_ = dt
-
-	rl.UpdateMusicStream(common.Music.Theme)
-
+func HandleUserInput() {
 	// Press enter or tap to change to ending game screen
 	if rl.IsKeyDown(rl.KeyF10) { /* || rl.IsGestureDetected(rl.GestureDrag) */
 		finishScreen = 1
 		rl.PlaySound(common.FX.Coin)
 	}
-
-	// Pick up item
 	if rl.IsKeyDown(rl.KeyF) {
-		log.Println("Picked up ...")
+		log.Println("[F] Picked up item")
 	}
+}
+
+func Update() {
+	HandleUserInput()
+
+	dt := rl.GetFrameTime()
+	_ = dt
+	slog.Debug("Update", "dt", dt)
+
+	rl.UpdateMusicStream(common.Music.Theme)
 
 	// Save variables this frame
 	oldCam := camera
@@ -119,13 +105,13 @@ func Update() {
 
 	// Reset single frame flags/variables
 	player.Collisions = rl.Quaternion{}
-	isWallCollision = false
+	isPlayerWallCollision = false
 
 	rl.UpdateCamera(&camera, rl.CameraThirdPerson)
 
 	player.Update()
 
-	if isWallCollision {
+	if isPlayerWallCollision {
 		player.Position = oldPlayer.Position
 		player.BoundingBox = rl.NewBoundingBox(
 			rl.NewVector3(player.Position.X-player.Size.X/2,
@@ -140,45 +126,28 @@ func Update() {
 }
 
 func Draw() {
-	rl.BeginMode3D(camera)
-	rl.ClearBackground(rl.Black)
-
 	screenW := int32(rl.GetScreenWidth())
 	screenH := int32(rl.GetScreenHeight())
 
 	// 3D World
+	rl.BeginMode3D(camera)
+
+	rl.ClearBackground(rl.Black)
+
+	floor.Draw()
 	player.Draw()
-
-	// Set floor model texture tiling and emissive color parameters on shader
-	if isEnableLight := false; isEnableLight {
-		textureTilingLoc := rl.GetShaderLocation(floorModel.Materials.Shader, "tiling")
-		emissiveColorLoc := rl.GetShaderLocation(floorModel.Materials.Shader, "emissiveColor")
-		floorTextureTiling := []float32{.5, .5}
-		rl.SetShaderValue(floorModel.Materials.Shader, textureTilingLoc, floorTextureTiling, rl.ShaderUniformVec2)
-
-		floorEmissiveColorVector4 := rl.ColorNormalize(floorModel.Materials.GetMap(rl.MapEmission).Color)
-		floorEmissiveColor := []float32{floorEmissiveColorVector4.X, floorEmissiveColorVector4.Y, floorEmissiveColorVector4.Z, floorEmissiveColorVector4.W}
-		rl.SetShaderValue(floorModel.Materials.Shader, emissiveColorLoc, floorEmissiveColor, rl.ShaderUniformVec2)
-	}
-	rl.DrawModel(floorModel, rl.Vector3Zero(), 5.0, rl.Beige) // Draw floor model
-
-	// rl.DrawCubeV(floor.Position, floor.Size, rl.DarkBrown)
-	rl.DrawBoundingBox(floor.BoundingBox, rl.Brown)
-	DrawXYZOrbitV(rl.Vector3Zero(), 2.)
-	DrawWorldXYZAxis()
 
 	rl.EndMode3D()
 
-	// 2D HUD
-	fontThatIsInGameDotGo := rl.GetFontDefault()
-	fontSize := float32(fontThatIsInGameDotGo.BaseSize) * 3.0
-
+	// 2D World
+	fontSize := float32(common.Font.Primary.BaseSize) * 3.0
 	text := "[F] PICK UP"
-	rl.DrawText(text, screenW/2-rl.MeasureText(text, 20)/2, screenH-20*2, 20, rl.White)
-
 	rl.DrawFPS(10, 10)
-	rl.DrawTextEx(fontThatIsInGameDotGo, fmt.Sprintf("%.6f", rl.GetFrameTime()),
-		rl.NewVector2(10, 10+20*1), fontSize*2./3., 1, rl.Lime)
+	rl.DrawText(text, screenW/2-rl.MeasureText(text, 20)/2, screenH-20*2, 20, rl.White)
+	rl.DrawTextEx(common.Font.Primary,
+		fmt.Sprintf("%.6f", rl.GetFrameTime()),
+		rl.NewVector2(10, 10+20*1),
+		fontSize*2./3., 1, rl.Lime)
 }
 
 func Unload() {
@@ -192,99 +161,6 @@ func Unload() {
 // Gameplay screen should finish?
 func Finish() int {
 	return finishScreen
-}
-
-type Floor struct {
-	Position    rl.Vector3
-	Size        rl.Vector3
-	BoundingBox rl.BoundingBox
-}
-
-type Player struct {
-	Position    rl.Vector3
-	Size        rl.Vector3
-	BoundingBox rl.BoundingBox
-	Collisions  rl.Quaternion
-}
-
-func (p *Player) Update() {
-	// Project the player as the camera target
-	p.Position = camera.Target
-
-	p.BoundingBox = rl.NewBoundingBox(
-		rl.NewVector3(p.Position.X-p.Size.X/2, p.Position.Y-p.Size.Y/2, p.Position.Z-p.Size.Z/2),
-		rl.NewVector3(p.Position.X+p.Size.X/2, p.Position.Y+p.Size.Y/2, p.Position.Z+p.Size.Z/2))
-
-	// Wall collisions
-	if p.BoundingBox.Min.X <= floor.BoundingBox.Min.X {
-		isWallCollision = true
-		p.Collisions.X = -1
-	}
-	if p.BoundingBox.Max.X >= floor.BoundingBox.Max.X {
-		isWallCollision = true
-		p.Collisions.X = 1
-	}
-	if p.BoundingBox.Min.Z <= floor.BoundingBox.Min.Z {
-		isWallCollision = true
-		p.Collisions.Z = -1
-	}
-	if p.BoundingBox.Max.Z >= floor.BoundingBox.Max.Z {
-		isWallCollision = true
-		p.Collisions.Z = 1
-	}
-
-	// Floor collisions
-	if p.BoundingBox.Min.Y <= floor.BoundingBox.Min.Y {
-		p.Collisions.Y = 1 // Player head below floor
-	}
-	if p.BoundingBox.Max.Y >= floor.BoundingBox.Min.Y { // On floor
-		p.Collisions.W = -1 // Allow walking freely
-	}
-}
-
-func (p Player) Draw() {
-	col := rl.Beige
-	rl.DrawCapsule(
-		rl.Vector3Add(p.Position, rl.NewVector3(0, p.Size.Y/4, 0)),
-		rl.Vector3Add(p.Position, rl.NewVector3(0, -p.Size.Y/4, 0)),
-		p.Size.X/2, 16, 16, col)
-	rl.DrawCapsuleWires(
-		rl.Vector3Add(p.Position, rl.NewVector3(0, p.Size.Y/4, 0)),
-		rl.Vector3Add(p.Position, rl.NewVector3(0, -p.Size.Y/4, 0)),
-		p.Size.X/2, 16, 16, col)
-	rl.DrawCylinderWiresEx(
-		rl.Vector3Add(p.Position, rl.NewVector3(0, p.Size.Y/2, 0)),
-		rl.Vector3Add(p.Position, rl.NewVector3(0, -p.Size.Y/2, 0)),
-		p.Size.X/2, p.Size.X/2, 16, col)
-	if isWallCollision {
-		rl.DrawBoundingBox(p.BoundingBox, rl.Red)
-	} else {
-		rl.DrawBoundingBox(p.BoundingBox, rl.LightGray)
-	}
-
-	if p.Collisions.X != 0 {
-		pos := p.Position
-		pos.X += p.Collisions.X * p.Size.X / 2
-		rl.DrawCubeV(pos, rl.Vector3Scale(p.Size, .5), xCol)
-	}
-	if p.Collisions.Y != 0 {
-		pos := p.Position
-		pos.Y += p.Collisions.Y * p.Size.Y / 2
-		rl.DrawCubeV(pos, rl.Vector3Scale(p.Size, .5), yCol)
-	}
-	if p.Collisions.Z != 0 {
-		pos := p.Position
-		pos.Z += p.Collisions.Z * p.Size.Z / 2
-		rl.DrawCubeV(pos, rl.Vector3Scale(p.Size, .5), zCol)
-	}
-	if p.Collisions.W != 0 { // Floor
-		pos := p.Position
-		pos.Y += p.Collisions.W * p.Size.Y / 2
-		rl.DrawCubeV(pos, rl.Vector3Scale(p.Size, .5), yCol)
-	}
-
-	DrawXYZOrbitV(p.Position, 1.)
-	draw_cube_texture_main()
 }
 
 // DrawXYZOrbitV draws perpendicular 3D circles to all 3 (x y z) axis.
@@ -302,40 +178,8 @@ func DrawWorldXYZAxis() {
 }
 
 func draw_cube_texture_main() {
-	// screenWidth := int32(rl.GetScreenWidth())
-	// screenHeight := int32(rl.GetScreenHeight())
-
-	// rl.InitWindow(screenWidth, screenHeight, "raylib [models] example - draw cube texture")
-	//
-	// // Define the camera to look into our 3d world
-	// camera := rl.Camera{
-	// 	Position: rl.Vector3{
-	// 		Y: 10.0,
-	// 		Z: 10.0,
-	// 	},
-	// 	Target:     rl.Vector3{},
-	// 	Up:         rl.Vector3{Y: 1.0},
-	// 	Fovy:       45.0,
-	// 	Projection: rl.CameraPerspective,
-	// }
-
-	// rl.SetTargetFPS(60) // Set our game to run at 60 frames-per-second
-
-	// Main game loop
-	// for !rl.WindowShouldClose() { // Detect window close button or ESC key
-	// Update
-	// TODO: Update your variables here
-
-	// Draw
-	// rl.BeginDrawing()
-	// rl.ClearBackground(rl.RayWhite)
-	// rl.BeginMode3D(camera)
-
 	// Draw cube with an applied texture
-	vec := rl.Vector3{
-		X: -2.0,
-		Y: 2.0,
-	}
+	vec := rl.Vector3{X: -2.0, Y: 2.0}
 	DrawCubeTexture(cubeTexture, vec, 2.0, 4.0, 2.0, rl.White)
 
 	// Draw cube with an applied texture, but only a defined rectangle piece of the texture
@@ -344,21 +188,8 @@ func draw_cube_texture_main() {
 		Width:  float32(cubeTexture.Width) / 2.0,
 		Height: float32(cubeTexture.Height) / 2.0,
 	}
-	vec = rl.Vector3{
-		X: 2.0,
-		Y: 1.0,
-	}
+	vec = rl.Vector3{X: 2.0, Y: 1.0}
 	DrawCubeTextureRec(cubeTexture, rec, vec, 2.0, 2.0, 2.0, rl.White)
-
-	// rl.DrawGrid(10, 1.0) // Draw a grid
-	// rl.EndMode3D()
-	// rl.DrawFPS(10, 10)
-	// rl.EndDrawing()
-	// }
-
-	// De-Initialization
-	// rl.UnloadTexture(texture) // Unload texture
-	// rl.CloseWindow()          // Close window and OpenGL context
 }
 
 // DrawCubeTexture draws a textured cube
@@ -373,76 +204,77 @@ func DrawCubeTexture(texture rl.Texture2D, position rl.Vector3, width, height, l
 
 	// Vertex data transformation can be defined with the commented lines,
 	// but in this example we calculate the transformed vertex data directly when calling rlVertex3f()
-	// rl.PushMatrix()
+	rl.PushMatrix()
 	// NOTE: Transformation is applied in inverse order (scale -> rotate -> translate)
-	//rl.Translatef(2.0, 0.0, 0.0)
-	//rl.Rotatef(45, 0, 1, )
-	//rl.Scalef(2.0, 2.0, 2.0)
+	rl.Translatef(2.0, 0.0, 0.0)
+	rl.Rotatef(45, 0, 1, 0)
+	rl.Scalef(2.0, 2.0, 2.0)
+	{
+		rl.Begin(rl.Quads)
+		rl.Color4ub(color.R, color.G, color.B, color.A)
+		// Front Face
+		rl.Normal3f(0.0, 0.0, 1.0) // Normal Pointing Towards Viewer
+		rl.TexCoord2f(0.0, 0.0)
+		rl.Vertex3f(x-width/2, y-height/2, z+length/2) // Bottom Left Of The Texture and Quad
+		rl.TexCoord2f(1.0, 0.0)
+		rl.Vertex3f(x+width/2, y-height/2, z+length/2) // Bottom Right Of The Texture and Quad
+		rl.TexCoord2f(1.0, 1.0)
+		rl.Vertex3f(x+width/2, y+height/2, z+length/2) // Top Right Of The Texture and Quad
+		rl.TexCoord2f(0.0, 1.0)
+		rl.Vertex3f(x-width/2, y+height/2, z+length/2) // Top Left Of The Texture and Quad
+		// Back Face
+		rl.Normal3f(0.0, 0.0, -1.0) // Normal Pointing Away From Viewer
+		rl.TexCoord2f(1.0, 0.0)
+		rl.Vertex3f(x-width/2, y-height/2, z-length/2) // Bottom Right Of The Texture and Quad
+		rl.TexCoord2f(1.0, 1.0)
+		rl.Vertex3f(x-width/2, y+height/2, z-length/2) // Top Right Of The Texture and Quad
+		rl.TexCoord2f(0.0, 1.0)
+		rl.Vertex3f(x+width/2, y+height/2, z-length/2) // Top Left Of The Texture and Quad
+		rl.TexCoord2f(0.0, 0.0)
+		rl.Vertex3f(x+width/2, y-height/2, z-length/2) // Bottom Left Of The Texture and Quad
+		// Top Face
+		rl.Normal3f(0.0, 1.0, 0.0) // Normal Pointing Up
+		rl.TexCoord2f(0.0, 1.0)
+		rl.Vertex3f(x-width/2, y+height/2, z-length/2) // Top Left Of The Texture and Quad.
+		rl.TexCoord2f(0.0, 0.0)
+		rl.Vertex3f(x-width/2, y+height/2, z+length/2) // Bottom Left Of The Texture and Quad
+		rl.TexCoord2f(1.0, 0.0)
+		rl.Vertex3f(x+width/2, y+height/2, z+length/2) // Bottom Right Of The Texture and Quad
+		rl.TexCoord2f(1.0, 1.0)
+		rl.Vertex3f(x+width/2, y+height/2, z-length/2) // Top Right Of The Texture and Quad Bottom Face
+		rl.Normal3f(0.0, -1.0, 0.0)                    // Normal Pointing Down
+		rl.TexCoord2f(1.0, 1.0)
+		rl.Vertex3f(x-width/2, y-height/2, z-length/2) // Top Right Of The Texture and Quad
+		rl.TexCoord2f(0.0, 1.0)
+		rl.Vertex3f(x+width/2, y-height/2, z-length/2) // Top Left Of The Texture and Quad
+		rl.TexCoord2f(0.0, 0.0)
+		rl.Vertex3f(x+width/2, y-height/2, z+length/2) // Bottom Left Of The Texture and Quad
+		rl.TexCoord2f(1.0, 0.0)
+		rl.Vertex3f(x-width/2, y-height/2, z+length/2) // Bottom Right Of The Texture and Quad
+		// Right face
+		rl.Normal3f(1.0, 0.0, 0.0) // Normal Pointing Right
+		rl.TexCoord2f(1.0, 0.0)
+		rl.Vertex3f(x+width/2, y-height/2, z-length/2) // Bottom Right Of The Texture and Quad
+		rl.TexCoord2f(1.0, 1.0)
+		rl.Vertex3f(x+width/2, y+height/2, z-length/2) // Top Right Of The Texture and Quad
+		rl.TexCoord2f(0.0, 1.0)
+		rl.Vertex3f(x+width/2, y+height/2, z+length/2) // Top Left Of The Texture and Quad
+		rl.TexCoord2f(0.0, 0.0)
+		rl.Vertex3f(x+width/2, y-height/2, z+length/2) // Bottom Left Of The Texture and Quad
+		// Left Face
+		rl.Normal3f(-1.0, 0.0, 0.0) // Normal Pointing Left
+		rl.TexCoord2f(0.0, 0.0)
+		rl.Vertex3f(x-width/2, y-height/2, z-length/2) // Bottom Left Of The Texture and Quad
+		rl.TexCoord2f(1.0, 0.0)
+		rl.Vertex3f(x-width/2, y-height/2, z+length/2) // Bottom Right Of The Texture and Quad
+		rl.TexCoord2f(1.0, 1.0)
+		rl.Vertex3f(x-width/2, y+height/2, z+length/2) // Top Right Of The Texture and Quad
+		rl.TexCoord2f(0.0, 1.0)
+		rl.Vertex3f(x-width/2, y+height/2, z-length/2) // Top Left Of The Texture and Quad
 
-	rl.Begin(rl.Quads)
-	rl.Color4ub(color.R, color.G, color.B, color.A)
-	// Front Face
-	rl.Normal3f(0.0, 0.0, 1.0) // Normal Pointing Towards Viewer
-	rl.TexCoord2f(0.0, 0.0)
-	rl.Vertex3f(x-width/2, y-height/2, z+length/2) // Bottom Left Of The Texture and Quad
-	rl.TexCoord2f(1.0, 0.0)
-	rl.Vertex3f(x+width/2, y-height/2, z+length/2) // Bottom Right Of The Texture and Quad
-	rl.TexCoord2f(1.0, 1.0)
-	rl.Vertex3f(x+width/2, y+height/2, z+length/2) // Top Right Of The Texture and Quad
-	rl.TexCoord2f(0.0, 1.0)
-	rl.Vertex3f(x-width/2, y+height/2, z+length/2) // Top Left Of The Texture and Quad
-	// Back Face
-	rl.Normal3f(0.0, 0.0, -1.0) // Normal Pointing Away From Viewer
-	rl.TexCoord2f(1.0, 0.0)
-	rl.Vertex3f(x-width/2, y-height/2, z-length/2) // Bottom Right Of The Texture and Quad
-	rl.TexCoord2f(1.0, 1.0)
-	rl.Vertex3f(x-width/2, y+height/2, z-length/2) // Top Right Of The Texture and Quad
-	rl.TexCoord2f(0.0, 1.0)
-	rl.Vertex3f(x+width/2, y+height/2, z-length/2) // Top Left Of The Texture and Quad
-	rl.TexCoord2f(0.0, 0.0)
-	rl.Vertex3f(x+width/2, y-height/2, z-length/2) // Bottom Left Of The Texture and Quad
-	// Top Face
-	rl.Normal3f(0.0, 1.0, 0.0) // Normal Pointing Up
-	rl.TexCoord2f(0.0, 1.0)
-	rl.Vertex3f(x-width/2, y+height/2, z-length/2) // Top Left Of The Texture and Quad.
-	rl.TexCoord2f(0.0, 0.0)
-	rl.Vertex3f(x-width/2, y+height/2, z+length/2) // Bottom Left Of The Texture and Quad
-	rl.TexCoord2f(1.0, 0.0)
-	rl.Vertex3f(x+width/2, y+height/2, z+length/2) // Bottom Right Of The Texture and Quad
-	rl.TexCoord2f(1.0, 1.0)
-	rl.Vertex3f(x+width/2, y+height/2, z-length/2) // Top Right Of The Texture and Quad Bottom Face
-	rl.Normal3f(0.0, -1.0, 0.0)                    // Normal Pointing Down
-	rl.TexCoord2f(1.0, 1.0)
-	rl.Vertex3f(x-width/2, y-height/2, z-length/2) // Top Right Of The Texture and Quad
-	rl.TexCoord2f(0.0, 1.0)
-	rl.Vertex3f(x+width/2, y-height/2, z-length/2) // Top Left Of The Texture and Quad
-	rl.TexCoord2f(0.0, 0.0)
-	rl.Vertex3f(x+width/2, y-height/2, z+length/2) // Bottom Left Of The Texture and Quad
-	rl.TexCoord2f(1.0, 0.0)
-	rl.Vertex3f(x-width/2, y-height/2, z+length/2) // Bottom Right Of The Texture and Quad
-	// Right face
-	rl.Normal3f(1.0, 0.0, 0.0) // Normal Pointing Right
-	rl.TexCoord2f(1.0, 0.0)
-	rl.Vertex3f(x+width/2, y-height/2, z-length/2) // Bottom Right Of The Texture and Quad
-	rl.TexCoord2f(1.0, 1.0)
-	rl.Vertex3f(x+width/2, y+height/2, z-length/2) // Top Right Of The Texture and Quad
-	rl.TexCoord2f(0.0, 1.0)
-	rl.Vertex3f(x+width/2, y+height/2, z+length/2) // Top Left Of The Texture and Quad
-	rl.TexCoord2f(0.0, 0.0)
-	rl.Vertex3f(x+width/2, y-height/2, z+length/2) // Bottom Left Of The Texture and Quad
-	// Left Face
-	rl.Normal3f(-1.0, 0.0, 0.0) // Normal Pointing Left
-	rl.TexCoord2f(0.0, 0.0)
-	rl.Vertex3f(x-width/2, y-height/2, z-length/2) // Bottom Left Of The Texture and Quad
-	rl.TexCoord2f(1.0, 0.0)
-	rl.Vertex3f(x-width/2, y-height/2, z+length/2) // Bottom Right Of The Texture and Quad
-	rl.TexCoord2f(1.0, 1.0)
-	rl.Vertex3f(x-width/2, y+height/2, z+length/2) // Top Right Of The Texture and Quad
-	rl.TexCoord2f(0.0, 1.0)
-	rl.Vertex3f(x-width/2, y+height/2, z-length/2) // Top Left Of The Texture and Quad
-
-	rl.End()
-	//rl.PopMatrix()
+		rl.End()
+	}
+	rl.PopMatrix()
 
 	rl.SetTexture(0)
 }
