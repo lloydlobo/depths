@@ -541,7 +541,7 @@ func runPreviousVersion() {
 		fmt.Printf("levelPlaceholder: %v\n", levelPlaceholder)
 	}
 
-	rl.DisableCursor()
+	// rl.DisableCursor()
 	rl.SetTargetFPS(fps)
 
 	for !rl.WindowShouldClose() {

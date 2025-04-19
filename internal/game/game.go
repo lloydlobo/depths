@@ -12,6 +12,7 @@ import (
 
 	audiopro "example/depths/internal/audio/processor"
 	"example/depths/internal/common"
+	"example/depths/internal/light"
 	endingSC "example/depths/internal/screen/ending"
 	gameplaySC "example/depths/internal/screen/gameplay"
 	logoSC "example/depths/internal/screen/logo"
@@ -30,6 +31,7 @@ import (
 func Run() {
 	// Initialize
 
+	rl.SetConfigFlags(rl.FlagMsaa4xHint)
 	rl.InitWindow(int32(rl.GetScreenWidth()), int32(rl.GetScreenHeight()), "tiny game ─ depths")
 
 	rl.InitAudioDevice()
@@ -49,13 +51,69 @@ func Run() {
 	common.Music.Theme = rl.LoadMusicStream(filepath.Join("res", "music", cmp.Or("mini1111.xm", "infraction-moments_passed.wav")))
 	common.Music.Theme.Looping = false
 	rl.SetMusicVolume(common.Music.Theme, 0.125)
-	if false {
-		rl.PauseMusicStream(common.Music.Theme)
-	} else {
-		rl.PlayMusicStream(common.Music.Theme)
-	}
+	rl.PauseMusicStream(common.Music.Theme)
+
 	common.FX.Coin = rl.LoadSound("res/fx/coin.wav")
 	rl.SetSoundVolume(common.FX.Coin, 0.3)
+
+	common.Texture.CubicmapAtlas = rl.LoadTexture(filepath.Join("res", "texture", "cubicmap_atlas.png"))
+
+	// Load PBR shader and setup all required locations
+	common.Shader.PBR = rl.LoadShader(
+		filepath.Join("res", "shader", "glsl330_"+"pbr.vs"),
+		filepath.Join("res", "shader", "glsl330_"+"pbr.fs"))
+	updateShaderLoc := func(shader rl.Shader, index int32, uniformName string) {
+		shader.UpdateLocation(index, rl.GetShaderLocation(shader, uniformName))
+		// common.Shader.PBR.UpdateLocation(rl.MapAlbedo, rl.GetShaderLocation(common.Shader.PBR, "albedoMap"))
+		// common.Shader.PBR.UpdateLocation(rl.MapMetalness, rl.GetShaderLocation(common.Shader.PBR, "mraMap"))
+	}
+	if false {
+		updateShaderLoc(common.Shader.PBR, rl.ShaderLocMapAlbedo, "albedoMap")
+		// WARNING: Metalness, roughness, and ambient occlusion are all packed into a MRA texture
+		// They are passed as to the SHADER_LOC_MAP_METALNESS location for convenience,
+		// shader already takes care of it accordingly
+		updateShaderLoc(common.Shader.PBR, rl.ShaderLocMapMetalness, "mraMap")
+		updateShaderLoc(common.Shader.PBR, rl.ShaderLocMapNormal, "normalMap")
+		// WARNING: Similar to the MRA map, the emissive map packs different information
+		// into a single texture: it stores height and emission data
+		// It is binded to SHADER_LOC_MAP_EMISSION location an properly processed on shader
+		updateShaderLoc(common.Shader.PBR, rl.ShaderLocMapEmission, "emissiveMap")
+		updateShaderLoc(common.Shader.PBR, rl.ShaderLocColorDiffuse, "albedoColor")
+	}
+
+	const MAX_LIGHTS = 4
+
+	if false {
+		// Setup additional required shader locations, including lights data
+		updateShaderLoc(common.Shader.PBR, rl.ShaderLocVectorView, "viewPos")
+		lightCountLoc := rl.GetShaderLocation(common.Shader.PBR, "numOfLights")
+		maxLightCount := []float32{MAX_LIGHTS}
+		rl.SetShaderValue(common.Shader.PBR, lightCountLoc, maxLightCount, rl.ShaderUniformInt)
+
+		// Setup ambient color and intensity parameters
+		ambientIntensity := []float32{0.02}
+		ambientColor := rl.NewColor(26, 32, 135, 255)
+		acnVec3 := rl.NewVector3(float32(ambientColor.R)/255.0, float32(ambientColor.G)/255.0, float32(ambientColor.B)/255.0)
+		ambientColorNormalized := []float32{acnVec3.X, acnVec3.Y, acnVec3.Z}
+		rl.SetShaderValue(common.Shader.PBR, rl.GetShaderLocation(common.Shader.PBR, "ambientColor"), ambientColorNormalized, rl.ShaderUniformVec3)
+		rl.SetShaderValue(common.Shader.PBR, rl.GetShaderLocation(common.Shader.PBR, "ambient"), ambientIntensity, rl.ShaderUniformFloat)
+	}
+
+	if false {
+		// Create some lights
+		light.Lights[0] = light.CreateLight(light.PointLight, rl.NewVector3(-1.0, 1.0, -2.0), rl.NewVector3(0.0, 0.0, 0.0), rl.Yellow, 4.0, common.Shader.PBR)
+		light.Lights[1] = light.CreateLight(light.PointLight, rl.NewVector3(2.0, 1.0, 1.0), rl.NewVector3(0.0, 0.0, 0.0), rl.Green, 3.3, common.Shader.PBR)
+		light.Lights[2] = light.CreateLight(light.PointLight, rl.NewVector3(-2.0, 1.0, 1.0), rl.NewVector3(0.0, 0.0, 0.0), rl.Red, 8.3, common.Shader.PBR)
+		light.Lights[3] = light.CreateLight(light.PointLight, rl.NewVector3(1.0, 1.0, -2.0), rl.NewVector3(0.0, 0.0, 0.0), rl.Blue, 2.0, common.Shader.PBR)
+	}
+
+	// Setup material texture maps usage in shader
+	// NOTE: By default, the texture maps are always used
+	usage := []float32{1}
+	rl.SetShaderValue(common.Shader.PBR, rl.GetShaderLocation(common.Shader.PBR, "useTexAlbedo"), usage, rl.ShaderUniformInt)
+	rl.SetShaderValue(common.Shader.PBR, rl.GetShaderLocation(common.Shader.PBR, "useTexNormal"), usage, rl.ShaderUniformInt)
+	rl.SetShaderValue(common.Shader.PBR, rl.GetShaderLocation(common.Shader.PBR, "useTexMRA"), usage, rl.ShaderUniformInt)
+	rl.SetShaderValue(common.Shader.PBR, rl.GetShaderLocation(common.Shader.PBR, "useTexEmissive"), usage, rl.ShaderUniformInt)
 
 	currentScreen = logoGameScreen
 	logoSC.Init()
@@ -229,20 +287,22 @@ func UpdateDrawFrame() {
 	// =============================================================================
 	// Update
 
-	rl.UpdateMusicStream(common.Music.Theme)
+	if false {
+		rl.UpdateMusicStream(common.Music.Theme)
 
-	// Modify processing variables
-	if rl.IsKeyPressed(rl.KeyLeft) {
-		audiopro.AudioExponent -= 0.05
-	}
-	if rl.IsKeyPressed(rl.KeyRight) {
-		audiopro.AudioExponent += 0.05
-	}
-	if rl.IsKeyPressed(rl.KeyDown) {
-		audiopro.AudioExponent -= 0.25
-	}
-	if rl.IsKeyPressed(rl.KeyUp) {
-		audiopro.AudioExponent += 0.25
+		// Modify processing variables
+		if rl.IsKeyPressed(rl.KeyLeft) {
+			audiopro.AudioExponent -= 0.05
+		}
+		if rl.IsKeyPressed(rl.KeyRight) {
+			audiopro.AudioExponent += 0.05
+		}
+		if rl.IsKeyPressed(rl.KeyDown) {
+			audiopro.AudioExponent -= 0.25
+		}
+		if rl.IsKeyPressed(rl.KeyUp) {
+			audiopro.AudioExponent += 0.25
+		}
 	}
 
 	if !onTransition {

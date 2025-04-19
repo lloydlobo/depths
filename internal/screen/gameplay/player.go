@@ -1,6 +1,9 @@
 package gameplay
 
 import (
+	"cmp"
+	"example/depths/internal/common"
+
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
@@ -57,47 +60,53 @@ func (p *Player) Update() {
 	}
 }
 
+var playerCol = cmp.Or(rl.White, rl.ColorLerp(rl.Black, rl.DarkGray, .1))
+
 func (p Player) Draw() {
-	col := rl.Beige
+	col := playerCol
 	rl.DrawCapsule(
 		rl.Vector3Add(p.Position, rl.NewVector3(0, p.Size.Y/4, 0)),
 		rl.Vector3Add(p.Position, rl.NewVector3(0, -p.Size.Y/4, 0)),
 		p.Size.X/2, 16, 16, col)
-	rl.DrawCapsuleWires(
-		rl.Vector3Add(p.Position, rl.NewVector3(0, p.Size.Y/4, 0)),
-		rl.Vector3Add(p.Position, rl.NewVector3(0, -p.Size.Y/4, 0)),
-		p.Size.X/2, 16, 16, col)
-	rl.DrawCylinderWiresEx(
-		rl.Vector3Add(p.Position, rl.NewVector3(0, p.Size.Y/2, 0)),
-		rl.Vector3Add(p.Position, rl.NewVector3(0, -p.Size.Y/2, 0)),
-		p.Size.X/2, p.Size.X/2, 16, col)
-	if isPlayerWallCollision {
-		rl.DrawBoundingBox(p.BoundingBox, rl.Red)
-	} else {
-		rl.DrawBoundingBox(p.BoundingBox, rl.LightGray)
+	if false {
+		rl.DrawCapsuleWires(
+			rl.Vector3Add(p.Position, rl.NewVector3(0, p.Size.Y/4, 0)),
+			rl.Vector3Add(p.Position, rl.NewVector3(0, -p.Size.Y/4, 0)),
+			p.Size.X/2, 16, 16, col)
+		rl.DrawCylinderWiresEx(
+			rl.Vector3Add(p.Position, rl.NewVector3(0, p.Size.Y/2, 0)),
+			rl.Vector3Add(p.Position, rl.NewVector3(0, -p.Size.Y/2, 0)),
+			p.Size.X/2, p.Size.X/2, 16, col)
+		if isPlayerWallCollision {
+			rl.DrawBoundingBox(p.BoundingBox, rl.Red)
+		} else {
+			rl.DrawBoundingBox(p.BoundingBox, rl.LightGray)
+		}
 	}
 
+	size := rl.Vector3Scale(p.Size, .5)
 	if p.Collisions.X != 0 {
 		pos := p.Position
 		pos.X += p.Collisions.X * p.Size.X / 2
-		rl.DrawCubeV(pos, rl.Vector3Scale(p.Size, .5), xCol)
+		rl.DrawCubeV(pos, size, common.XAxisColor)
 	}
 	if p.Collisions.Y != 0 {
 		pos := p.Position
 		pos.Y += p.Collisions.Y * p.Size.Y / 2
-		rl.DrawCubeV(pos, rl.Vector3Scale(p.Size, .5), yCol)
+		rl.DrawCubeV(pos, size, common.YAxisColor)
 	}
 	if p.Collisions.Z != 0 {
 		pos := p.Position
 		pos.Z += p.Collisions.Z * p.Size.Z / 2
-		rl.DrawCubeV(pos, rl.Vector3Scale(p.Size, .5), zCol)
+		rl.DrawCubeV(pos, size, common.ZAxisColor)
 	}
 	if p.Collisions.W != 0 { // Floor
 		pos := p.Position
 		pos.Y += p.Collisions.W * p.Size.Y / 2
-		rl.DrawCubeV(pos, rl.Vector3Scale(p.Size, .5), yCol)
+		rl.DrawCubeV(pos, size, common.YAxisColor)
 	}
 
-	DrawXYZOrbitV(p.Position, 1.)
-	draw_cube_texture_main()
+	if true {
+		DrawXYZOrbitV(p.Position, 1./common.Phi)
+	}
 }

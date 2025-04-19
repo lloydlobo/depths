@@ -10,6 +10,7 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 
 	"example/depths/internal/common"
+	"example/depths/internal/light"
 )
 
 var (
@@ -21,12 +22,10 @@ var (
 	player                Player
 	floor                 Floor
 	isPlayerWallCollision bool
-)
 
-var (
-	xCol = rl.Fade(rl.Red, .3)
-	yCol = rl.Fade(rl.Green, .3)
-	zCol = rl.Fade(rl.Green, .3)
+	textureTilingLoc     int32
+	emissiveColorLoc     int32
+	emissiveIntensityLoc int32
 )
 
 // TEMPORARY
@@ -34,12 +33,10 @@ var (
 //	TEMPORARY
 
 var (
-	// 							TEMPORARY
-	// 							TEMPORARY
-	cubeTexture rl.Texture2D
-	floorModel  rl.Model
-	//							TEMPORARY
-	//							TEMPORARY
+	floorRoadPBRModel   rl.Model
+	floorTileLargeModel rl.Model
+
+	wallModel rl.Model
 )
 
 // 	TEMPORARY
@@ -50,21 +47,13 @@ func Init() {
 	framesCounter = 0
 	finishScreen = 0
 
-	// See also https://github.com/raylib-extras/extras-c/blob/main/cameras/rlTPCamera/rlTPCamera.h
 	camera = rl.Camera3D{
 		Position:   rl.NewVector3(0., 30., 30.),
-		Target:     rl.NewVector3(0., 1+0.5, 0.),
+		Target:     rl.NewVector3(0., (1+0.5)-0.5, 0.),
 		Up:         rl.NewVector3(0., 1., 0.),
 		Fovy:       45.0,
 		Projection: rl.CameraPerspective,
-	}
-
-	common.Shader.PBR = rl.LoadShader(
-		filepath.Join("res", "shader", "glsl330_"+"pbr.vs"),
-		filepath.Join("res", "shader", "glsl330_"+"pbr.fs"))
-
-	// Load cubeTexture to be applied to the cubes sides (256x256 png)
-	cubeTexture = rl.LoadTexture("res/cubicmap_atlas.png")
+	} // See also https://github.com/raylib-extras/extras-c/blob/main/cameras/rlTPCamera/rlTPCamera.h
 
 	InitFloor() // Init floor and friends
 
@@ -77,6 +66,22 @@ func Init() {
 	rl.PlayMusicStream(common.Music.Theme)
 
 	rl.DisableCursor() // for ThirdPersonPerspective
+
+	// Get location for shader parameters that can be modified in real time
+	emissiveIntensityLoc = rl.GetShaderLocation(common.Shader.PBR, "emissivePower")
+	emissiveColorLoc = rl.GetShaderLocation(common.Shader.PBR, "emissiveColor")
+	textureTilingLoc = rl.GetShaderLocation(common.Shader.PBR, "tiling")
+
+	{
+		// KayKit_DungeonRemastered_1.1_FREE/Assets/textures/dungeon_texture.png
+		dungeonTexture := rl.LoadTexture(filepath.Join("res", "texture", "dungeon_texture.png"))
+		floorTileLargeModel = rl.LoadModel(filepath.Join("res", "model", "obj", "floor_tile_large.obj"))
+		rl.SetMaterialTexture(floorTileLargeModel.Materials, rl.MapDiffuse, dungeonTexture)
+
+		// KayKit_DungeonRemastered_1.1_FREE/Assets/textures/dungeon_texture.png
+		wallModel = rl.LoadModel(filepath.Join("res", "model", "obj", "wall.obj"))
+		rl.SetMaterialTexture(wallModel.Materials, rl.MapDiffuse, dungeonTexture)
+	}
 }
 
 func HandleUserInput() {
@@ -85,23 +90,38 @@ func HandleUserInput() {
 		finishScreen = 1
 		rl.PlaySound(common.FX.Coin)
 	}
+
 	if rl.IsKeyDown(rl.KeyF) {
 		log.Println("[F] Picked up item")
+	}
+
+	if false {
+		// Check key inputs to enable/disable lights
+		if rl.IsKeyPressed(rl.KeyOne) {
+			light.Lights[2].EnabledBinary = light.GetToggledEnabledBinary(2)
+		}
+		if rl.IsKeyPressed(rl.KeyTwo) {
+			light.Lights[1].EnabledBinary = light.GetToggledEnabledBinary(1)
+		}
+		if rl.IsKeyPressed(rl.KeyThree) {
+			light.Lights[3].EnabledBinary = light.GetToggledEnabledBinary(3)
+		}
+		if rl.IsKeyPressed(rl.KeyFour) {
+			light.Lights[0].EnabledBinary = light.GetToggledEnabledBinary(0)
+		}
 	}
 }
 
 func Update() {
 	HandleUserInput()
-
-	dt := rl.GetFrameTime()
-	_ = dt
-	slog.Debug("Update", "dt", dt)
-
 	rl.UpdateMusicStream(common.Music.Theme)
 
 	// Save variables this frame
 	oldCam := camera
 	oldPlayer := player
+
+	dt := rl.GetFrameTime()
+	slog.Debug("Update", "dt", dt)
 
 	// Reset single frame flags/variables
 	player.Collisions = rl.Quaternion{}
@@ -109,15 +129,24 @@ func Update() {
 
 	rl.UpdateCamera(&camera, rl.CameraThirdPerson)
 
+	// Update the shader with the camera view vector (points towards { 0.0f, 0.0f, 0.0f })
+	camPos := [3]float32{oldCam.Position.X, oldCam.Position.Y, oldCam.Position.Z}
+	rl.SetShaderValue(common.Shader.PBR, common.Shader.PBR.GetLocation(rl.ShaderLocVectorView), camPos[:], rl.ShaderUniformVec3)
+
+	if false {
+		// Update light values on shader (actually, only enable/disable them)
+		for i := range light.MaxLights {
+			light.UpdateLight(common.Shader.PBR, light.Lights[i])
+		}
+	}
+
 	player.Update()
 
 	if isPlayerWallCollision {
 		player.Position = oldPlayer.Position
 		player.BoundingBox = rl.NewBoundingBox(
-			rl.NewVector3(player.Position.X-player.Size.X/2,
-				player.Position.Y-player.Size.Y/2, player.Position.Z-player.Size.Z/2),
-			rl.NewVector3(player.Position.X+player.Size.X/2,
-				player.Position.Y+player.Size.Y/2, player.Position.Z+player.Size.Z/2))
+			rl.NewVector3(player.Position.X-player.Size.X/2, player.Position.Y-player.Size.Y/2, player.Position.Z-player.Size.Z/2),
+			rl.NewVector3(player.Position.X+player.Size.X/2, player.Position.Y+player.Size.Y/2, player.Position.Z+player.Size.Z/2))
 		camera.Target = oldCam.Target
 		camera.Position = oldCam.Position
 	}
@@ -132,10 +161,72 @@ func Draw() {
 	// 3D World
 	rl.BeginMode3D(camera)
 
-	rl.ClearBackground(rl.Black)
+	bgCol := cmp.Or(rl.ColorBrightness(rl.DarkPurple, -.9), rl.Black, rl.RayWhite)
+	rl.ClearBackground(bgCol)
 
-	floor.Draw()
 	player.Draw()
+
+	// Draw floor
+	{
+		if false {
+			floor.Draw()
+		} else {
+			const floorModelScale = 4
+			for x := float32(floor.BoundingBox.Min.X); x < float32(floor.BoundingBox.Max.X); x += floorModelScale {
+				for z := float32(floor.BoundingBox.Min.Z); z < float32(floor.BoundingBox.Max.Z); z += floorModelScale {
+					centerX, centerY, centerZ := x+(floorModelScale/4.)*2., float32(0.), z+(floorModelScale/4.)*2.
+					rl.DrawModel(floorTileLargeModel, rl.NewVector3(centerX, centerY, centerZ), floorModelScale/4., rl.White)
+				}
+			}
+		}
+		if false {
+			rl.DrawBoundingBox(floor.BoundingBox, rl.Purple)
+		}
+		DrawXYZOrbitV(rl.Vector3Zero(), 2.)
+		DrawWorldXYZAxis()
+	}
+
+	// Draw walls
+	const wallLen = 4
+	const wallThick = 1. / 4.
+	wallTint := rl.White
+	wallPos := floor.Position
+	floorSize := floor.Size
+
+	for i := -float32(floorSize.Z/2) + wallLen/2; i < float32(floorSize.Z/2); i += wallLen { // Along Z axis
+		rl.DrawModelEx(wallModel, rl.NewVector3(wallPos.X-floorSize.X/2-wallThick, wallPos.Y, wallPos.Z+i),
+			rl.NewVector3(0, 1, 0), 90, common.Vector3One, wallTint)
+		rl.DrawModelEx(wallModel, rl.NewVector3(wallPos.X+floorSize.X/2+wallThick, wallPos.Y, wallPos.Z+i),
+			rl.NewVector3(0, 1, 0), 90, common.Vector3One, wallTint)
+	}
+	for i := -float32(floorSize.X/2) + wallLen/2; i < float32(floorSize.X/2); i += wallLen { // Along X axis
+		rl.DrawModelEx(wallModel, rl.NewVector3(wallPos.X-i, wallPos.Y, wallPos.Z-floorSize.X/2-wallThick),
+			rl.NewVector3(0, 1, 0), 180, common.Vector3One, wallTint)
+		rl.DrawModelEx(wallModel, rl.NewVector3(wallPos.X+i, wallPos.Y, wallPos.Z+floorSize.X/2+wallThick),
+			rl.NewVector3(0, 1, 0), 180, common.Vector3One, wallTint)
+	}
+
+	// rl.DrawModelEx(wallModel, rl.NewVector3(wallPos.X, wallPos.Y, wallPos.Z+floorSize.Z/2), rl.NewVector3(0, 1, 0), 180, common.Vector3One, common.ZAxisColor)
+	// rl.DrawModelEx(wallModel, rl.NewVector3(wallPos.X, wallPos.Y, wallPos.Z-floorSize.Z/2), rl.NewVector3(0, 1, 0), 180, common.Vector3One, common.ZAxisColor)
+
+	if false {
+		for i := range light.MaxLights {
+			lightColor := rl.NewColor(
+				uint8(light.Lights[i].Color[0]*255),
+				uint8(light.Lights[i].Color[1]*255),
+				uint8(light.Lights[i].Color[2]*255),
+				uint8(light.Lights[i].Color[3]*255))
+			if light.Lights[i].EnabledBinary == 1 {
+				rl.DrawSphereEx(light.Lights[i].Position, .2, 8, 8, lightColor)
+			} else {
+				rl.DrawSphereWires(light.Lights[i].Position, .2, 8, 8, rl.Fade(lightColor, .3))
+			}
+		}
+	}
+
+	if true {
+		DrawCubicmaps()
+	}
 
 	rl.EndMode3D()
 
@@ -161,210 +252,4 @@ func Unload() {
 // Gameplay screen should finish?
 func Finish() int {
 	return finishScreen
-}
-
-// DrawXYZOrbitV draws perpendicular 3D circles to all 3 (x y z) axis.
-func DrawXYZOrbitV(pos rl.Vector3, radius float32) {
-	rl.DrawCircle3D(pos, radius, rl.NewVector3(0, 1, 0), 90, xCol)
-	rl.DrawCircle3D(pos, radius, rl.NewVector3(1, 0, 0), 90, yCol)
-	rl.DrawCircle3D(pos, radius, rl.NewVector3(0, -1, 0), 0, zCol)
-}
-
-// DrawWorldXYZAxis draws all 3 (x y z) axis intersecting at (0,0,0).
-func DrawWorldXYZAxis() {
-	rl.DrawLine3D(rl.NewVector3(500, 0, 0), rl.NewVector3(-500, 0, 0), xCol)
-	rl.DrawLine3D(rl.NewVector3(0, 500, 0), rl.NewVector3(0, -500, 0), yCol)
-	rl.DrawLine3D(rl.NewVector3(0, 0, 500), rl.NewVector3(0, 0, -500), zCol)
-}
-
-func draw_cube_texture_main() {
-	// Draw cube with an applied texture
-	vec := rl.Vector3{X: -2.0, Y: 2.0}
-	DrawCubeTexture(cubeTexture, vec, 2.0, 4.0, 2.0, rl.White)
-
-	// Draw cube with an applied texture, but only a defined rectangle piece of the texture
-	rec := rl.Rectangle{
-		Y:      float32(cubeTexture.Height) / 2.0,
-		Width:  float32(cubeTexture.Width) / 2.0,
-		Height: float32(cubeTexture.Height) / 2.0,
-	}
-	vec = rl.Vector3{X: 2.0, Y: 1.0}
-	DrawCubeTextureRec(cubeTexture, rec, vec, 2.0, 2.0, 2.0, rl.White)
-}
-
-// DrawCubeTexture draws a textured cube
-// NOTE: Cube position is the center position
-func DrawCubeTexture(texture rl.Texture2D, position rl.Vector3, width, height, length float32, color rl.Color) {
-	x := position.X
-	y := position.Y
-	z := position.Z
-
-	// Set desired texture to be enabled while drawing following vertex data
-	rl.SetTexture(texture.ID)
-
-	// Vertex data transformation can be defined with the commented lines,
-	// but in this example we calculate the transformed vertex data directly when calling rlVertex3f()
-	rl.PushMatrix()
-	// NOTE: Transformation is applied in inverse order (scale -> rotate -> translate)
-	rl.Translatef(2.0, 0.0, 0.0)
-	rl.Rotatef(45, 0, 1, 0)
-	rl.Scalef(2.0, 2.0, 2.0)
-	{
-		rl.Begin(rl.Quads)
-		rl.Color4ub(color.R, color.G, color.B, color.A)
-		// Front Face
-		rl.Normal3f(0.0, 0.0, 1.0) // Normal Pointing Towards Viewer
-		rl.TexCoord2f(0.0, 0.0)
-		rl.Vertex3f(x-width/2, y-height/2, z+length/2) // Bottom Left Of The Texture and Quad
-		rl.TexCoord2f(1.0, 0.0)
-		rl.Vertex3f(x+width/2, y-height/2, z+length/2) // Bottom Right Of The Texture and Quad
-		rl.TexCoord2f(1.0, 1.0)
-		rl.Vertex3f(x+width/2, y+height/2, z+length/2) // Top Right Of The Texture and Quad
-		rl.TexCoord2f(0.0, 1.0)
-		rl.Vertex3f(x-width/2, y+height/2, z+length/2) // Top Left Of The Texture and Quad
-		// Back Face
-		rl.Normal3f(0.0, 0.0, -1.0) // Normal Pointing Away From Viewer
-		rl.TexCoord2f(1.0, 0.0)
-		rl.Vertex3f(x-width/2, y-height/2, z-length/2) // Bottom Right Of The Texture and Quad
-		rl.TexCoord2f(1.0, 1.0)
-		rl.Vertex3f(x-width/2, y+height/2, z-length/2) // Top Right Of The Texture and Quad
-		rl.TexCoord2f(0.0, 1.0)
-		rl.Vertex3f(x+width/2, y+height/2, z-length/2) // Top Left Of The Texture and Quad
-		rl.TexCoord2f(0.0, 0.0)
-		rl.Vertex3f(x+width/2, y-height/2, z-length/2) // Bottom Left Of The Texture and Quad
-		// Top Face
-		rl.Normal3f(0.0, 1.0, 0.0) // Normal Pointing Up
-		rl.TexCoord2f(0.0, 1.0)
-		rl.Vertex3f(x-width/2, y+height/2, z-length/2) // Top Left Of The Texture and Quad.
-		rl.TexCoord2f(0.0, 0.0)
-		rl.Vertex3f(x-width/2, y+height/2, z+length/2) // Bottom Left Of The Texture and Quad
-		rl.TexCoord2f(1.0, 0.0)
-		rl.Vertex3f(x+width/2, y+height/2, z+length/2) // Bottom Right Of The Texture and Quad
-		rl.TexCoord2f(1.0, 1.0)
-		rl.Vertex3f(x+width/2, y+height/2, z-length/2) // Top Right Of The Texture and Quad Bottom Face
-		rl.Normal3f(0.0, -1.0, 0.0)                    // Normal Pointing Down
-		rl.TexCoord2f(1.0, 1.0)
-		rl.Vertex3f(x-width/2, y-height/2, z-length/2) // Top Right Of The Texture and Quad
-		rl.TexCoord2f(0.0, 1.0)
-		rl.Vertex3f(x+width/2, y-height/2, z-length/2) // Top Left Of The Texture and Quad
-		rl.TexCoord2f(0.0, 0.0)
-		rl.Vertex3f(x+width/2, y-height/2, z+length/2) // Bottom Left Of The Texture and Quad
-		rl.TexCoord2f(1.0, 0.0)
-		rl.Vertex3f(x-width/2, y-height/2, z+length/2) // Bottom Right Of The Texture and Quad
-		// Right face
-		rl.Normal3f(1.0, 0.0, 0.0) // Normal Pointing Right
-		rl.TexCoord2f(1.0, 0.0)
-		rl.Vertex3f(x+width/2, y-height/2, z-length/2) // Bottom Right Of The Texture and Quad
-		rl.TexCoord2f(1.0, 1.0)
-		rl.Vertex3f(x+width/2, y+height/2, z-length/2) // Top Right Of The Texture and Quad
-		rl.TexCoord2f(0.0, 1.0)
-		rl.Vertex3f(x+width/2, y+height/2, z+length/2) // Top Left Of The Texture and Quad
-		rl.TexCoord2f(0.0, 0.0)
-		rl.Vertex3f(x+width/2, y-height/2, z+length/2) // Bottom Left Of The Texture and Quad
-		// Left Face
-		rl.Normal3f(-1.0, 0.0, 0.0) // Normal Pointing Left
-		rl.TexCoord2f(0.0, 0.0)
-		rl.Vertex3f(x-width/2, y-height/2, z-length/2) // Bottom Left Of The Texture and Quad
-		rl.TexCoord2f(1.0, 0.0)
-		rl.Vertex3f(x-width/2, y-height/2, z+length/2) // Bottom Right Of The Texture and Quad
-		rl.TexCoord2f(1.0, 1.0)
-		rl.Vertex3f(x-width/2, y+height/2, z+length/2) // Top Right Of The Texture and Quad
-		rl.TexCoord2f(0.0, 1.0)
-		rl.Vertex3f(x-width/2, y+height/2, z-length/2) // Top Left Of The Texture and Quad
-
-		rl.End()
-	}
-	rl.PopMatrix()
-
-	rl.SetTexture(0)
-}
-
-// DrawCubeTextureRec draws a cube with texture piece applied to all faces
-func DrawCubeTextureRec(texture rl.Texture2D, source rl.Rectangle, position rl.Vector3, width, height,
-	length float32, color rl.Color) {
-
-	x := position.X
-	y := position.Y
-	z := position.Z
-
-	texWidth := float32(texture.Width)
-	texHeight := float32(texture.Height)
-
-	// Set desired texture to be enabled while drawing following vertex data
-	rl.SetTexture(texture.ID)
-
-	// We calculate the normalized texture coordinates for the desired texture-source-rectangle
-	// It means converting from (tex.width, tex.height) coordinates to [0.0f, 1.0f] equivalent
-	rl.Begin(rl.Quads)
-	rl.Color4ub(color.R, color.G, color.B, color.A)
-
-	// Front face
-	rl.Normal3f(0.0, 0.0, 1.0)
-	rl.TexCoord2f(source.X/texWidth, (source.Y+source.Height)/texHeight)
-	rl.Vertex3f(x-width/2, y-height/2, z+length/2)
-	rl.TexCoord2f((source.X+source.Width)/texWidth, (source.Y+source.Height)/texHeight)
-	rl.Vertex3f(x+width/2, y-height/2, z+length/2)
-	rl.TexCoord2f((source.X+source.Width)/texWidth, source.Y/texHeight)
-	rl.Vertex3f(x+width/2, y+height/2, z+length/2)
-	rl.TexCoord2f(source.X/texWidth, source.Y/texHeight)
-	rl.Vertex3f(x-width/2, y+height/2, z+length/2)
-
-	// Back face
-	rl.Normal3f(0.0, 0.0, -1.0)
-	rl.TexCoord2f((source.X+source.Width)/texWidth, (source.Y+source.Height)/texHeight)
-	rl.Vertex3f(x-width/2, y-height/2, z-length/2)
-	rl.TexCoord2f((source.X+source.Width)/texWidth, source.Y/texHeight)
-	rl.Vertex3f(x-width/2, y+height/2, z-length/2)
-	rl.TexCoord2f(source.X/texWidth, source.Y/texHeight)
-	rl.Vertex3f(x+width/2, y+height/2, z-length/2)
-	rl.TexCoord2f(source.X/texWidth, (source.Y+source.Height)/texHeight)
-	rl.Vertex3f(x+width/2, y-height/2, z-length/2)
-
-	// Top face
-	rl.Normal3f(0.0, 1.0, 0.0)
-	rl.TexCoord2f(source.X/texWidth, source.Y/texHeight)
-	rl.Vertex3f(x-width/2, y+height/2, z-length/2)
-	rl.TexCoord2f(source.X/texWidth, (source.Y+source.Height)/texHeight)
-	rl.Vertex3f(x-width/2, y+height/2, z+length/2)
-	rl.TexCoord2f((source.X+source.Width)/texWidth, (source.Y+source.Height)/texHeight)
-	rl.Vertex3f(x+width/2, y+height/2, z+length/2)
-	rl.TexCoord2f((source.X+source.Width)/texWidth, source.Y/texHeight)
-	rl.Vertex3f(x+width/2, y+height/2, z-length/2)
-
-	// Bottom face
-	rl.Normal3f(0.0, -1.0, 0.0)
-	rl.TexCoord2f((source.X+source.Width)/texWidth, source.Y/texHeight)
-	rl.Vertex3f(x-width/2, y-height/2, z-length/2)
-	rl.TexCoord2f(source.X/texWidth, source.Y/texHeight)
-	rl.Vertex3f(x+width/2, y-height/2, z-length/2)
-	rl.TexCoord2f(source.X/texWidth, (source.Y+source.Height)/texHeight)
-	rl.Vertex3f(x+width/2, y-height/2, z+length/2)
-	rl.TexCoord2f((source.X+source.Width)/texWidth, (source.Y+source.Height)/texHeight)
-	rl.Vertex3f(x-width/2, y-height/2, z+length/2)
-
-	// Right face
-	rl.Normal3f(1.0, 0.0, 0.0)
-	rl.TexCoord2f((source.X+source.Width)/texWidth, (source.Y+source.Height)/texHeight)
-	rl.Vertex3f(x+width/2, y-height/2, z-length/2)
-	rl.TexCoord2f((source.X+source.Width)/texWidth, source.Y/texHeight)
-	rl.Vertex3f(x+width/2, y+height/2, z-length/2)
-	rl.TexCoord2f(source.X/texWidth, source.Y/texHeight)
-	rl.Vertex3f(x+width/2, y+height/2, z+length/2)
-	rl.TexCoord2f(source.X/texWidth, (source.Y+source.Height)/texHeight)
-	rl.Vertex3f(x+width/2, y-height/2, z+length/2)
-
-	// Left face
-	rl.Normal3f(-1.0, 0.0, 0.0)
-	rl.TexCoord2f(source.X/texWidth, (source.Y+source.Height)/texHeight)
-	rl.Vertex3f(x-width/2, y-height/2, z-length/2)
-	rl.TexCoord2f((source.X+source.Width)/texWidth, (source.Y+source.Height)/texHeight)
-	rl.Vertex3f(x-width/2, y-height/2, z+length/2)
-	rl.TexCoord2f((source.X+source.Width)/texWidth, source.Y/texHeight)
-	rl.Vertex3f(x-width/2, y+height/2, z+length/2)
-	rl.TexCoord2f(source.X/texWidth, source.Y/texHeight)
-	rl.Vertex3f(x-width/2, y+height/2, z-length/2)
-
-	rl.End()
-
-	rl.SetTexture(0)
 }
