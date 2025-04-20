@@ -4,12 +4,10 @@ import (
 	"cmp"
 	"fmt"
 	"log"
-	"log/slog"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
 	"example/depths/internal/common"
-	"example/depths/internal/light"
 )
 
 var (
@@ -45,11 +43,11 @@ var (
 var (
 	// dungeonTexture rl.Texture2D
 
-	boxLargeModel         rl.Model
-	boxLargePositions     []rl.Vector3
-	boxLargeBoundingBoxes []rl.BoundingBox
-	boxLargeSize          rl.Vector3
-	boxLargeCount         int32
+	barrelModel         rl.Model
+	barrelPositions     []rl.Vector3
+	barrelBoundingBoxes []rl.BoundingBox
+	barrelSize          rl.Vector3
+	barrelCount         int32
 )
 
 const (
@@ -85,13 +83,7 @@ func NewGoldChest(pos, size rl.Vector3) GoldChest {
 	}
 }
 
-func InitGoldChests() {
-	positions := []rl.Vector3{
-		rl.NewVector3(2, 0, -12),
-		rl.NewVector3(-6, 0, -6),
-		rl.NewVector3(-8, 0, 12),
-		rl.NewVector3(-9, 0, -4),
-	}
+func InitGoldChests(positions []rl.Vector3) {
 	size := rl.NewVector3(1, 1, 1)
 	for i := range positions {
 		goldChests = append(goldChests, NewGoldChest(positions[i], size))
@@ -153,50 +145,64 @@ func Init() {
 		Position:   rl.NewVector3(0., 16., 16.),
 		Target:     rl.NewVector3(0., .5, 0.),
 		Up:         rl.NewVector3(0., 1., 0.),
-		Fovy:       15. * float32(cmp.Or(4., 3., 2.)),
+		Fovy:       15. * float32(cmp.Or(3., 4., 2.)),
 		Projection: rl.CameraPerspective,
 	} // See also https://github.com/raylib-extras/extras-c/blob/main/cameras/rlTPCamera/rlTPCamera.h
 
 	// These props/tiles/objects share the same dungeon texture
 	// dungeonTexture = rl.LoadTexture(filepath.Join("res", "texture", "dungeon_texture.png"))
 	// dungeonTexture = common.Model.OBJ.Colormap
-	{
-		InitFloor()
-		InitWall()
-		InitGoldChests()
-		InitPlayer()
-	}
 
 	isPlayerWallCollision = false
+
+	// SCENES 0..3
+	// SCENES 0..3
+	// SCENES 0..3
+	// SCENES 0..3
+	// SCENES 0..3
+	// SCENES 0..3
+	// SCENES 0..3
+	//			SCENES 0..3
+	//						SCENES 0..3
+	InitPlayer()
+	InitFloor()
+	InitWall()
+	InitGoldChests([]rl.Vector3{
+		rl.NewVector3(2, 0, -8),
+		rl.NewVector3(-3, 0, -6),
+		rl.NewVector3(-8, 0, 5),
+		rl.NewVector3(-5, 0, -4),
+	})
+	InitBarrels := func(positions []rl.Vector3) {
+		barrelSize = rl.NewVector3(0.5, 0.5, 0.5)
+		for _, pos := range positions {
+			barrelPositions = append(barrelPositions, pos)
+			barrelBoundingBoxes = append(barrelBoundingBoxes, common.GetBoundingBoxFromPositionSizeV(pos, barrelSize))
+			barrelCount++
+		}
+		barrelModel = common.Model.OBJ.Barrel
+		rl.SetMaterialTexture(barrelModel.Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
+	}
+	InitBarrels([]rl.Vector3{
+		rl.NewVector3(-5, 0, -8),
+		rl.NewVector3(-3, 0, -7),
+		rl.NewVector3(4, 0, 7),
+		rl.NewVector3(5, 0, -4),
+	})
+
+	//						SCENES 0..3
+	//			SCENES 0..3
+	// SCENES 0..3
+	// SCENES 0..3
+	// SCENES 0..3
+	// SCENES 0..3
+	// SCENES 0..3
 
 	rl.SetMusicVolume(common.Music.Theme, float32(cmp.Or(1.0, 0.125)))
 
 	rl.PlayMusicStream(common.Music.Theme)
 
 	rl.DisableCursor() // for ThirdPersonPerspective
-
-	// Get location for shader parameters that can be modified in real time
-	emissiveIntensityLoc = rl.GetShaderLocation(common.Shader.PBR, "emissivePower")
-	emissiveColorLoc = rl.GetShaderLocation(common.Shader.PBR, "emissiveColor")
-	textureTilingLoc = rl.GetShaderLocation(common.Shader.PBR, "tiling")
-
-	{ // KayKit_DungeonRemastered_1.1_FREE/Assets/textures/dungeon_texture.png
-		// boxLargeModel = rl.LoadModel(filepath.Join("res", "model", "obj", "box_large.obj"))
-		boxLargeModel = common.Model.OBJ.Barrel
-		rl.SetMaterialTexture(boxLargeModel.Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
-	}
-
-	boxLargeSize = rl.NewVector3(0.5, 0.5, 0.5)
-	for _, pos := range []rl.Vector3{
-		rl.NewVector3(-5, 0, -8),
-		rl.NewVector3(-3, 0, -7),
-		rl.NewVector3(4, 0, 7),
-		rl.NewVector3(5, 0, -4),
-	} {
-		boxLargePositions = append(boxLargePositions, pos)
-		boxLargeBoundingBoxes = append(boxLargeBoundingBoxes, common.GetBoundingBoxFromPositionSizeV(pos, boxLargeSize))
-		boxLargeCount++
-	}
 }
 
 func HandleUserInput() {
@@ -205,67 +211,31 @@ func HandleUserInput() {
 		finishScreen = 1
 		rl.PlaySound(common.FX.Coin)
 	}
-
 	if rl.IsKeyDown(rl.KeyF) {
 		log.Println("[F] Picked up item")
-	}
-
-	if false {
-		// Check key inputs to enable/disable lights
-		if rl.IsKeyPressed(rl.KeyOne) {
-			light.Lights[2].EnabledBinary = light.GetToggledEnabledBinary(2)
-		}
-		if rl.IsKeyPressed(rl.KeyTwo) {
-			light.Lights[1].EnabledBinary = light.GetToggledEnabledBinary(1)
-		}
-		if rl.IsKeyPressed(rl.KeyThree) {
-			light.Lights[3].EnabledBinary = light.GetToggledEnabledBinary(3)
-		}
-		if rl.IsKeyPressed(rl.KeyFour) {
-			light.Lights[0].EnabledBinary = light.GetToggledEnabledBinary(0)
-		}
 	}
 }
 
 func Update() {
-	rl.UpdateMusicStream(common.Music.Theme)
-
 	HandleUserInput()
 
 	// Save variables this frame
 	oldCam := camera
 	oldPlayer := player
 
-	dt := rl.GetFrameTime()
-	slog.Debug("Update", "dt", dt)
-
-	// Reset single frame flags/variables
+	// Reset flags/variables
 	player.Collisions = rl.Quaternion{}
 	isPlayerWallCollision = false
 
+	rl.UpdateMusicStream(common.Music.Theme)
 	rl.UpdateCamera(&camera, rl.CameraThirdPerson)
 
-	// Update the shader with the camera view vector (points towards { 0.0f, 0.0f, 0.0f })
-	camPos := [3]float32{oldCam.Position.X, oldCam.Position.Y, oldCam.Position.Z}
-	rl.SetShaderValue(common.Shader.PBR, common.Shader.PBR.GetLocation(rl.ShaderLocVectorView), camPos[:], rl.ShaderUniformVec3)
-
-	if false {
-		// Update light values on shader (actually, only enable/disable them)
-		for i := range light.MaxLights {
-			light.UpdateLight(common.Shader.PBR, light.Lights[i])
-		}
-	}
-
 	player.Update()
-
-	// Wall to Player collisions
 	if isPlayerWallCollision {
 		RevertPlayerAndCameraPositions(oldPlayer, &player, oldCam, &camera)
 	}
-
-	// LargeBox to Player collisions
-	for i := range boxLargeCount {
-		if rl.CheckCollisionBoxes(boxLargeBoundingBoxes[i], player.BoundingBox) {
+	for i := range barrelCount {
+		if rl.CheckCollisionBoxes(barrelBoundingBoxes[i], player.BoundingBox) {
 			RevertPlayerAndCameraPositions(oldPlayer, &player, oldCam, &camera)
 		}
 	}
@@ -279,27 +249,36 @@ func Draw() {
 
 	// 3D World
 	rl.BeginMode3D(camera)
-
 	rl.ClearBackground(rl.Black)
+	{
+		player.Draw()
+		floor.Draw()
+		DrawWalls()
+		for _, pos := range barrelPositions { // Draw offgrid tiles
+			rl.DrawModelEx(barrelModel, pos, rl.NewVector3(0, 1, 0), 0., rl.NewVector3(1, 1, 1), rl.White)
+		}
+		for i := range goldChestCount {
+			chest := goldChests[i]
+			rl.DrawModelEx(goldChestModels[chest.State], chest.Pos, rl.NewVector3(0, 1, 0), 0., rl.NewVector3(1, 1, 1), rl.White)
+		}
 
-	player.Draw()
-	floor.Draw()
-	DrawWalls()
-	for _, pos := range boxLargePositions { // Draw offgrid tiles
-		// rl.DrawModel(boxLargeModel, pos, 1., rl.White)
-		rl.DrawModelEx(boxLargeModel, pos, rl.NewVector3(0, 1, 0), 0., rl.NewVector3(1, 1, 1), rl.White)
+		// Draw banners at floor corners
+		floorBBMin := floor.BoundingBox.Min
+		floorBBMax := floor.BoundingBox.Max
+		rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMin.X+1, 0, floorBBMin.Z+1), common.YAxis, 45, common.Vector3One, rl.White)  // leftback
+		rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMax.X-1, 0, floorBBMin.Z+1), common.YAxis, -45, common.Vector3One, rl.White) // rightback
+		rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMax.X, 0, floorBBMax.Z), common.YAxis, 45, common.Vector3One, rl.White)      // rightfront
+		rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMin.X, 0, floorBBMax.Z), common.YAxis, -45, common.Vector3One, rl.White)     // leftfront
+
+		rl.DrawModel(common.Model.OBJ.Coin, rl.NewVector3(1, 0, 1), 1., rl.White)
+		rl.DrawModel(common.Model.OBJ.WoodSupport, rl.NewVector3(2, 0, 2), 1., rl.White)
+		rl.DrawModel(common.Model.OBJ.WoodStructure, rl.NewVector3(3, 0, 3), 1., rl.White)
+		rl.DrawModel(common.Model.OBJ.Dirt, rl.NewVector3(4, 0, 4), 1., rl.White)
+		rl.DrawModel(common.Model.OBJ.Rocks, rl.NewVector3(5, 0, 5), 1., rl.White)
+		rl.DrawModel(common.Model.OBJ.Stones, rl.NewVector3(6, 0, 6), 1., rl.White)
+		rl.DrawModel(common.Model.OBJ.Trap, rl.NewVector3(7, 0, 7), 1., rl.White)
+
 	}
-	for i := range goldChestCount {
-		chest := goldChests[i]
-		// rl.DrawModel(goldChestModels[chest.State], chest.Pos, 1.0, rl.White)
-		rl.DrawModelEx(goldChestModels[chest.State], chest.Pos, rl.NewVector3(0, 1, 0), 0., rl.NewVector3(1, 1, 1), rl.White)
-	}
-
-	cubeSize := rl.NewVector3(.9, .7, .9)
-	rl.DrawCubeV(rl.NewVector3(4, 1, 4), cubeSize, rl.Brown)
-	rl.DrawCubeV(rl.NewVector3(5, 1, 4), cubeSize, rl.Brown)
-	rl.DrawCubeV(rl.NewVector3(5, 1, 5), cubeSize, rl.DarkBrown)
-
 	rl.EndMode3D()
 
 	// 2D World

@@ -27,3 +27,9 @@ var (
 	YAxisColor = rl.Fade(rl.Green, .2)
 	ZAxisColor = rl.Fade(rl.Blue, .2)
 )
+
+var (
+	XAxis = rl.NewVector3(1, 0, 0)
+	YAxis = rl.NewVector3(0, 1, 0)
+	ZAxis = rl.NewVector3(0, 0, 1)
+)

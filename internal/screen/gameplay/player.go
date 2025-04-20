@@ -95,7 +95,7 @@ func (p Player) Draw() {
 			p.Size.X/2, 8, 8, col)
 	}
 
-	if false {
+	if true {
 		rl.DrawCapsuleWires(
 			rl.Vector3Add(p.Position, rl.NewVector3(0, p.Size.Y/4, 0)),
 			rl.Vector3Add(p.Position, rl.NewVector3(0, -p.Size.Y/4, 0)),
@@ -111,7 +111,7 @@ func (p Player) Draw() {
 		}
 	}
 
-	if false {
+	if true {
 		size := rl.Vector3Scale(p.Size, .5)
 		if p.Collisions.X != 0 {
 			pos := p.Position
@@ -135,7 +135,7 @@ func (p Player) Draw() {
 		}
 	}
 
-	if false {
+	if true {
 		DrawXYZOrbitV(p.Position, 1./common.Phi)
 	}
 }
