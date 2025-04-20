@@ -14,10 +14,6 @@ type Player struct {
 	Collisions  rl.Quaternion
 }
 
-var (
-	playerModel rl.Model
-)
-
 func NewPlayer() Player {
 	out := Player{
 		Position:   camera.Target,
@@ -27,12 +23,6 @@ func NewPlayer() Player {
 		rl.NewVector3(camera.Target.X-player.Size.X/2, camera.Target.Y-player.Size.Y/2, camera.Target.Z-player.Size.Z/2),
 		rl.NewVector3(camera.Target.X+player.Size.X/2, camera.Target.Y+player.Size.Y/2, camera.Target.Z+player.Size.Z/2))
 	return out
-}
-
-func InitPlayer() {
-	player = NewPlayer()
-	playerModel = common.Model.OBJ.Column
-	rl.SetMaterialTexture(playerModel.Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
 }
 
 func (p *Player) Update() {
@@ -73,30 +63,11 @@ func (p *Player) Update() {
 var playerCol = cmp.Or(rl.White, rl.ColorLerp(rl.Black, rl.DarkGray, .1))
 
 func (p Player) Draw() {
-	col := rl.Fade(playerCol, .125)
-	// rl.DrawModel(common.Model.OBJ.Banner, p.Position, 1.0, rl.White)
-	rl.DrawModel(common.Model.OBJ.Coin, p.Position, 1.0, rl.White)
-	rl.DrawModelEx(
-		playerModel,
-		rl.NewVector3(p.Position.X, p.Position.Y-1/1, p.Position.Z),
-		rl.NewVector3(0, 1, 0),
-		0,
-		rl.NewVector3(1, 1, 1),
-		rl.White,
-	)
-
-	if false {
-		rl.DrawCapsuleWires(
-			rl.Vector3Add(p.Position, rl.NewVector3(0, p.Size.Y/4, 0)),
-			rl.Vector3Add(p.Position, rl.NewVector3(0, -p.Size.Y/4, 0)),
-			p.Size.X/2, 3, 3, col)
-	} else {
-		rl.DrawCapsule(
-			rl.Vector3Add(p.Position, rl.NewVector3(0, p.Size.Y/4, 0)),
-			rl.Vector3Add(p.Position, rl.NewVector3(0, -p.Size.Y/4, 0)),
-			p.Size.X/2, 8, 8, col)
-	}
-
+	col := playerCol
+	rl.DrawCapsule(
+		rl.Vector3Add(p.Position, rl.NewVector3(0, p.Size.Y/4, 0)),
+		rl.Vector3Add(p.Position, rl.NewVector3(0, -p.Size.Y/4, 0)),
+		p.Size.X/2, 16, 16, col)
 	if false {
 		rl.DrawCapsuleWires(
 			rl.Vector3Add(p.Position, rl.NewVector3(0, p.Size.Y/4, 0)),
@@ -113,31 +84,29 @@ func (p Player) Draw() {
 		}
 	}
 
-	if false {
-		size := rl.Vector3Scale(p.Size, .5)
-		if p.Collisions.X != 0 {
-			pos := p.Position
-			pos.X += p.Collisions.X * p.Size.X / 2
-			rl.DrawCubeV(pos, size, common.XAxisColor)
-		}
-		if p.Collisions.Y != 0 {
-			pos := p.Position
-			pos.Y += p.Collisions.Y * p.Size.Y / 2
-			rl.DrawCubeV(pos, size, common.YAxisColor)
-		}
-		if p.Collisions.Z != 0 {
-			pos := p.Position
-			pos.Z += p.Collisions.Z * p.Size.Z / 2
-			rl.DrawCubeV(pos, size, common.ZAxisColor)
-		}
-		if p.Collisions.W != 0 { // Floor
-			pos := p.Position
-			pos.Y += p.Collisions.W * p.Size.Y / 2
-			rl.DrawCubeV(pos, size, common.YAxisColor)
-		}
+	size := rl.Vector3Scale(p.Size, .5)
+	if p.Collisions.X != 0 {
+		pos := p.Position
+		pos.X += p.Collisions.X * p.Size.X / 2
+		rl.DrawCubeV(pos, size, common.XAxisColor)
+	}
+	if p.Collisions.Y != 0 {
+		pos := p.Position
+		pos.Y += p.Collisions.Y * p.Size.Y / 2
+		rl.DrawCubeV(pos, size, common.YAxisColor)
+	}
+	if p.Collisions.Z != 0 {
+		pos := p.Position
+		pos.Z += p.Collisions.Z * p.Size.Z / 2
+		rl.DrawCubeV(pos, size, common.ZAxisColor)
+	}
+	if p.Collisions.W != 0 { // Floor
+		pos := p.Position
+		pos.Y += p.Collisions.W * p.Size.Y / 2
+		rl.DrawCubeV(pos, size, common.YAxisColor)
 	}
 
-	if false {
+	if true {
 		DrawXYZOrbitV(p.Position, 1./common.Phi)
 	}
 }

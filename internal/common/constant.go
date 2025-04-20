@@ -7,9 +7,10 @@ import (
 )
 
 const (
-	Phi            = math.Phi
-	InvPhi         = 1 / Phi
-	OneMinusInvPhi = 1 - InvPhi
+	Phi            = math.Phi   // 1.61803
+	InvPhi         = 1 / Phi    // 0.618034
+	OneMinusInvPhi = 1 - InvPhi // 0.381966
+	TwoMinusInvPhi = 2 - InvPhi // 1.38197
 )
 
 var (

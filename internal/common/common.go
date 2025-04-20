@@ -4,6 +4,8 @@ package common
 
 import (
 	rl "github.com/gen2brain/raylib-go/raylib"
+
+	"example/depths/internal/model"
 )
 
 var (
@@ -25,6 +27,15 @@ var (
 	}
 	Texture struct {
 		CubicmapAtlas rl.Texture2D // Load cubeTexture to be applied to the cubes sides (256x256 png)
+	}
+	Model struct {
+		// OBJ Text file format. Must include vertex position-texcoords-normals
+		// information, if files references some .mtl materials file, it will be loaded (or try to).
+		OBJ     model.ModelsObj
+
+		GLB     interface{}
+		FBX     interface{}
+		Texture interface{}
 	}
 )
 

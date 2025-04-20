@@ -101,9 +101,12 @@ func InitGoldChests() {
 		// dir := filepath.Join("res", "model", "obj")
 		switch i {
 		case GoldChestEmpty:
+			// goldChestModels[i] = rl.LoadModel(filepath.Join(dir, "chest.obj"))
+
 			goldChestModels[i] = common.Model.OBJ.Stones
 			rl.SetMaterialTexture(goldChestModels[i].Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
 		case GoldChestFull:
+			// goldChestModels[i] = rl.LoadModel(filepath.Join(dir, "chest_gold.obj"))
 			goldChestModels[i] = common.Model.OBJ.Chest
 			rl.SetMaterialTexture(goldChestModels[i].Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
 		default:
@@ -159,13 +162,13 @@ func Init() {
 
 	// These props/tiles/objects share the same dungeon texture
 	// dungeonTexture = rl.LoadTexture(filepath.Join("res", "texture", "dungeon_texture.png"))
-	// dungeonTexture = common.Model.OBJ.Colormap
 	{
 		InitFloor()
 		InitWall()
 		InitGoldChests()
-		InitPlayer()
 	}
+
+	player = NewPlayer()
 
 	isPlayerWallCollision = false
 
@@ -186,7 +189,7 @@ func Init() {
 		rl.SetMaterialTexture(boxLargeModel.Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
 	}
 
-	boxLargeSize = rl.NewVector3(1.0, 1.0, 1.0)
+	boxLargeSize = rl.NewVector3(1.5, 1.5, 1.5)
 	for _, pos := range []rl.Vector3{
 		rl.NewVector3(-5, 0, -8),
 		rl.NewVector3(-3, 0, -7),

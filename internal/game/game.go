@@ -2,7 +2,6 @@
 package game
 
 import (
-	"cmp"
 	"fmt"
 	"log"
 	"os"
@@ -13,6 +12,7 @@ import (
 	audiopro "example/depths/internal/audio/processor"
 	"example/depths/internal/common"
 	"example/depths/internal/light"
+	"example/depths/internal/model"
 	endingSC "example/depths/internal/screen/ending"
 	gameplaySC "example/depths/internal/screen/gameplay"
 	logoSC "example/depths/internal/screen/logo"
@@ -47,34 +47,32 @@ func Run() {
 	common.Font.Primary = rl.GetFontDefault()
 	common.Font.Secondary = rl.LoadFont("res/mecha.png")
 
-	common.Music.Ambient = rl.LoadMusicStream("res/music/ambient.ogg")
-	common.Music.Theme = rl.LoadMusicStream(filepath.Join(
-		"res",
-		"music",
-		cmp.Or(
-			"sinnesloschen-beam-117362.mp3",
-			"infraction-moments_passed.wav",
-			"mini1111.xm",
-		),
-	))
-	common.Music.Theme.Looping = false
-	rl.SetMusicVolume(common.Music.Theme, 0.125)
+	common.Music.Theme = rl.LoadMusicStream(filepath.Join("res", "music", "sinnesloschen-beam-117362.mp3"))
+	common.Music.Theme.Looping = true
+	rl.SetMusicVolume(common.Music.Theme, 1.0)
 	rl.PauseMusicStream(common.Music.Theme)
+
+	common.Music.Ambient = rl.LoadMusicStream(filepath.Join("res", "music", "ambient.ogg"))
+	common.Music.Ambient.Looping = true
 
 	common.FX.Coin = rl.LoadSound("res/fx/coin.wav")
 	rl.SetSoundVolume(common.FX.Coin, 0.3)
 
 	common.Texture.CubicmapAtlas = rl.LoadTexture(filepath.Join("res", "texture", "cubicmap_atlas.png"))
+	common.Model.OBJ = model.LoadAssetModelOBJ()
 
-	// Load PBR shader and setup all required locations
+	/* Load PBR shader and setup all required locations */
 	common.Shader.PBR = rl.LoadShader(
-		filepath.Join("res", "shader", "glsl330_"+"pbr.vs"),
-		filepath.Join("res", "shader", "glsl330_"+"pbr.fs"))
+		filepath.Join("res", "shader", "glsl330_"+"pbr.vs"), // Vertex shader
+		filepath.Join("res", "shader", "glsl330_"+"pbr.fs"), // Fragment shader
+	)
+
 	updateShaderLoc := func(shader rl.Shader, index int32, uniformName string) {
 		shader.UpdateLocation(index, rl.GetShaderLocation(shader, uniformName))
 		// common.Shader.PBR.UpdateLocation(rl.MapAlbedo, rl.GetShaderLocation(common.Shader.PBR, "albedoMap"))
 		// common.Shader.PBR.UpdateLocation(rl.MapMetalness, rl.GetShaderLocation(common.Shader.PBR, "mraMap"))
 	}
+
 	if false {
 		updateShaderLoc(common.Shader.PBR, rl.ShaderLocMapAlbedo, "albedoMap")
 		// WARNING: Metalness, roughness, and ambient occlusion are all packed into a MRA texture
