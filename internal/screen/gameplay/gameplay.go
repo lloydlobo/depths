@@ -151,7 +151,7 @@ func Init() {
 
 	camera = rl.Camera3D{
 		Position:   rl.NewVector3(0., 16., 16.),
-		Target:     rl.NewVector3(0., (1+.5)-.5, 0.),
+		Target:     rl.NewVector3(0., .5, 0.),
 		Up:         rl.NewVector3(0., 1., 0.),
 		Fovy:       15. * float32(cmp.Or(4., 3., 2.)),
 		Projection: rl.CameraPerspective,
@@ -186,7 +186,7 @@ func Init() {
 		rl.SetMaterialTexture(boxLargeModel.Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
 	}
 
-	boxLargeSize = rl.NewVector3(1.0, 1.0, 1.0)
+	boxLargeSize = rl.NewVector3(0.5, 0.5, 0.5)
 	for _, pos := range []rl.Vector3{
 		rl.NewVector3(-5, 0, -8),
 		rl.NewVector3(-3, 0, -7),
@@ -286,11 +286,13 @@ func Draw() {
 	floor.Draw()
 	DrawWalls()
 	for _, pos := range boxLargePositions { // Draw offgrid tiles
-		rl.DrawModel(boxLargeModel, pos, 1., rl.White)
+		// rl.DrawModel(boxLargeModel, pos, 1., rl.White)
+		rl.DrawModelEx(boxLargeModel, pos, rl.NewVector3(0, 1, 0), 0., rl.NewVector3(1, 1, 1), rl.White)
 	}
 	for i := range goldChestCount {
 		chest := goldChests[i]
-		rl.DrawModel(goldChestModels[chest.State], chest.Pos, 1.0, rl.White)
+		// rl.DrawModel(goldChestModels[chest.State], chest.Pos, 1.0, rl.White)
+		rl.DrawModelEx(goldChestModels[chest.State], chest.Pos, rl.NewVector3(0, 1, 0), 0., rl.NewVector3(1, 1, 1), rl.White)
 	}
 
 	cubeSize := rl.NewVector3(.9, .7, .9)

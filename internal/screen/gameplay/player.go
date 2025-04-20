@@ -21,7 +21,7 @@ var (
 func NewPlayer() Player {
 	out := Player{
 		Position:   camera.Target,
-		Size:       rl.NewVector3(1, 2, 1),
+		Size:       cmp.Or(rl.NewVector3(.5, 1., .5), rl.NewVector3(1, 2, 1)),
 		Collisions: rl.NewQuaternion(0, 0, 0, 0)}
 	out.BoundingBox = rl.NewBoundingBox(
 		rl.NewVector3(camera.Target.X-player.Size.X/2, camera.Target.Y-player.Size.Y/2, camera.Target.Z-player.Size.Z/2),
@@ -74,14 +74,12 @@ var playerCol = cmp.Or(rl.White, rl.ColorLerp(rl.Black, rl.DarkGray, .1))
 
 func (p Player) Draw() {
 	col := rl.Fade(playerCol, .125)
-	// rl.DrawModel(common.Model.OBJ.Banner, p.Position, 1.0, rl.White)
-	rl.DrawModel(common.Model.OBJ.Coin, p.Position, 1.0, rl.White)
 	rl.DrawModelEx(
 		playerModel,
-		rl.NewVector3(p.Position.X, p.Position.Y-1/1, p.Position.Z),
+		rl.NewVector3(p.Position.X, p.Position.Y-p.Size.Y/2, p.Position.Z),
 		rl.NewVector3(0, 1, 0),
 		0,
-		rl.NewVector3(1, 1, 1),
+		rl.NewVector3(1., common.InvPhi, 1.),
 		rl.White,
 	)
 
