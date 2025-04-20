@@ -48,7 +48,15 @@ func Run() {
 	common.Font.Secondary = rl.LoadFont("res/mecha.png")
 
 	common.Music.Ambient = rl.LoadMusicStream("res/music/ambient.ogg")
-	common.Music.Theme = rl.LoadMusicStream(filepath.Join("res", "music", cmp.Or("mini1111.xm", "infraction-moments_passed.wav")))
+	common.Music.Theme = rl.LoadMusicStream(filepath.Join(
+		"res",
+		"music",
+		cmp.Or(
+			"sinnesloschen-beam-117362.mp3",
+			"infraction-moments_passed.wav",
+			"mini1111.xm",
+		),
+	))
 	common.Music.Theme.Looping = false
 	rl.SetMusicVolume(common.Music.Theme, 0.125)
 	rl.PauseMusicStream(common.Music.Theme)

@@ -36,7 +36,13 @@ var (
 	floorRoadPBRModel   rl.Model
 	floorTileLargeModel rl.Model
 
-	wallModel rl.Model
+	wallModel       rl.Model
+	wallCornerModel rl.Model
+
+	boxLargeModel         rl.Model
+	boxLargePositions     []rl.Vector3
+	boxLargeBoundingBoxes []rl.BoundingBox
+	boxLargeSize          = rl.NewVector3(1.5, 1.5, 1.5)
 )
 
 // 	TEMPORARY
@@ -61,7 +67,7 @@ func Init() {
 
 	isPlayerWallCollision = false
 
-	rl.SetMusicVolume(common.Music.Theme, float32(cmp.Or(0.125, 1.0)))
+	rl.SetMusicVolume(common.Music.Theme, float32(cmp.Or(1.0, 0.125)))
 
 	rl.PlayMusicStream(common.Music.Theme)
 
@@ -72,15 +78,29 @@ func Init() {
 	emissiveColorLoc = rl.GetShaderLocation(common.Shader.PBR, "emissiveColor")
 	textureTilingLoc = rl.GetShaderLocation(common.Shader.PBR, "tiling")
 
-	{
-		// KayKit_DungeonRemastered_1.1_FREE/Assets/textures/dungeon_texture.png
+	{ // KayKit_DungeonRemastered_1.1_FREE/Assets/textures/dungeon_texture.png
 		dungeonTexture := rl.LoadTexture(filepath.Join("res", "texture", "dungeon_texture.png"))
 		floorTileLargeModel = rl.LoadModel(filepath.Join("res", "model", "obj", "floor_tile_large.obj"))
 		rl.SetMaterialTexture(floorTileLargeModel.Materials, rl.MapDiffuse, dungeonTexture)
 
-		// KayKit_DungeonRemastered_1.1_FREE/Assets/textures/dungeon_texture.png
 		wallModel = rl.LoadModel(filepath.Join("res", "model", "obj", "wall.obj"))
 		rl.SetMaterialTexture(wallModel.Materials, rl.MapDiffuse, dungeonTexture)
+
+		wallCornerModel = rl.LoadModel(filepath.Join("res", "model", "obj", "wall_corner.obj"))
+		rl.SetMaterialTexture(wallCornerModel.Materials, rl.MapDiffuse, dungeonTexture)
+
+		boxLargeModel = rl.LoadModel(filepath.Join("res", "model", "obj", "box_large.obj"))
+		rl.SetMaterialTexture(boxLargeModel.Materials, rl.MapDiffuse, dungeonTexture)
+	}
+
+	for _, pos := range []rl.Vector3{
+		rl.NewVector3(-5, 0, -8),
+		rl.NewVector3(-3, 0, -7),
+		rl.NewVector3(4, 0, 7),
+		rl.NewVector3(5, 0, -4),
+	} {
+		boxLargePositions = append(boxLargePositions, pos)
+		boxLargeBoundingBoxes = append(boxLargeBoundingBoxes, common.GetBoundingBoxFromPositionSizeV(pos, boxLargeSize))
 	}
 }
 
@@ -113,8 +133,10 @@ func HandleUserInput() {
 }
 
 func Update() {
-	HandleUserInput()
+
 	rl.UpdateMusicStream(common.Music.Theme)
+
+	HandleUserInput()
 
 	// Save variables this frame
 	oldCam := camera
@@ -142,13 +164,18 @@ func Update() {
 
 	player.Update()
 
+	// Handle collisions
+
+	// Update player to wall objects
 	if isPlayerWallCollision {
-		player.Position = oldPlayer.Position
-		player.BoundingBox = rl.NewBoundingBox(
-			rl.NewVector3(player.Position.X-player.Size.X/2, player.Position.Y-player.Size.Y/2, player.Position.Z-player.Size.Z/2),
-			rl.NewVector3(player.Position.X+player.Size.X/2, player.Position.Y+player.Size.Y/2, player.Position.Z+player.Size.Z/2))
-		camera.Target = oldCam.Target
-		camera.Position = oldCam.Position
+		RevertPlayerAndCameraPositions(oldPlayer, &player, oldCam, &camera)
+	}
+
+	// Update player to props objects
+	for _, bb := range boxLargeBoundingBoxes {
+		if rl.CheckCollisionBoxes(player.BoundingBox, bb) {
+			RevertPlayerAndCameraPositions(oldPlayer, &player, oldCam, &camera)
+		}
 	}
 
 	framesCounter++
@@ -161,53 +188,78 @@ func Draw() {
 	// 3D World
 	rl.BeginMode3D(camera)
 
-	bgCol := cmp.Or(rl.ColorBrightness(rl.DarkPurple, -.9), rl.Black, rl.RayWhite)
+	bgCol := cmp.Or(
+		rl.Black,
+		rl.ColorBrightness(rl.DarkPurple, -.9),
+		rl.Gray,
+		rl.RayWhite,
+	)
 	rl.ClearBackground(bgCol)
 
 	player.Draw()
 
 	// Draw floor
-	{
-		if false {
-			floor.Draw()
-		} else {
-			const floorModelScale = 4
-			for x := float32(floor.BoundingBox.Min.X); x < float32(floor.BoundingBox.Max.X); x += floorModelScale {
-				for z := float32(floor.BoundingBox.Min.Z); z < float32(floor.BoundingBox.Max.Z); z += floorModelScale {
-					centerX, centerY, centerZ := x+(floorModelScale/4.)*2., float32(0.), z+(floorModelScale/4.)*2.
-					rl.DrawModel(floorTileLargeModel, rl.NewVector3(centerX, centerY, centerZ), floorModelScale/4., rl.White)
-				}
+	if false {
+		floor.Draw()
+	} else {
+		const floorModelScale = 4
+		for x := float32(floor.BoundingBox.Min.X); x < float32(floor.BoundingBox.Max.X); x += floorModelScale {
+			for z := float32(floor.BoundingBox.Min.Z); z < float32(floor.BoundingBox.Max.Z); z += floorModelScale {
+				centerX, centerY, centerZ := x+(floorModelScale/4.)*2., float32(0.), z+(floorModelScale/4.)*2.
+				rl.DrawModel(floorTileLargeModel, rl.NewVector3(centerX, centerY, centerZ), floorModelScale/4., rl.White)
 			}
 		}
-		if false {
-			rl.DrawBoundingBox(floor.BoundingBox, rl.Purple)
-		}
-		DrawXYZOrbitV(rl.Vector3Zero(), 2.)
-		DrawWorldXYZAxis()
 	}
+	if false {
+		rl.DrawBoundingBox(floor.BoundingBox, rl.Purple)
+	}
+	DrawXYZOrbitV(rl.Vector3Zero(), 2.)
+	DrawWorldXYZAxis()
 
 	// Draw walls
-	const wallLen = 4
-	const wallThick = 1. / 4.
+	const wallLen = 4.
+	const wallThick = 1. / 2.
+	const wallBotY = 1. / 4.
 	wallTint := rl.White
 	wallPos := floor.Position
 	floorSize := floor.Size
-
 	for i := -float32(floorSize.Z/2) + wallLen/2; i < float32(floorSize.Z/2); i += wallLen { // Along Z axis
-		rl.DrawModelEx(wallModel, rl.NewVector3(wallPos.X-floorSize.X/2-wallThick, wallPos.Y, wallPos.Z+i),
-			rl.NewVector3(0, 1, 0), 90, common.Vector3One, wallTint)
-		rl.DrawModelEx(wallModel, rl.NewVector3(wallPos.X+floorSize.X/2+wallThick, wallPos.Y, wallPos.Z+i),
-			rl.NewVector3(0, 1, 0), 90, common.Vector3One, wallTint)
+		pos1 := rl.NewVector3(
+			wallPos.X-floorSize.X/2-wallThick,
+			wallPos.Y+wallBotY,
+			wallPos.Z+i)
+		pos2 := rl.NewVector3(
+			wallPos.X+floorSize.X/2+wallThick,
+			wallPos.Y+wallBotY,
+			wallPos.Z+i)
+		rl.DrawModelEx(wallModel, pos1, rl.NewVector3(0, 1, 0), 90, common.Vector3One, wallTint) // -X +-Z
+		rl.DrawModelEx(wallModel, pos2, rl.NewVector3(0, 1, 0), 90, common.Vector3One, wallTint) // +X +-Z
 	}
 	for i := -float32(floorSize.X/2) + wallLen/2; i < float32(floorSize.X/2); i += wallLen { // Along X axis
-		rl.DrawModelEx(wallModel, rl.NewVector3(wallPos.X-i, wallPos.Y, wallPos.Z-floorSize.X/2-wallThick),
-			rl.NewVector3(0, 1, 0), 180, common.Vector3One, wallTint)
-		rl.DrawModelEx(wallModel, rl.NewVector3(wallPos.X+i, wallPos.Y, wallPos.Z+floorSize.X/2+wallThick),
-			rl.NewVector3(0, 1, 0), 180, common.Vector3One, wallTint)
+		pos1 := rl.NewVector3(
+			wallPos.X-i,
+			wallPos.Y+wallBotY,
+			wallPos.Z-floorSize.Z/2-wallThick)
+		pos2 := rl.NewVector3(
+			wallPos.X+i,
+			wallPos.Y+wallBotY,
+			wallPos.Z+floorSize.Z/2+wallThick)
+		rl.DrawModelEx(wallModel, pos1, rl.NewVector3(0, 1, 0), 180, common.Vector3One, wallTint) // +-X -Z
+		rl.DrawModelEx(wallModel, pos2, rl.NewVector3(0, 1, 0), 180, common.Vector3One, wallTint) // +-X +Z
 	}
+	bottomLeft := rl.NewVector3(wallPos.X-floorSize.X/2-wallThick, wallPos.Y+wallBotY, wallPos.Z+floorSize.Z/2+wallThick)
+	bottomRight := rl.NewVector3(wallPos.X+floorSize.X/2+wallThick, wallPos.Y+wallBotY, wallPos.Z+floorSize.Z/2+wallThick)
+	topRight := rl.NewVector3(wallPos.X+floorSize.X/2+wallThick, wallPos.Y+wallBotY, wallPos.Z-floorSize.Z/2-wallThick)
+	topLeft := rl.NewVector3(wallPos.X-floorSize.X/2-wallThick, wallPos.Y+wallBotY, wallPos.Z-floorSize.Z/2-wallThick)
+	rl.DrawModelEx(wallCornerModel, topRight, rl.NewVector3(0, 1, 0), 0, common.Vector3One, wallTint)
+	rl.DrawModelEx(wallCornerModel, topLeft, rl.NewVector3(0, 1, 0), 90, common.Vector3One, wallTint)
+	rl.DrawModelEx(wallCornerModel, bottomLeft, rl.NewVector3(0, 1, 0), 180, common.Vector3One, wallTint)
+	rl.DrawModelEx(wallCornerModel, bottomRight, rl.NewVector3(0, 1, 0), 270, common.Vector3One, wallTint)
 
-	// rl.DrawModelEx(wallModel, rl.NewVector3(wallPos.X, wallPos.Y, wallPos.Z+floorSize.Z/2), rl.NewVector3(0, 1, 0), 180, common.Vector3One, common.ZAxisColor)
-	// rl.DrawModelEx(wallModel, rl.NewVector3(wallPos.X, wallPos.Y, wallPos.Z-floorSize.Z/2), rl.NewVector3(0, 1, 0), 180, common.Vector3One, common.ZAxisColor)
+	// Draw offgrid tiles
+	for _, pos := range boxLargePositions {
+		rl.DrawModel(boxLargeModel, pos, 1., rl.White)
+	}
 
 	if false {
 		for i := range light.MaxLights {
@@ -223,11 +275,9 @@ func Draw() {
 			}
 		}
 	}
-
-	if true {
+	if false {
 		DrawCubicmaps()
 	}
-
 	rl.EndMode3D()
 
 	// 2D World

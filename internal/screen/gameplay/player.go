@@ -110,3 +110,17 @@ func (p Player) Draw() {
 		DrawXYZOrbitV(p.Position, 1./common.Phi)
 	}
 }
+
+// FIXME: Camera gets stuck if player keeps moving into the box. Maybe lerp or
+// free camera if "distance to the box is less" or touching.
+func RevertPlayerAndCameraPositions(
+	srcPlayer Player, dstPlayer *Player,
+	srcCamera rl.Camera3D, dstCamera *rl.Camera3D,
+) {
+	dstPlayer.Position = srcPlayer.Position
+	dstPlayer.BoundingBox = rl.NewBoundingBox(
+		rl.NewVector3(dstPlayer.Position.X-dstPlayer.Size.X/2, dstPlayer.Position.Y-dstPlayer.Size.Y/2, dstPlayer.Position.Z-dstPlayer.Size.Z/2),
+		rl.NewVector3(dstPlayer.Position.X+dstPlayer.Size.X/2, dstPlayer.Position.Y+dstPlayer.Size.Y/2, dstPlayer.Position.Z+dstPlayer.Size.Z/2))
+	dstCamera.Target = srcCamera.Target
+	dstCamera.Position = srcCamera.Position
+}
