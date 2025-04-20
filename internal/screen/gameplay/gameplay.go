@@ -20,9 +20,8 @@ var (
 	floor                 Floor
 	isPlayerWallCollision bool
 
-	textureTilingLoc     int32
-	emissiveColorLoc     int32
-	emissiveIntensityLoc int32
+	checkedTexture rl.Texture2D
+	checkedModel   rl.Model
 )
 
 // TEMPORARY
@@ -198,6 +197,13 @@ func Init() {
 	// SCENES 0..3
 	// SCENES 0..3
 
+	checkedImg := rl.GenImageChecked(100, 100, 1, 1, rl.ColorBrightness(rl.Black, .25), rl.ColorBrightness(rl.Black, .2))
+	checkedTexture = rl.LoadTextureFromImage(checkedImg)
+	rl.UnloadImage(checkedImg)
+	checkedMesh := rl.GenMeshPlane(100, 100, 10, 10)
+	checkedModel = rl.LoadModelFromMesh(checkedMesh)
+	checkedModel.Materials.Maps.Texture = checkedTexture
+
 	rl.SetMusicVolume(common.Music.Theme, float32(cmp.Or(1.0, 0.125)))
 
 	rl.PlayMusicStream(common.Music.Theme)
@@ -261,6 +267,8 @@ func Draw() {
 			chest := goldChests[i]
 			rl.DrawModelEx(goldChestModels[chest.State], chest.Pos, rl.NewVector3(0, 1, 0), 0., rl.NewVector3(1, 1, 1), rl.White)
 		}
+
+		rl.DrawModel(checkedModel, rl.NewVector3(0., -.05, 0.), 1., rl.RayWhite)
 
 		// Draw banners at floor corners
 		floorBBMin := floor.BoundingBox.Min
