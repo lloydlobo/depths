@@ -24,9 +24,9 @@ var (
 	checkedTexture rl.Texture2D
 	checkedModel   rl.Model
 
-	impactSoftHeavy    []rl.Sound
-	impactSoftMedium   []rl.Sound
-	impactGenericLight []rl.Sound
+	fxImpactSoftHeavy    []rl.Sound
+	fxImpactSoftMedium   []rl.Sound
+	fxImpactGenericLight []rl.Sound
 )
 
 // TEMPORARY
@@ -43,16 +43,6 @@ var (
 //												TEMPORARY
 //													TEMPORARY
 //														TEMPORARY
-
-var (
-	// dungeonTexture rl.Texture2D
-
-	barrelModel         rl.Model
-	barrelPositions     []rl.Vector3
-	barrelBoundingBoxes []rl.BoundingBox
-	barrelSize          rl.Vector3
-	barrelCount         int32
-)
 
 const (
 	DirtDSR DirtStoneRockState = iota
@@ -195,6 +185,7 @@ func Init() {
 			maxSkipPosOdds = int32(3)
 			y              = (floor.BoundingBox.Min.Y + floor.BoundingBox.Max.Y) / 2.0
 		)
+		offsetFromPlayerPos := float32(5.) // FIXME: This won't work if player is not at (0,0,0)
 	NextCol:
 		for x := floor.BoundingBox.Min.X + 1; x < floor.BoundingBox.Max.X; x++ {
 		NextRow:
@@ -205,8 +196,8 @@ func Init() {
 				if len(a) >= int(maxPositions) {
 					break NextCol
 				}
-				for i := float32(-4); i <= 4; i++ {
-					for k := float32(-4); k <= 4; k++ {
+				for i := -offsetFromPlayerPos; i <= offsetFromPlayerPos; i++ {
+					for k := -offsetFromPlayerPos; k <= offsetFromPlayerPos; k++ {
 						if i == x && k == z {
 							continue NextRow
 						}
@@ -217,19 +208,7 @@ func Init() {
 		}
 		return a
 	}
-
 	InitDirtStoneRockObjects(InitMiningObjectPositions())
-	// InitBarrels := func(positions []rl.Vector3) {
-	// 	barrelSize = rl.NewVector3(0.5, 0.5, 0.5)
-	// 	for _, pos := range positions {
-	// 		barrelPositions = append(barrelPositions, pos)
-	// 		barrelBoundingBoxes = append(barrelBoundingBoxes, common.GetBoundingBoxFromPositionSizeV(pos, barrelSize))
-	// 		barrelCount++
-	// 	}
-	// 	barrelModel = common.Model.OBJ.Barrel
-	// 	rl.SetMaterialTexture(barrelModel.Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
-	// }
-	// InitBarrels([]rl.Vector3{ rl.NewVector3(-5, 0, -8), rl.NewVector3(-3, 0, -7), rl.NewVector3(4, 0, 7), rl.NewVector3(5, 0, -4), })
 
 	//						SCENES 0..3
 	//			SCENES 0..3
@@ -246,21 +225,21 @@ func Init() {
 	checkedModel.Materials.Maps.Texture = checkedTexture
 
 	sfxDir := filepath.Join("res", "fx", "kenney_impact-sounds", "Audio")
-	impactSoftHeavy = []rl.Sound{
+	fxImpactSoftHeavy = []rl.Sound{
 		rl.LoadSound(filepath.Join(sfxDir, "impactSoft_heavy_000.ogg")),
 		rl.LoadSound(filepath.Join(sfxDir, "impactSoft_heavy_001.ogg")),
 		rl.LoadSound(filepath.Join(sfxDir, "impactSoft_heavy_002.ogg")),
 		rl.LoadSound(filepath.Join(sfxDir, "impactSoft_heavy_003.ogg")),
 		rl.LoadSound(filepath.Join(sfxDir, "impactSoft_heavy_004.ogg")),
 	}
-	impactSoftMedium = []rl.Sound{
+	fxImpactSoftMedium = []rl.Sound{
 		rl.LoadSound(filepath.Join(sfxDir, "impactSoft_medium_000.ogg")),
 		rl.LoadSound(filepath.Join(sfxDir, "impactSoft_medium_001.ogg")),
 		rl.LoadSound(filepath.Join(sfxDir, "impactSoft_medium_002.ogg")),
 		rl.LoadSound(filepath.Join(sfxDir, "impactSoft_medium_003.ogg")),
 		rl.LoadSound(filepath.Join(sfxDir, "impactSoft_medium_004.ogg")),
 	}
-	impactGenericLight = []rl.Sound{
+	fxImpactGenericLight = []rl.Sound{
 		rl.LoadSound(filepath.Join(sfxDir, "impactGeneric_light_000.ogg")),
 		rl.LoadSound(filepath.Join(sfxDir, "impactGeneric_light_001.ogg")),
 		rl.LoadSound(filepath.Join(sfxDir, "impactGeneric_light_002.ogg")),
@@ -304,11 +283,6 @@ func Update() {
 	if isPlayerWallCollision {
 		RevertPlayerAndCameraPositions(oldPlayer, &player, oldCam, &camera)
 	}
-	for i := range barrelCount {
-		if rl.CheckCollisionBoxes(barrelBoundingBoxes[i], player.BoundingBox) {
-			RevertPlayerAndCameraPositions(oldPlayer, &player, oldCam, &camera)
-		}
-	}
 	for i := range dirtStoneRockCount {
 		// Skip final mined object residue
 		if dirtStoneRockArray[i].State == maxDirtStoneRockStates-1 {
@@ -324,9 +298,9 @@ func Update() {
 			if rl.IsKeyPressed(rl.KeySpace) {
 				// Play mining sound with variations (s1:kick + s2:snare + s3:hollow-thock)
 				state := dirtStoneRockArray[i].State
-				s1 := impactSoftMedium[rl.GetRandomValue(int32(state), int32(len(impactSoftMedium)-1))]
-				s2 := impactGenericLight[rl.GetRandomValue(int32(state), int32(len(impactGenericLight)-1))]
-				s3 := impactSoftHeavy[rl.GetRandomValue(int32(state), int32(len(impactSoftHeavy)-1))]
+				s1 := fxImpactSoftMedium[rl.GetRandomValue(int32(state), int32(len(fxImpactSoftMedium)-1))]
+				s2 := fxImpactGenericLight[rl.GetRandomValue(int32(state), int32(len(fxImpactGenericLight)-1))]
+				s3 := fxImpactSoftHeavy[rl.GetRandomValue(int32(state), int32(len(fxImpactSoftHeavy)-1))]
 				rl.SetSoundVolume(s1, float32(rl.GetRandomValue(7, 10))/10.)
 				rl.SetSoundVolume(s2, float32(rl.GetRandomValue(4, 8))/10.)
 				rl.SetSoundVolume(s3, float32(rl.GetRandomValue(1, 4))/10.)
@@ -353,11 +327,10 @@ func Draw() {
 	{
 		player.Draw()
 		floor.Draw()
-		if false {
-			DrawWalls()
-		}
-		for _, pos := range barrelPositions { // Draw offgrid tiles
-			rl.DrawModelEx(barrelModel, pos, rl.NewVector3(0, 1, 0), 0., rl.NewVector3(1, 1, 1), rl.White)
+		if true {
+			pos := floor.Position
+			size := rl.Vector3Multiply(floor.Size, rl.NewVector3(.21, 1., .21))
+			DrawWalls(pos, size)
 		}
 		for i := range dirtStoneRockCount {
 			chest := dirtStoneRockArray[i]
@@ -374,24 +347,25 @@ func Draw() {
 		rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMax.X, 0, floorBBMax.Z), common.YAxis, 45, common.Vector3One, rl.White)      // rightfront
 		rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMin.X, 0, floorBBMax.Z), common.YAxis, -45, common.Vector3One, rl.White)     // leftfront
 
-		// rl.DrawModel(common.Model.OBJ.Dirt, rl.NewVector3(0, common.Phi, 0), common.Phi, rl.White)
-		rl.DrawModel(common.Model.OBJ.WoodStructure, rl.NewVector3(0, 0, 0), 1., rl.White)
+		if false {
+			// rl.DrawModel(common.Model.OBJ.Dirt, rl.NewVector3(0, common.Phi, 0), common.Phi, rl.White)
+			rl.DrawModel(common.Model.OBJ.WoodStructure, rl.NewVector3(0, 0, 0), 1., rl.White)
 
-		rl.DrawModel(common.Model.OBJ.CharacterHuman, common.Vector3One, 1., rl.Red)
+			rl.DrawModel(common.Model.OBJ.CharacterHuman, common.Vector3One, 1., rl.Red)
 
-		rl.DrawModel(common.Model.OBJ.Dirt, rl.NewVector3(4, 0, 4), 1., rl.White)
-		rl.DrawModel(common.Model.OBJ.Rocks, rl.NewVector3(5, 0, 4), 1., rl.White)
-		rl.DrawModel(common.Model.OBJ.Dirt, rl.NewVector3(6, 0, 4), 1., rl.White)
-		rl.DrawModel(common.Model.OBJ.Stones, rl.NewVector3(7, 0, 4), 1., rl.White)
+			rl.DrawModel(common.Model.OBJ.Dirt, rl.NewVector3(4, 0, 4), 1., rl.White)
+			rl.DrawModel(common.Model.OBJ.Rocks, rl.NewVector3(5, 0, 4), 1., rl.White)
+			rl.DrawModel(common.Model.OBJ.Dirt, rl.NewVector3(6, 0, 4), 1., rl.White)
+			rl.DrawModel(common.Model.OBJ.Stones, rl.NewVector3(7, 0, 4), 1., rl.White)
 
-		rl.DrawModel(common.Model.OBJ.Coin, rl.NewVector3(1, 0, 1), 1., rl.White)
-		rl.DrawModel(common.Model.OBJ.WoodSupport, rl.NewVector3(2, 0, 2), 1., rl.White)
-		rl.DrawModel(common.Model.OBJ.WoodStructure, rl.NewVector3(3, 0, 3), 1., rl.White)
-		rl.DrawModel(common.Model.OBJ.Dirt, rl.NewVector3(4, 0, 4), 1., rl.White)
-		rl.DrawModel(common.Model.OBJ.Rocks, rl.NewVector3(5, 0, 5), 1., rl.White)
-		rl.DrawModel(common.Model.OBJ.Stones, rl.NewVector3(6, 0, 6), 1., rl.White)
-		rl.DrawModel(common.Model.OBJ.Trap, rl.NewVector3(7, 0, 7), 1., rl.White)
-
+			rl.DrawModel(common.Model.OBJ.Coin, rl.NewVector3(1, 0, 1), 1., rl.White)
+			rl.DrawModel(common.Model.OBJ.WoodSupport, rl.NewVector3(2, 0, 2), 1., rl.White)
+			rl.DrawModel(common.Model.OBJ.WoodStructure, rl.NewVector3(3, 0, 3), 1., rl.White)
+			rl.DrawModel(common.Model.OBJ.Dirt, rl.NewVector3(4, 0, 4), 1., rl.White)
+			rl.DrawModel(common.Model.OBJ.Rocks, rl.NewVector3(5, 0, 5), 1., rl.White)
+			rl.DrawModel(common.Model.OBJ.Stones, rl.NewVector3(6, 0, 6), 1., rl.White)
+			rl.DrawModel(common.Model.OBJ.Trap, rl.NewVector3(7, 0, 7), 1., rl.White)
+		}
 	}
 	rl.EndMode3D()
 

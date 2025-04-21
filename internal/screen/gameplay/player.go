@@ -22,19 +22,16 @@ func NewPlayer() Player {
 	out := Player{
 		Position:   camera.Target,
 		Size:       cmp.Or(rl.NewVector3(.5, 1., .5), rl.NewVector3(1, 2, 1)),
-		Collisions: rl.NewQuaternion(0, 0, 0, 0)}
-	out.BoundingBox = rl.NewBoundingBox(
-		rl.NewVector3(camera.Target.X-player.Size.X/2, camera.Target.Y-player.Size.Y/2, camera.Target.Z-player.Size.Z/2),
-		rl.NewVector3(camera.Target.X+player.Size.X/2, camera.Target.Y+player.Size.Y/2, camera.Target.Z+player.Size.Z/2))
+		Collisions: rl.NewQuaternion(0, 0, 0, 0),
+	}
+	out.BoundingBox = common.GetBoundingBoxFromPositionSizeV(camera.Target, player.Size)
 	return out
 }
 
 func InitPlayer() {
 	player = NewPlayer()
-	playerModel = common.Model.OBJ.Column
+	playerModel = common.Model.OBJ.CharacterHuman
 	rl.SetMaterialTexture(playerModel.Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
-	// playerModel = common.Model.GLB.Column
-	// rl.SetMaterialTexture(playerModel.Materials, rl.MapDiffuse, common.Model.GLB.Colormap)
 }
 
 func (p *Player) Update() {
@@ -75,51 +72,22 @@ func (p *Player) Update() {
 var playerCol = cmp.Or(rl.White, rl.ColorLerp(rl.Black, rl.DarkGray, .1))
 
 func (p Player) Draw() {
-	col := rl.Fade(playerCol, .125)
-	rl.DrawModelEx(
-		playerModel,
+	rl.DrawModelEx(playerModel,
 		rl.NewVector3(p.Position.X, p.Position.Y-p.Size.Y/2, p.Position.Z),
-		rl.NewVector3(0, 1, 0),
-		0,
-		rl.NewVector3(1., common.InvPhi, 1.),
-		rl.White,
-	)
-	// rl.DrawModel(common.Model.GLB.CharacterHuman, p.Position, 1., rl.White)
+		rl.NewVector3(0, 1, 0), 0.0,
+		rl.NewVector3(1., common.InvPhi, 1.), rl.White)
+	rl.DrawCapsule(
+		rl.Vector3Add(p.Position, rl.NewVector3(0, p.Size.Y/8, 0)),
+		rl.Vector3Add(p.Position, rl.NewVector3(0, -p.Size.Y/4, 0)),
+		p.Size.X/2, 8, 8, rl.Fade(playerCol, .5))
 
-	if false {
-		rl.DrawCapsuleWires(
-			rl.Vector3Add(p.Position, rl.NewVector3(0, p.Size.Y/4, 0)),
-			rl.Vector3Add(p.Position, rl.NewVector3(0, -p.Size.Y/4, 0)),
-			p.Size.X/2, 3, 3, col)
-	} else {
-		rl.DrawCapsule(
-			rl.Vector3Add(p.Position, rl.NewVector3(0, p.Size.Y/4, 0)),
-			rl.Vector3Add(p.Position, rl.NewVector3(0, -p.Size.Y/4, 0)),
-			p.Size.X/2, 8, 8, col)
-	}
-
-	if false {
-		rl.DrawCapsuleWires(
-			rl.Vector3Add(p.Position, rl.NewVector3(0, p.Size.Y/4, 0)),
-			rl.Vector3Add(p.Position, rl.NewVector3(0, -p.Size.Y/4, 0)),
-			p.Size.X/2, 16, 16, col)
-		rl.DrawCylinderWiresEx(
-			rl.Vector3Add(p.Position, rl.NewVector3(0, p.Size.Y/2, 0)),
-			rl.Vector3Add(p.Position, rl.NewVector3(0, -p.Size.Y/2, 0)),
-			p.Size.X/2, p.Size.X/2, 16, col)
-
-	}
-
-	if isPlayerWallCollision {
-		rl.DrawBoundingBox(p.BoundingBox, rl.Red)
-	} else {
-		if false {
-			rl.DrawBoundingBox(p.BoundingBox, rl.LightGray)
-		}
-	}
-
+	// Debug
 	if true {
+		if isPlayerWallCollision {
+			rl.DrawBoundingBox(p.BoundingBox, rl.Red)
+		}
 		size := rl.Vector3Scale(p.Size, .5)
+
 		if p.Collisions.X != 0 {
 			pos := p.Position
 			pos.X += p.Collisions.X * p.Size.X / 2
@@ -140,9 +108,7 @@ func (p Player) Draw() {
 			pos.Y += p.Collisions.W * p.Size.Y / 2
 			rl.DrawCubeV(pos, size, common.YAxisColor)
 		}
-	}
 
-	if true {
 		DrawXYZOrbitV(p.Position, 1./common.Phi)
 	}
 }
@@ -155,8 +121,12 @@ func RevertPlayerAndCameraPositions(
 ) {
 	dstPlayer.Position = srcPlayer.Position
 	dstPlayer.BoundingBox = rl.NewBoundingBox(
-		rl.NewVector3(dstPlayer.Position.X-dstPlayer.Size.X/2, dstPlayer.Position.Y-dstPlayer.Size.Y/2, dstPlayer.Position.Z-dstPlayer.Size.Z/2),
-		rl.NewVector3(dstPlayer.Position.X+dstPlayer.Size.X/2, dstPlayer.Position.Y+dstPlayer.Size.Y/2, dstPlayer.Position.Z+dstPlayer.Size.Z/2))
+		rl.NewVector3(dstPlayer.Position.X-dstPlayer.Size.X/2,
+			dstPlayer.Position.Y-dstPlayer.Size.Y/2,
+			dstPlayer.Position.Z-dstPlayer.Size.Z/2),
+		rl.NewVector3(dstPlayer.Position.X+dstPlayer.Size.X/2,
+			dstPlayer.Position.Y+dstPlayer.Size.Y/2,
+			dstPlayer.Position.Z+dstPlayer.Size.Z/2))
 	dstCamera.Target = srcCamera.Target
 	dstCamera.Position = srcCamera.Position
 }
