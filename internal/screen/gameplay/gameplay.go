@@ -93,13 +93,13 @@ func InitMineObjPositions() []rl.Vector3 {
 	var (
 		y    = (floor.BoundingBox.Min.Y + floor.BoundingBox.Max.Y) / 2.0
 		bb   = floor.BoundingBox
-		offX = float32(4)
-		offZ = float32(4)
+		offX = float32(3)
+		offZ = float32(3)
 	)
 
 	var (
 		maxGridCells            = floor.Size.X * floor.Size.Z // just-in-case
-		maxSkipLoopPositionOdds = int32(3)
+		maxSkipLoopPositionOdds = int32(2)                    // if 2 -> 0,1,2 -> 1/3 odds
 	)
 
 NextCol:
@@ -114,6 +114,10 @@ NextCol:
 				for k := -offZ; k <= offZ; k++ {
 					if i == x && k == z {
 						continue NextRow
+					}
+					if rl.Vector3Distance(rl.NewVector3(i, y, k), rl.NewVector3(x, y, z)) < (offX+offZ)/2 {
+						continue NextRow
+
 					}
 				}
 			}
@@ -131,10 +135,9 @@ func InitAllMineObj(positions []rl.Vector3) {
 		size := rl.Vector3Multiply(
 			rl.NewVector3(1, 1, 1),
 			rl.NewVector3(
-				float32(rl.GetRandomValue(90, 96))/100.,
+				float32(rl.GetRandomValue(88, 101))/100.,
 				float32(rl.GetRandomValue(161, 2*161))/100.,
-				float32(rl.GetRandomValue(90, 96))/100.),
-		)
+				float32(rl.GetRandomValue(88, 101))/100.))
 
 		obj := NewMineObj(positions[i], size)
 		obj.Rotn = cmp.Or(float32(rl.GetRandomValue(-50, 50)/10.), 0.)
