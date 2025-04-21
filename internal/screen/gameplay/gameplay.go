@@ -179,12 +179,25 @@ func Init() {
 	InitPlayer()
 	InitFloor()
 	InitWall()
-	InitDirtStoneRockObjects([]rl.Vector3{
-		rl.NewVector3(2, 0, -8),
-		rl.NewVector3(-3, 0, -6),
-		rl.NewVector3(-8, 0, 5),
-		rl.NewVector3(-5, 0, -4),
-	})
+
+	var positions []rl.Vector3
+	floorY := (floor.BoundingBox.Min.Y + floor.BoundingBox.Max.Y) / 2.0
+
+	for x := floor.BoundingBox.Min.X + 1; x < floor.BoundingBox.Max.X; x++ {
+	NextIteration:
+		for z := floor.BoundingBox.Min.Z + 1; z < floor.BoundingBox.Max.Z; z++ {
+			// Avoid spawning where player is standing
+			for i := float32(-2); i <= 2; i++ {
+				for k := float32(-2); k <= 2; k++ {
+					if i == x && k == z {
+						continue NextIteration
+					}
+				}
+			}
+			positions = append(positions, rl.NewVector3(x, floorY, z))
+		}
+	}
+	InitDirtStoneRockObjects(positions)
 	InitBarrels := func(positions []rl.Vector3) {
 		barrelSize = rl.NewVector3(0.5, 0.5, 0.5)
 		// barrelSize = rl.NewVector3(1.0, 1.0, 1.0)
