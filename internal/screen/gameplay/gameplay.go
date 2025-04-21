@@ -53,6 +53,7 @@ const (
 	DirtDSR DirtStoneRockState = iota
 	RockDSR
 	StoneDSR
+	FloorDetailTileDSR
 
 	maxDirtStoneRockStates
 )
@@ -105,6 +106,9 @@ func InitDirtStoneRockObjects(positions []rl.Vector3) {
 			rl.SetMaterialTexture(dirtStoneRockModels[i].Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
 		case StoneDSR:
 			dirtStoneRockModels[i] = common.Model.OBJ.Stones
+			rl.SetMaterialTexture(dirtStoneRockModels[i].Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
+		case FloorDetailTileDSR:
+			dirtStoneRockModels[i] = common.Model.OBJ.FloorDetail
 			rl.SetMaterialTexture(dirtStoneRockModels[i].Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
 		default:
 			panic(fmt.Sprintf("unexpected gameplay.DirtStoneRockState: %#v", i))
@@ -256,6 +260,7 @@ func Update() {
 		}
 	}
 	for i := range dirtStoneRockCount {
+		// Skip final mined object residue
 		if dirtStoneRockArray[i].State == maxDirtStoneRockStates-1 {
 			continue
 		}
@@ -264,6 +269,7 @@ func Update() {
 			player.BoundingBox,
 		) {
 			RevertPlayerAndCameraPositions(oldPlayer, &player, oldCam, &camera)
+
 			// Trigger once
 			if rl.IsKeyPressed(rl.KeyF) {
 				dirtStoneRockArray[i].NextState()
