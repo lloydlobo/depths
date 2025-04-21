@@ -29,7 +29,7 @@ func DrawWalls(pos, size rl.Vector3) {
 
 	var (
 		rotationAxis = rl.Vector3{X: 0, Y: 1, Z: 0} // Y-axis
-		scale        = rl.Vector3Multiply(common.Vector3One, rl.NewVector3(1, common.InvPhi, 1))
+		scale        = rl.Vector3Multiply(common.Vector3One, rl.NewVector3(1, common.OneMinusInvPhi, 1))
 		tint         = rl.White
 	)
 

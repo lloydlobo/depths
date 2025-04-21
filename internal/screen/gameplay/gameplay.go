@@ -185,23 +185,23 @@ func Init() {
 			maxSkipPosOdds = int32(3)
 			y              = (floor.BoundingBox.Min.Y + floor.BoundingBox.Max.Y) / 2.0
 		)
-		offsetFromPlayerPos := float32(5.) // FIXME: This won't work if player is not at (0,0,0)
+		offsetFromPlayerPos := float32(4.) // FIXME: This won't work if player is not at (0,0,0)
 	NextCol:
 		for x := floor.BoundingBox.Min.X + 1; x < floor.BoundingBox.Max.X; x++ {
 		NextRow:
 			for z := floor.BoundingBox.Min.Z + 1; z < floor.BoundingBox.Max.Z; z++ {
-				if rl.GetRandomValue(0, maxSkipPosOdds) == 0 {
-					continue NextRow
-				}
-				if len(a) >= int(maxPositions) {
-					break NextCol
-				}
 				for i := -offsetFromPlayerPos; i <= offsetFromPlayerPos; i++ {
 					for k := -offsetFromPlayerPos; k <= offsetFromPlayerPos; k++ {
 						if i == x && k == z {
 							continue NextRow
 						}
 					}
+				}
+				if rl.GetRandomValue(0, maxSkipPosOdds) == 0 {
+					continue NextRow
+				}
+				if len(a) >= int(maxPositions) {
+					break NextCol
 				}
 				a = append(a, rl.NewVector3(x, y, z))
 			}
@@ -329,7 +329,7 @@ func Draw() {
 		floor.Draw()
 		if true {
 			pos := floor.Position
-			size := rl.Vector3Multiply(floor.Size, rl.NewVector3(.21, 1., .21))
+			size := rl.Vector3Multiply(floor.Size, rl.NewVector3(.1, 1., .2))
 			DrawWalls(pos, size)
 		}
 		for i := range dirtStoneRockCount {
