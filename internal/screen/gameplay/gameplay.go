@@ -8,6 +8,8 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 
 	"example/depths/internal/common"
+	"example/depths/internal/floor"
+	"example/depths/internal/player"
 )
 
 var (
@@ -16,9 +18,9 @@ var (
 
 	camera rl.Camera3D
 
-	player                Player
-	floor                 Floor
-	isPlayerWallCollision bool
+	Player player.Player
+	Floor  floor.Floor
+	// isPlayerWallCollision bool
 
 	checkedTexture rl.Texture2D
 	checkedModel   rl.Model
@@ -91,14 +93,14 @@ func InitMineObjPositions() []rl.Vector3 {
 	var positions []rl.Vector3 // 61% of maxPositions
 
 	var (
-		y    = (floor.BoundingBox.Min.Y + floor.BoundingBox.Max.Y) / 2.0
-		bb   = floor.BoundingBox
+		y    = (Floor.BoundingBox.Min.Y + Floor.BoundingBox.Max.Y) / 2.0
+		bb   = Floor.BoundingBox
 		offX = float32(3)
 		offZ = float32(3)
 	)
 
 	var (
-		maxGridCells            = floor.Size.X * floor.Size.Z // just-in-case
+		maxGridCells            = Floor.Size.X * Floor.Size.Z // just-in-case
 		maxSkipLoopPositionOdds = int32(2)                    // if 2 -> 0,1,2 -> 1/3 odds
 	)
 
@@ -211,8 +213,6 @@ func Init() {
 	// dungeonTexture = rl.LoadTexture(filepath.Join("res", "texture", "dungeon_texture.png"))
 	// dungeonTexture = common.Model.OBJ.Colormap
 
-	isPlayerWallCollision = false
-
 	// SCENES 0..3
 	// SCENES 0..3
 	// SCENES 0..3
@@ -222,8 +222,10 @@ func Init() {
 	// SCENES 0..3
 	//			SCENES 0..3
 	//						SCENES 0..3
-	InitPlayer()
-	InitFloor()
+	player.InitPlayer(&Player, camera)
+	Player.IsPlayerWallCollision = false
+
+	floor.InitFloor(&Floor)
 	InitWall()
 	// - Avoid spawning where player is standing
 	// - Randomly skip a position
@@ -266,19 +268,19 @@ func Update() {
 
 	// Save variables this frame
 	oldCam := camera
-	oldPlayer := player
+	oldPlayer := Player
 
 	// Reset flags/variables
-	player.Collisions = rl.Quaternion{}
-	isPlayerWallCollision = false
+	Player.Collisions = rl.Quaternion{}
+	Player.IsPlayerWallCollision = false
 
 	rl.UpdateMusicStream(common.Music.Theme)
 	rl.UpdateCamera(&camera, rl.CameraThirdPerson)
 
-	player.Update()
+	Player.Update(camera, Floor)
 
-	if isPlayerWallCollision {
-		RevertPlayerAndCameraPositions(oldPlayer, &player, oldCam, &camera)
+	if Player.IsPlayerWallCollision {
+		player.RevertPlayerAndCameraPositions(oldPlayer, &Player, oldCam, &camera)
 	}
 	for i := range mineObjCount {
 		// Skip final mined object residue
@@ -287,37 +289,37 @@ func Update() {
 		}
 		if rl.CheckCollisionBoxes(
 			common.GetBoundingBoxFromPositionSizeV(mineObjArray[i].Pos, mineObjArray[i].Size),
-			player.BoundingBox,
+			Player.BoundingBox,
 		) {
 			// FIND OUT WHERE PLAYER TOUCHED THE BOX
 			// HACK
 			//		HACK
 			//			HACK
-			player.Collisions.Z = 1
-			dx := oldPlayer.Position.X - player.Position.X
+			Player.Collisions.Z = 1
+			dx := oldPlayer.Position.X - Player.Position.X
 			if dx < 0.0 { // new <- old
-				player.Collisions.X = 1
+				Player.Collisions.X = 1
 			} else if dx > 0.0 { // new -> old
-				player.Collisions.X = -1
+				Player.Collisions.X = -1
 			} else {
-				if player.Collisions.X != 0 { // Placeholder (do not overwrite previous)
-					player.Collisions.X = 0
+				if Player.Collisions.X != 0 { // Placeholder (do not overwrite previous)
+					Player.Collisions.X = 0
 				}
 			}
-			dz := oldPlayer.Position.Z - player.Position.Z
+			dz := oldPlayer.Position.Z - Player.Position.Z
 			if dz < 0.0 { // new <- old
-				player.Collisions.Z = 1
+				Player.Collisions.Z = 1
 			} else if dz > 0.0 { // new -> old
-				player.Collisions.Z = -1
+				Player.Collisions.Z = -1
 			} else {
-				if player.Collisions.Z != 0 { // Placeholder (do not overwrite previous)
-					player.Collisions.Z = 0
+				if Player.Collisions.Z != 0 { // Placeholder (do not overwrite previous)
+					Player.Collisions.Z = 0
 				}
 			}
 			//			HACK
 			//		HACK
 			// HACK
-			RevertPlayerAndCameraPositions(oldPlayer, &player, oldCam, &camera)
+			player.RevertPlayerAndCameraPositions(oldPlayer, &Player, oldCam, &camera)
 
 			// Trigger once while mining
 			if (rl.IsKeyDown(rl.KeySpace) && framesCounter%16 == 0) ||
@@ -347,9 +349,9 @@ func Update() {
 		const fps = 60
 		const framesInterval = fps / 3.0
 		if framesCounter%int32(framesInterval) == 0 {
-			if !rl.Vector3Equals(oldPlayer.Position, player.Position) &&
-				rl.Vector3Distance(oldCam.Position, player.Position) > 1.0 &&
-				(player.Collisions.X == 0 && player.Collisions.Z == 0) {
+			if !rl.Vector3Equals(oldPlayer.Position, Player.Position) &&
+				rl.Vector3Distance(oldCam.Position, Player.Position) > 1.0 &&
+				(Player.Collisions.X == 0 && Player.Collisions.Z == 0) {
 				rl.PlaySound(common.FXS.FootStepsConcrete[int(framesCounter)%len(common.FXS.FootStepsConcrete)])
 			}
 		}
@@ -370,14 +372,14 @@ func Draw() {
 	rl.ClearBackground(rl.Black)
 
 	{
-		player.Draw()
+		Player.Draw()
 
-		floor.Draw()
+		Floor.Draw()
 
 		// Use walls to avoid infinite-map generation
 		DrawWalls(
-			floor.Position,
-			floor.Size,
+			Floor.Position,
+			Floor.Size,
 			rl.NewVector3(
 				1.,
 				cmp.Or(common.Phi, common.OneMinusInvPhi, float32(1.)),
@@ -396,11 +398,11 @@ func Draw() {
 			bb3 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(7, 2, 7)) // bot barrier
 			rl.DrawBoundingBox(bb3, rl.Blue)
 			{
-				isPlayerInsideBase := rl.CheckCollisionBoxes(player.BoundingBox, bb1)
-				isPlayerEnteringBase := rl.CheckCollisionBoxes(player.BoundingBox, bb2)
-				isPlayerInsideBotBarrier := rl.CheckCollisionBoxes(player.BoundingBox, bb3)
+				isPlayerInsideBase := rl.CheckCollisionBoxes(Player.BoundingBox, bb1)
+				isPlayerEnteringBase := rl.CheckCollisionBoxes(Player.BoundingBox, bb2)
+				isPlayerInsideBotBarrier := rl.CheckCollisionBoxes(Player.BoundingBox, bb3)
 				if isPlayerInsideBotBarrier && !isPlayerEnteringBase && !isPlayerInsideBase {
-					playerCol = rl.Blue
+					player.PlayerCol = rl.Blue
 				} else if isPlayerEnteringBase && !isPlayerInsideBase {
 					// HACK: Placeholder change scene check logic
 					if hasLeftDrillBase {
@@ -411,14 +413,14 @@ func Draw() {
 						finishScreen = 1 // HACK: Placeholder to shift scene
 						rl.PlaySound(common.FX.Coin)
 					}
-					playerCol = rl.Green
+					player.PlayerCol = rl.Green
 				} else if isPlayerInsideBase {
-					playerCol = rl.Red
+					player.PlayerCol = rl.Red
 				} else {
 					if !hasLeftDrillBase {
 						hasLeftDrillBase = true
 					}
-					playerCol = rl.White
+					player.PlayerCol = rl.White
 				}
 			}
 		}
@@ -459,8 +461,8 @@ func Draw() {
 
 		if false {
 			// Draw banners at floor corners
-			floorBBMin := floor.BoundingBox.Min
-			floorBBMax := floor.BoundingBox.Max
+			floorBBMin := Floor.BoundingBox.Min
+			floorBBMax := Floor.BoundingBox.Max
 			rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMin.X+1, 0, floorBBMin.Z+1), common.YAxis, 45, common.Vector3One, rl.White)  // leftback
 			rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMax.X-1, 0, floorBBMin.Z+1), common.YAxis, -45, common.Vector3One, rl.White) // rightback
 			rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMax.X, 0, floorBBMax.Z), common.YAxis, 45, common.Vector3One, rl.White)      // rightfront
