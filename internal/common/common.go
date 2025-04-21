@@ -1,5 +1,14 @@
 // Package common provides assets and resources initialized once (if possible)
 // before the game is run.
+//
+// Physically-Based Rendering
+//
+//	See https://marmoset.co/posts/basic-theory-of-physically-based-rendering/
+//
+// OBJ Text file format.
+//
+//	Must include vertex position-texcoords-normals information, if files
+//	references some .mtl materials file, it will be loaded (or try to).
 package common
 
 import (
@@ -9,33 +18,18 @@ import (
 )
 
 var (
-	Font struct {
-		Primary   rl.Font
-		Secondary rl.Font
+	Font  struct{ Primary, Secondary rl.Font }
+	Music struct{ Theme, Ambient rl.Music }
+	FX    struct{ Coin rl.Sound }
+	FXS   struct {
+		ImpactsSoftHeavy, ImpactsSoftMedium, ImpactsGenericLight,
+		FootStepsConcrete []rl.Sound
 	}
-	Music struct {
-		Theme   rl.Music
-		Ambient rl.Music
-	}
-	FX struct {
-		Coin rl.Sound
-	}
-	Shader struct {
-		// Physically-Based Rendering
-		// See https://marmoset.co/posts/basic-theory-of-physically-based-rendering/
-		PBR rl.Shader
-	}
-	Texture struct {
-		CubicmapAtlas rl.Texture2D // Load cubeTexture to be applied to the cubes sides (256x256 png)
-	}
-	Model struct {
-		// OBJ Text file format. Must include vertex position-texcoords-normals
-		// information, if files references some .mtl materials file, it will be loaded (or try to).
+	Shader  struct{ PBR rl.Shader }
+	Texture struct{ CubicmapAtlas rl.Texture2D }
+	Model   struct {
 		OBJ model.ModelsOBJ
 		GLB model.ModelsGLB
-
-		FBX     interface{}
-		Texture interface{}
 	}
 )
 

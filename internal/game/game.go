@@ -58,6 +58,38 @@ func Run() {
 	common.FX.Coin = rl.LoadSound("res/fx/coin.wav")
 	rl.SetSoundVolume(common.FX.Coin, 0.3)
 
+	{
+		var fxAudioDir = filepath.Join("res", "fx", "kenney_impact-sounds", "Audio")
+		common.FXS.FootStepsConcrete = []rl.Sound{
+			rl.LoadSound(filepath.Join(fxAudioDir, "footstep_concrete_000.ogg")),
+			rl.LoadSound(filepath.Join(fxAudioDir, "footstep_concrete_001.ogg")),
+			rl.LoadSound(filepath.Join(fxAudioDir, "footstep_concrete_002.ogg")),
+			rl.LoadSound(filepath.Join(fxAudioDir, "footstep_concrete_003.ogg")),
+			rl.LoadSound(filepath.Join(fxAudioDir, "footstep_concrete_004.ogg")),
+		}
+		common.FXS.ImpactsSoftHeavy = []rl.Sound{
+			rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_heavy_000.ogg")),
+			rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_heavy_001.ogg")),
+			rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_heavy_002.ogg")),
+			rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_heavy_003.ogg")),
+			rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_heavy_004.ogg")),
+		}
+		common.FXS.ImpactsSoftMedium = []rl.Sound{
+			rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_medium_000.ogg")),
+			rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_medium_001.ogg")),
+			rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_medium_002.ogg")),
+			rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_medium_003.ogg")),
+			rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_medium_004.ogg")),
+		}
+		common.FXS.ImpactsGenericLight = []rl.Sound{
+			rl.LoadSound(filepath.Join(fxAudioDir, "impactGeneric_light_000.ogg")),
+			rl.LoadSound(filepath.Join(fxAudioDir, "impactGeneric_light_001.ogg")),
+			rl.LoadSound(filepath.Join(fxAudioDir, "impactGeneric_light_002.ogg")),
+			rl.LoadSound(filepath.Join(fxAudioDir, "impactGeneric_light_003.ogg")),
+			rl.LoadSound(filepath.Join(fxAudioDir, "impactGeneric_light_004.ogg")),
+		}
+	}
+
 	common.Texture.CubicmapAtlas = rl.LoadTexture(filepath.Join("res", "texture", "cubicmap_atlas.png"))
 	common.Model.OBJ = model.LoadAssetModelOBJ()
 

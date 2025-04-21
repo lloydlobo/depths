@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"fmt"
 	"log"
-	"path/filepath"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
@@ -24,11 +23,10 @@ var (
 	checkedTexture rl.Texture2D
 	checkedModel   rl.Model
 
-	fxSoftHeavyImpacts    []rl.Sound
-	fxSoftMediumImpacts   []rl.Sound
-	fxGenericLightImpacts []rl.Sound
-
-	fxFootsteps []rl.Sound
+	// fxImpactsSoftHeavy    []rl.Sound
+	// fxImpactsSoftMedium   []rl.Sound
+	// fxImpactsGenericLight []rl.Sound
+	// fxConcreteFootsteps []rl.Sound
 )
 
 // TEMPORARY
@@ -47,78 +45,117 @@ var (
 //														TEMPORARY
 
 const (
-	DirtDSR DirtStoneRockState = iota
-	RockDSR
-	StoneDSR
-	FloorDetailTileDSR
+	DirtMineObjState MineObjState = iota
+	RockMineObjState
+	StoneMineObjState
+	FloorDetailMineObjState // decorated floor tile
 
-	maxDirtStoneRockStates
+	maxMineObjState
 )
 
 var (
-	dirtStoneRockArray  []DirtStoneRockObj
-	dirtStoneRockCount  int32
-	dirtStoneRockModels [maxDirtStoneRockStates]rl.Model
+	mineObjArray  []MineObj
+	mineObjCount  int32
+	mineObjModels [maxMineObjState]rl.Model
 )
 
-type DirtStoneRockState uint8
-type DirtStoneRockObj struct {
+type MineObjState uint8
+type MineObj struct {
 	Pos      rl.Vector3
 	Size     rl.Vector3
 	Rotn     float32
 	Health   float32 // [0..1]
-	State    DirtStoneRockState
+	State    MineObjState
 	IsActive bool
 }
 
-func NewDirtStoneRockObj(pos, size rl.Vector3) DirtStoneRockObj {
-	return DirtStoneRockObj{
+func NewMineObj(pos, size rl.Vector3) MineObj {
+	return MineObj{
 		Pos:      pos,
 		Size:     size,
 		Rotn:     0.0,
-		State:    DirtDSR,
+		State:    DirtMineObjState,
 		IsActive: true,
 	}
 }
 
-func (o *DirtStoneRockObj) NextState() {
+func (o *MineObj) NextState() {
 	o.State++
-	if o.State >= maxDirtStoneRockStates {
-		o.State = maxDirtStoneRockStates - 1
+	if o.State >= maxMineObjState {
+		o.State = maxMineObjState - 1
 		o.IsActive = false
 	}
 }
 
-func InitDirtStoneRockObjects(positions []rl.Vector3) {
+func InitMineObjPositions() []rl.Vector3 {
+	var positions []rl.Vector3 // 61% of maxPositions
+
+	var (
+		y    = (floor.BoundingBox.Min.Y + floor.BoundingBox.Max.Y) / 2.0
+		bb   = floor.BoundingBox
+		offX = float32(4)
+		offZ = float32(4)
+	)
+
+	var (
+		maxGridCells            = floor.Size.X * floor.Size.Z // just-in-case
+		maxSkipLoopPositionOdds = int32(3)
+	)
+
+NextCol:
+	for x := bb.Min.X + 1; x < bb.Max.X; x++ {
+	NextRow:
+		for z := bb.Min.Z + 1; z < bb.Max.Z; z++ {
+			if len(positions) >= int(maxGridCells) {
+				break NextCol
+			}
+			// Reserve space for area in offset from origin
+			for i := -offX; i <= offX; i++ {
+				for k := -offZ; k <= offZ; k++ {
+					if i == x && k == z {
+						continue NextRow
+					}
+				}
+			}
+			if rl.GetRandomValue(0, maxSkipLoopPositionOdds) == 0 {
+				continue NextRow
+			}
+			positions = append(positions, rl.NewVector3(x, y, z))
+		}
+	}
+	return positions
+}
+
+func InitAllMineObj(positions []rl.Vector3) {
 	for i := range positions {
 		size := rl.Vector3Multiply(
 			rl.NewVector3(1, 1, 1),
 			rl.NewVector3(
-				float32(rl.GetRandomValue(94, 98))/100.,
-				float32(rl.GetRandomValue(60, 62))/100.,
-				float32(rl.GetRandomValue(94, 98))/100.))
-		obj := NewDirtStoneRockObj(positions[i], size)
-		obj.Rotn = cmp.Or(float32(rl.GetRandomValue(-30, 30)/10.), 0.)
-		dirtStoneRockArray = append(dirtStoneRockArray, obj)
-		dirtStoneRockCount++
+				float32(rl.GetRandomValue(90, 96))/100.,
+				float32(rl.GetRandomValue(161, 2*161))/100.,
+				float32(rl.GetRandomValue(90, 96))/100.),
+		)
+
+		obj := NewMineObj(positions[i], size)
+		obj.Rotn = cmp.Or(float32(rl.GetRandomValue(-50, 50)/10.), 0.)
+
+		mineObjArray = append(mineObjArray, obj)
+		mineObjCount++
 	}
-	for i := range maxDirtStoneRockStates {
+	for i := range maxMineObjState {
 		switch i {
-		case DirtDSR:
-			dirtStoneRockModels[i] = common.Model.OBJ.Dirt
-			rl.SetMaterialTexture(dirtStoneRockModels[i].Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
-		case RockDSR:
-			dirtStoneRockModels[i] = common.Model.OBJ.Rocks
-			rl.SetMaterialTexture(dirtStoneRockModels[i].Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
-		case StoneDSR:
-			dirtStoneRockModels[i] = common.Model.OBJ.Stones
-			rl.SetMaterialTexture(dirtStoneRockModels[i].Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
-		case FloorDetailTileDSR:
-			dirtStoneRockModels[i] = common.Model.OBJ.FloorDetail
-			rl.SetMaterialTexture(dirtStoneRockModels[i].Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
+		case DirtMineObjState:
+			mineObjModels[i] = common.Model.OBJ.Dirt
+		case RockMineObjState:
+			mineObjModels[i] = common.Model.OBJ.Rocks
+		case StoneMineObjState:
+			mineObjModels[i] = common.Model.OBJ.Stones
+		case FloorDetailMineObjState:
+			mineObjModels[i] = common.Model.OBJ.FloorDetail
 		default:
-			panic(fmt.Sprintf("unexpected gameplay.DirtStoneRockState: %#v", i))
+			panic(fmt.Sprintf("unexpected gameplay.MineObjState: %#v", i))
 		}
+		rl.SetMaterialTexture(mineObjModels[i].Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
 	}
 }
 
@@ -159,38 +196,6 @@ func Init() {
 	framesCounter = 0
 	finishScreen = 0
 
-	var (
-		fxAudioDir = filepath.Join("res", "fx", "kenney_impact-sounds", "Audio")
-	)
-	fxFootsteps = []rl.Sound{
-		rl.LoadSound(filepath.Join(fxAudioDir, "footstep_concrete_000.ogg")),
-		rl.LoadSound(filepath.Join(fxAudioDir, "footstep_concrete_001.ogg")),
-		rl.LoadSound(filepath.Join(fxAudioDir, "footstep_concrete_002.ogg")),
-		rl.LoadSound(filepath.Join(fxAudioDir, "footstep_concrete_003.ogg")),
-		rl.LoadSound(filepath.Join(fxAudioDir, "footstep_concrete_004.ogg")),
-	}
-	fxSoftHeavyImpacts = []rl.Sound{
-		rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_heavy_000.ogg")),
-		rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_heavy_001.ogg")),
-		rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_heavy_002.ogg")),
-		rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_heavy_003.ogg")),
-		rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_heavy_004.ogg")),
-	}
-	fxSoftMediumImpacts = []rl.Sound{
-		rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_medium_000.ogg")),
-		rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_medium_001.ogg")),
-		rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_medium_002.ogg")),
-		rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_medium_003.ogg")),
-		rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_medium_004.ogg")),
-	}
-	fxGenericLightImpacts = []rl.Sound{
-		rl.LoadSound(filepath.Join(fxAudioDir, "impactGeneric_light_000.ogg")),
-		rl.LoadSound(filepath.Join(fxAudioDir, "impactGeneric_light_001.ogg")),
-		rl.LoadSound(filepath.Join(fxAudioDir, "impactGeneric_light_002.ogg")),
-		rl.LoadSound(filepath.Join(fxAudioDir, "impactGeneric_light_003.ogg")),
-		rl.LoadSound(filepath.Join(fxAudioDir, "impactGeneric_light_004.ogg")),
-	}
-
 	camera = rl.Camera3D{
 		Position:   rl.NewVector3(0., 16., 16.),
 		Target:     rl.NewVector3(0., .5, 0.),
@@ -217,42 +222,10 @@ func Init() {
 	InitPlayer()
 	InitFloor()
 	InitWall()
-
 	// - Avoid spawning where player is standing
 	// - Randomly skip a position
 	// - A noise map or simplex/perlin noise "can" serve better
-	InitMiningObjectPositions := func() []rl.Vector3 {
-		var a []rl.Vector3 // 61% of maxPositions
-		var (
-			maxPositions   = floor.Size.X * floor.Size.Z
-			maxSkipPosOdds = int32(3)
-			y              = (floor.BoundingBox.Min.Y + floor.BoundingBox.Max.Y) / 2.0
-		)
-		offsetFromPlayerPos := float32(4.) // FIXME: This won't work if player is not at (0,0,0)
-	NextCol:
-		for x := floor.BoundingBox.Min.X + 1; x < floor.BoundingBox.Max.X; x++ {
-		NextRow:
-			for z := floor.BoundingBox.Min.Z + 1; z < floor.BoundingBox.Max.Z; z++ {
-				for i := -offsetFromPlayerPos; i <= offsetFromPlayerPos; i++ {
-					for k := -offsetFromPlayerPos; k <= offsetFromPlayerPos; k++ {
-						if i == x && k == z {
-							continue NextRow
-						}
-					}
-				}
-				if rl.GetRandomValue(0, maxSkipPosOdds) == 0 {
-					continue NextRow
-				}
-				if len(a) >= int(maxPositions) {
-					break NextCol
-				}
-				a = append(a, rl.NewVector3(x, y, z))
-			}
-		}
-		return a
-	}
-	InitDirtStoneRockObjects(InitMiningObjectPositions())
-
+	InitAllMineObj(InitMineObjPositions())
 	//						SCENES 0..3
 	//			SCENES 0..3
 	// SCENES 0..3
@@ -304,13 +277,13 @@ func Update() {
 	if isPlayerWallCollision {
 		RevertPlayerAndCameraPositions(oldPlayer, &player, oldCam, &camera)
 	}
-	for i := range dirtStoneRockCount {
+	for i := range mineObjCount {
 		// Skip final mined object residue
-		if dirtStoneRockArray[i].State == maxDirtStoneRockStates-1 {
+		if mineObjArray[i].State == maxMineObjState-1 {
 			continue
 		}
 		if rl.CheckCollisionBoxes(
-			common.GetBoundingBoxFromPositionSizeV(dirtStoneRockArray[i].Pos, dirtStoneRockArray[i].Size),
+			common.GetBoundingBoxFromPositionSizeV(mineObjArray[i].Pos, mineObjArray[i].Size),
 			player.BoundingBox,
 		) {
 			// FIND OUT WHERE PLAYER TOUCHED THE BOX
@@ -347,10 +320,10 @@ func Update() {
 			if (rl.IsKeyDown(rl.KeySpace) && framesCounter%16 == 0) ||
 				(rl.IsMouseButtonDown(rl.MouseLeftButton) && framesCounter%16 == 0) {
 				// Play mining sound with variations (s1:kick + s2:snare + s3:hollow-thock)
-				state := dirtStoneRockArray[i].State
-				s1 := fxSoftMediumImpacts[rl.GetRandomValue(int32(state), int32(len(fxSoftMediumImpacts)-1))]
-				s2 := fxGenericLightImpacts[rl.GetRandomValue(int32(state), int32(len(fxGenericLightImpacts)-1))]
-				s3 := fxSoftHeavyImpacts[rl.GetRandomValue(int32(state), int32(len(fxSoftHeavyImpacts)-1))]
+				state := mineObjArray[i].State
+				s1 := common.FXS.ImpactsSoftMedium[rl.GetRandomValue(int32(state), int32(len(common.FXS.ImpactsSoftMedium)-1))]
+				s2 := common.FXS.ImpactsGenericLight[rl.GetRandomValue(int32(state), int32(len(common.FXS.ImpactsGenericLight)-1))]
+				s3 := common.FXS.ImpactsSoftHeavy[rl.GetRandomValue(int32(state), int32(len(common.FXS.ImpactsSoftHeavy)-1))]
 				rl.SetSoundVolume(s1, float32(rl.GetRandomValue(7, 10))/10.)
 				rl.SetSoundVolume(s2, float32(rl.GetRandomValue(4, 8))/10.)
 				rl.SetSoundVolume(s3, float32(rl.GetRandomValue(1, 4))/10.)
@@ -359,7 +332,7 @@ func Update() {
 				rl.PlaySound(s3)
 
 				// Increment state
-				dirtStoneRockArray[i].NextState()
+				mineObjArray[i].NextState()
 			}
 		}
 	}
@@ -374,7 +347,7 @@ func Update() {
 			if !rl.Vector3Equals(oldPlayer.Position, player.Position) &&
 				rl.Vector3Distance(oldCam.Position, player.Position) > 1.0 &&
 				(player.Collisions.X == 0 && player.Collisions.Z == 0) {
-				rl.PlaySound(fxFootsteps[int(framesCounter)%len(fxFootsteps)])
+				rl.PlaySound(common.FXS.FootStepsConcrete[int(framesCounter)%len(common.FXS.FootStepsConcrete)])
 			}
 		}
 	}
@@ -430,9 +403,9 @@ func Draw() {
 			rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
 		}
 
-		for i := range dirtStoneRockCount {
-			obj := dirtStoneRockArray[i]
-			rl.DrawModelEx(dirtStoneRockModels[obj.State], obj.Pos,
+		for i := range mineObjCount {
+			obj := mineObjArray[i]
+			rl.DrawModelEx(mineObjModels[obj.State], obj.Pos,
 				rl.NewVector3(0, 1, 0), obj.Rotn, obj.Size, rl.White)
 		}
 
