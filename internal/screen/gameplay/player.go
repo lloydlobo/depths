@@ -21,7 +21,7 @@ var (
 func NewPlayer() Player {
 	out := Player{
 		Position:   camera.Target,
-		Size:       cmp.Or(rl.NewVector3(.5, 1., .5), rl.NewVector3(1, 2, 1)),
+		Size:       cmp.Or(rl.NewVector3(.5, 1.-.5, .5), rl.NewVector3(1, 2, 1)),
 		Collisions: rl.NewQuaternion(0, 0, 0, 0),
 	}
 	out.BoundingBox = common.GetBoundingBoxFromPositionSizeV(camera.Target, player.Size)

@@ -93,7 +93,7 @@ func InitDirtStoneRockObjects(positions []rl.Vector3) {
 			rl.NewVector3(1, 1, 1),
 			rl.NewVector3(
 				float32(rl.GetRandomValue(94, 98))/100.,
-				float32(rl.GetRandomValue(84, 86))/100.,
+				float32(rl.GetRandomValue(60, 62))/100.,
 				float32(rl.GetRandomValue(94, 98))/100.))
 		obj := NewDirtStoneRockObj(positions[i], size)
 		obj.Rotn = cmp.Or(float32(rl.GetRandomValue(-30, 30)/10.), 0.)
@@ -336,10 +336,42 @@ func Draw() {
 	{
 		player.Draw()
 		floor.Draw()
-		DrawWalls(floor.Position, floor.Size, rl.NewVector3(1., common.InvPhi, 1.))
-		if true {
-			DrawWalls(floor.Position, rl.Vector3Multiply(floor.Size, rl.NewVector3(.1, 1., .2)),
-				rl.NewVector3(1., common.OneMinusInvPhi, 1.))
+		DrawWalls(
+			floor.Position,
+			floor.Size,
+			rl.NewVector3(1., cmp.Or(float32(1.), common.OneMinusInvPhi), 1.),
+		) // Use walls to avoid infinite-map generation
+
+		// Draw drill
+		const maxIndex = 2
+		wallScale := rl.NewVector3(1., 1., 1.)
+		for i := float32(-maxIndex + 1); i < maxIndex; i++ {
+			var model rl.Model
+			var y float32
+
+			model = common.Model.OBJ.Column
+			y = 0.
+
+			rl.DrawModelEx(model, rl.NewVector3(i, y, maxIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
+			rl.DrawModelEx(model, rl.NewVector3(i, y, -maxIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
+			rl.DrawModelEx(model, rl.NewVector3(maxIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
+			rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
+
+			model = common.Model.OBJ.Wall
+			y = 1. + .125*.5
+
+			rl.DrawModelEx(model, rl.NewVector3(i, y, maxIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
+			rl.DrawModelEx(model, rl.NewVector3(i, y, -maxIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
+			rl.DrawModelEx(model, rl.NewVector3(maxIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
+			rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
+
+			model = common.Model.OBJ.Column
+			y = 2. + .125*.5
+
+			rl.DrawModelEx(model, rl.NewVector3(i, y, maxIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
+			rl.DrawModelEx(model, rl.NewVector3(i, y, -maxIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
+			rl.DrawModelEx(model, rl.NewVector3(maxIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
+			rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
 		}
 
 		for i := range dirtStoneRockCount {
