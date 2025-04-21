@@ -50,55 +50,64 @@ var (
 )
 
 const (
-	GoldChestEmpty GoldChestState = iota
-	GoldChestFull
-	// GoldChestFullClosed
-	// GoldChestEmptyClosed
+	DirtDSR DirtStoneRockState = iota
+	RockDSR
+	StoneDSR
 
-	maxGoldChestStates
+	maxDirtStoneRockStates
 )
 
 var (
-	goldChests      []GoldChest
-	goldChestCount  int32
-	goldChestModels [maxGoldChestStates]rl.Model
+	dirtStoneRockArray  []DirtStoneRockObj
+	dirtStoneRockCount  int32
+	dirtStoneRockModels [maxDirtStoneRockStates]rl.Model
 )
 
-type GoldChestState uint8
-type GoldChest struct {
+type DirtStoneRockState uint8
+type DirtStoneRockObj struct {
 	Pos      rl.Vector3
 	Size     rl.Vector3
 	Health   float32 // [0..1]
-	State    GoldChestState
+	State    DirtStoneRockState
 	IsActive bool
 }
 
-func NewGoldChest(pos, size rl.Vector3) GoldChest {
-	return GoldChest{
+func NewDirtStoneRockObj(pos, size rl.Vector3) DirtStoneRockObj {
+	return DirtStoneRockObj{
 		Pos:      pos,
 		Size:     size,
-		State:    GoldChestFull,
+		State:    DirtDSR,
 		IsActive: true,
 	}
 }
 
-func InitGoldChests(positions []rl.Vector3) {
+func (o *DirtStoneRockObj) NextState() {
+	o.State++
+	if o.State >= maxDirtStoneRockStates {
+		o.State = maxDirtStoneRockStates - 1
+		o.IsActive = false
+	}
+}
+
+func InitDirtStoneRockObjects(positions []rl.Vector3) {
 	size := rl.NewVector3(1, 1, 1)
 	for i := range positions {
-		goldChests = append(goldChests, NewGoldChest(positions[i], size))
-		goldChestCount++
+		dirtStoneRockArray = append(dirtStoneRockArray, NewDirtStoneRockObj(positions[i], size))
+		dirtStoneRockCount++
 	}
-	for i := range maxGoldChestStates {
-		// dir := filepath.Join("res", "model", "obj")
+	for i := range maxDirtStoneRockStates {
 		switch i {
-		case GoldChestEmpty:
-			goldChestModels[i] = common.Model.OBJ.Stones
-			rl.SetMaterialTexture(goldChestModels[i].Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
-		case GoldChestFull:
-			goldChestModels[i] = common.Model.OBJ.Chest
-			rl.SetMaterialTexture(goldChestModels[i].Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
+		case DirtDSR:
+			dirtStoneRockModels[i] = common.Model.OBJ.Dirt
+			rl.SetMaterialTexture(dirtStoneRockModels[i].Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
+		case RockDSR:
+			dirtStoneRockModels[i] = common.Model.OBJ.Rocks
+			rl.SetMaterialTexture(dirtStoneRockModels[i].Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
+		case StoneDSR:
+			dirtStoneRockModels[i] = common.Model.OBJ.Stones
+			rl.SetMaterialTexture(dirtStoneRockModels[i].Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
 		default:
-			panic(fmt.Sprintf("unexpected gameplay.GoldChestState: %#v", i))
+			panic(fmt.Sprintf("unexpected gameplay.DirtStoneRockState: %#v", i))
 		}
 	}
 }
@@ -166,7 +175,7 @@ func Init() {
 	InitPlayer()
 	InitFloor()
 	InitWall()
-	InitGoldChests([]rl.Vector3{
+	InitDirtStoneRockObjects([]rl.Vector3{
 		rl.NewVector3(2, 0, -8),
 		rl.NewVector3(-3, 0, -6),
 		rl.NewVector3(-8, 0, 5),
@@ -174,12 +183,14 @@ func Init() {
 	})
 	InitBarrels := func(positions []rl.Vector3) {
 		barrelSize = rl.NewVector3(0.5, 0.5, 0.5)
+		// barrelSize = rl.NewVector3(1.0, 1.0, 1.0)
 		for _, pos := range positions {
 			barrelPositions = append(barrelPositions, pos)
 			barrelBoundingBoxes = append(barrelBoundingBoxes, common.GetBoundingBoxFromPositionSizeV(pos, barrelSize))
 			barrelCount++
 		}
 		barrelModel = common.Model.OBJ.Barrel
+		// barrelModel = common.Model.OBJ.Dirt
 		rl.SetMaterialTexture(barrelModel.Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
 	}
 	InitBarrels([]rl.Vector3{
@@ -200,8 +211,7 @@ func Init() {
 	checkedImg := rl.GenImageChecked(100, 100, 1, 1, rl.ColorBrightness(rl.Black, .25), rl.ColorBrightness(rl.Black, .2))
 	checkedTexture = rl.LoadTextureFromImage(checkedImg)
 	rl.UnloadImage(checkedImg)
-	checkedMesh := rl.GenMeshPlane(100, 100, 10, 10)
-	checkedModel = rl.LoadModelFromMesh(checkedMesh)
+	checkedModel = rl.LoadModelFromMesh(rl.GenMeshPlane(100, 100, 10, 10))
 	checkedModel.Materials.Maps.Texture = checkedTexture
 
 	rl.SetMusicVolume(common.Music.Theme, float32(cmp.Or(1.0, 0.125)))
@@ -245,6 +255,18 @@ func Update() {
 			RevertPlayerAndCameraPositions(oldPlayer, &player, oldCam, &camera)
 		}
 	}
+	for i := range dirtStoneRockCount {
+		if rl.CheckCollisionBoxes(
+			common.GetBoundingBoxFromPositionSizeV(dirtStoneRockArray[i].Pos, dirtStoneRockArray[i].Size),
+			player.BoundingBox,
+		) {
+			RevertPlayerAndCameraPositions(oldPlayer, &player, oldCam, &camera)
+			// Trigger once
+			if rl.IsKeyPressed(rl.KeyF) {
+				dirtStoneRockArray[i].NextState()
+			}
+		}
+	}
 
 	framesCounter++
 }
@@ -259,13 +281,15 @@ func Draw() {
 	{
 		player.Draw()
 		floor.Draw()
-		DrawWalls()
+		if false {
+			DrawWalls()
+		}
 		for _, pos := range barrelPositions { // Draw offgrid tiles
 			rl.DrawModelEx(barrelModel, pos, rl.NewVector3(0, 1, 0), 0., rl.NewVector3(1, 1, 1), rl.White)
 		}
-		for i := range goldChestCount {
-			chest := goldChests[i]
-			rl.DrawModelEx(goldChestModels[chest.State], chest.Pos, rl.NewVector3(0, 1, 0), 0., rl.NewVector3(1, 1, 1), rl.White)
+		for i := range dirtStoneRockCount {
+			chest := dirtStoneRockArray[i]
+			rl.DrawModelEx(dirtStoneRockModels[chest.State], chest.Pos, rl.NewVector3(0, 1, 0), 0., rl.NewVector3(1, 1, 1), rl.White)
 		}
 
 		rl.DrawModel(checkedModel, rl.NewVector3(0., -.05, 0.), 1., rl.RayWhite)
@@ -277,6 +301,16 @@ func Draw() {
 		rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMax.X-1, 0, floorBBMin.Z+1), common.YAxis, -45, common.Vector3One, rl.White) // rightback
 		rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMax.X, 0, floorBBMax.Z), common.YAxis, 45, common.Vector3One, rl.White)      // rightfront
 		rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMin.X, 0, floorBBMax.Z), common.YAxis, -45, common.Vector3One, rl.White)     // leftfront
+
+		// rl.DrawModel(common.Model.OBJ.Dirt, rl.NewVector3(0, common.Phi, 0), common.Phi, rl.White)
+		rl.DrawModel(common.Model.OBJ.WoodStructure, rl.NewVector3(0, 0, 0), 1., rl.White)
+
+		rl.DrawModel(common.Model.OBJ.CharacterHuman, common.Vector3One, 1., rl.Red)
+
+		rl.DrawModel(common.Model.OBJ.Dirt, rl.NewVector3(4, 0, 4), 1., rl.White)
+		rl.DrawModel(common.Model.OBJ.Rocks, rl.NewVector3(5, 0, 4), 1., rl.White)
+		rl.DrawModel(common.Model.OBJ.Dirt, rl.NewVector3(6, 0, 4), 1., rl.White)
+		rl.DrawModel(common.Model.OBJ.Stones, rl.NewVector3(7, 0, 4), 1., rl.White)
 
 		rl.DrawModel(common.Model.OBJ.Coin, rl.NewVector3(1, 0, 1), 1., rl.White)
 		rl.DrawModel(common.Model.OBJ.WoodSupport, rl.NewVector3(2, 0, 2), 1., rl.White)

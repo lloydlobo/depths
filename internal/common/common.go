@@ -31,9 +31,9 @@ var (
 	Model struct {
 		// OBJ Text file format. Must include vertex position-texcoords-normals
 		// information, if files references some .mtl materials file, it will be loaded (or try to).
-		OBJ     model.ModelsObj
+		OBJ model.ModelsOBJ
+		GLB model.ModelsGLB
 
-		GLB     interface{}
 		FBX     interface{}
 		Texture interface{}
 	}

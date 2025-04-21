@@ -28,7 +28,7 @@ func NewFloor(pos, size rl.Vector3) Floor {
 // NOTE: A basic plane shape can be generated instead of being loaded from a model file
 func InitFloor() {
 	pos := rl.NewVector3(0., 0., 0.)
-	size := rl.NewVector3(16., 0.001, 16.)
+	size := rl.NewVector3(16., 0.001, 12.)
 
 	// Set global var in internal/game.go for bounds, vertex information
 	floor = NewFloor(pos, size)

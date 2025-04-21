@@ -33,6 +33,8 @@ func InitPlayer() {
 	player = NewPlayer()
 	playerModel = common.Model.OBJ.Column
 	rl.SetMaterialTexture(playerModel.Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
+	// playerModel = common.Model.GLB.Column
+	// rl.SetMaterialTexture(playerModel.Materials, rl.MapDiffuse, common.Model.GLB.Colormap)
 }
 
 func (p *Player) Update() {
@@ -82,6 +84,7 @@ func (p Player) Draw() {
 		rl.NewVector3(1., common.InvPhi, 1.),
 		rl.White,
 	)
+	// rl.DrawModel(common.Model.GLB.CharacterHuman, p.Position, 1., rl.White)
 
 	if false {
 		rl.DrawCapsuleWires(
@@ -95,7 +98,7 @@ func (p Player) Draw() {
 			p.Size.X/2, 8, 8, col)
 	}
 
-	if true {
+	if false {
 		rl.DrawCapsuleWires(
 			rl.Vector3Add(p.Position, rl.NewVector3(0, p.Size.Y/4, 0)),
 			rl.Vector3Add(p.Position, rl.NewVector3(0, -p.Size.Y/4, 0)),
@@ -104,9 +107,13 @@ func (p Player) Draw() {
 			rl.Vector3Add(p.Position, rl.NewVector3(0, p.Size.Y/2, 0)),
 			rl.Vector3Add(p.Position, rl.NewVector3(0, -p.Size.Y/2, 0)),
 			p.Size.X/2, p.Size.X/2, 16, col)
-		if isPlayerWallCollision {
-			rl.DrawBoundingBox(p.BoundingBox, rl.Red)
-		} else {
+
+	}
+
+	if isPlayerWallCollision {
+		rl.DrawBoundingBox(p.BoundingBox, rl.Red)
+	} else {
+		if false {
 			rl.DrawBoundingBox(p.BoundingBox, rl.LightGray)
 		}
 	}
