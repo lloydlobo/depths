@@ -24,9 +24,11 @@ var (
 	checkedTexture rl.Texture2D
 	checkedModel   rl.Model
 
-	fxImpactSoftHeavy    []rl.Sound
-	fxImpactSoftMedium   []rl.Sound
-	fxImpactGenericLight []rl.Sound
+	fxSoftHeavyImpacts    []rl.Sound
+	fxSoftMediumImpacts   []rl.Sound
+	fxGenericLightImpacts []rl.Sound
+
+	fxFootsteps []rl.Sound
 )
 
 // TEMPORARY
@@ -157,6 +159,38 @@ func Init() {
 	framesCounter = 0
 	finishScreen = 0
 
+	var (
+		fxAudioDir = filepath.Join("res", "fx", "kenney_impact-sounds", "Audio")
+	)
+	fxFootsteps = []rl.Sound{
+		rl.LoadSound(filepath.Join(fxAudioDir, "footstep_concrete_000.ogg")),
+		rl.LoadSound(filepath.Join(fxAudioDir, "footstep_concrete_001.ogg")),
+		rl.LoadSound(filepath.Join(fxAudioDir, "footstep_concrete_002.ogg")),
+		rl.LoadSound(filepath.Join(fxAudioDir, "footstep_concrete_003.ogg")),
+		rl.LoadSound(filepath.Join(fxAudioDir, "footstep_concrete_004.ogg")),
+	}
+	fxSoftHeavyImpacts = []rl.Sound{
+		rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_heavy_000.ogg")),
+		rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_heavy_001.ogg")),
+		rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_heavy_002.ogg")),
+		rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_heavy_003.ogg")),
+		rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_heavy_004.ogg")),
+	}
+	fxSoftMediumImpacts = []rl.Sound{
+		rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_medium_000.ogg")),
+		rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_medium_001.ogg")),
+		rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_medium_002.ogg")),
+		rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_medium_003.ogg")),
+		rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_medium_004.ogg")),
+	}
+	fxGenericLightImpacts = []rl.Sound{
+		rl.LoadSound(filepath.Join(fxAudioDir, "impactGeneric_light_000.ogg")),
+		rl.LoadSound(filepath.Join(fxAudioDir, "impactGeneric_light_001.ogg")),
+		rl.LoadSound(filepath.Join(fxAudioDir, "impactGeneric_light_002.ogg")),
+		rl.LoadSound(filepath.Join(fxAudioDir, "impactGeneric_light_003.ogg")),
+		rl.LoadSound(filepath.Join(fxAudioDir, "impactGeneric_light_004.ogg")),
+	}
+
 	camera = rl.Camera3D{
 		Position:   rl.NewVector3(0., 16., 16.),
 		Target:     rl.NewVector3(0., .5, 0.),
@@ -233,29 +267,6 @@ func Init() {
 	checkedModel = rl.LoadModelFromMesh(rl.GenMeshPlane(100, 100, 10, 10))
 	checkedModel.Materials.Maps.Texture = checkedTexture
 
-	sfxDir := filepath.Join("res", "fx", "kenney_impact-sounds", "Audio")
-	fxImpactSoftHeavy = []rl.Sound{
-		rl.LoadSound(filepath.Join(sfxDir, "impactSoft_heavy_000.ogg")),
-		rl.LoadSound(filepath.Join(sfxDir, "impactSoft_heavy_001.ogg")),
-		rl.LoadSound(filepath.Join(sfxDir, "impactSoft_heavy_002.ogg")),
-		rl.LoadSound(filepath.Join(sfxDir, "impactSoft_heavy_003.ogg")),
-		rl.LoadSound(filepath.Join(sfxDir, "impactSoft_heavy_004.ogg")),
-	}
-	fxImpactSoftMedium = []rl.Sound{
-		rl.LoadSound(filepath.Join(sfxDir, "impactSoft_medium_000.ogg")),
-		rl.LoadSound(filepath.Join(sfxDir, "impactSoft_medium_001.ogg")),
-		rl.LoadSound(filepath.Join(sfxDir, "impactSoft_medium_002.ogg")),
-		rl.LoadSound(filepath.Join(sfxDir, "impactSoft_medium_003.ogg")),
-		rl.LoadSound(filepath.Join(sfxDir, "impactSoft_medium_004.ogg")),
-	}
-	fxImpactGenericLight = []rl.Sound{
-		rl.LoadSound(filepath.Join(sfxDir, "impactGeneric_light_000.ogg")),
-		rl.LoadSound(filepath.Join(sfxDir, "impactGeneric_light_001.ogg")),
-		rl.LoadSound(filepath.Join(sfxDir, "impactGeneric_light_002.ogg")),
-		rl.LoadSound(filepath.Join(sfxDir, "impactGeneric_light_003.ogg")),
-		rl.LoadSound(filepath.Join(sfxDir, "impactGeneric_light_004.ogg")),
-	}
-
 	rl.SetMusicVolume(common.Music.Theme, float32(cmp.Or(1.0, 0.125)))
 
 	rl.PlayMusicStream(common.Music.Theme)
@@ -289,6 +300,7 @@ func Update() {
 	rl.UpdateCamera(&camera, rl.CameraThirdPerson)
 
 	player.Update()
+
 	if isPlayerWallCollision {
 		RevertPlayerAndCameraPositions(oldPlayer, &player, oldCam, &camera)
 	}
@@ -301,15 +313,44 @@ func Update() {
 			common.GetBoundingBoxFromPositionSizeV(dirtStoneRockArray[i].Pos, dirtStoneRockArray[i].Size),
 			player.BoundingBox,
 		) {
+			// FIND OUT WHERE PLAYER TOUCHED THE BOX
+			// HACK
+			//		HACK
+			//			HACK
+			player.Collisions.Z = 1
+			dx := oldPlayer.Position.X - player.Position.X
+			if dx < 0.0 { // new <- old
+				player.Collisions.X = 1
+			} else if dx > 0.0 { // new -> old
+				player.Collisions.X = -1
+			} else {
+				if player.Collisions.X != 0 { // Placeholder (do not overwrite previous)
+					player.Collisions.X = 0
+				}
+			}
+			dz := oldPlayer.Position.Z - player.Position.Z
+			if dz < 0.0 { // new <- old
+				player.Collisions.Z = 1
+			} else if dz > 0.0 { // new -> old
+				player.Collisions.Z = -1
+			} else {
+				if player.Collisions.Z != 0 { // Placeholder (do not overwrite previous)
+					player.Collisions.Z = 0
+				}
+			}
+			//			HACK
+			//		HACK
+			// HACK
 			RevertPlayerAndCameraPositions(oldPlayer, &player, oldCam, &camera)
 
 			// Trigger once while mining
-			if rl.IsKeyPressed(rl.KeySpace) {
+			if (rl.IsKeyDown(rl.KeySpace) && framesCounter%16 == 0) ||
+				(rl.IsMouseButtonDown(rl.MouseLeftButton) && framesCounter%16 == 0) {
 				// Play mining sound with variations (s1:kick + s2:snare + s3:hollow-thock)
 				state := dirtStoneRockArray[i].State
-				s1 := fxImpactSoftMedium[rl.GetRandomValue(int32(state), int32(len(fxImpactSoftMedium)-1))]
-				s2 := fxImpactGenericLight[rl.GetRandomValue(int32(state), int32(len(fxImpactGenericLight)-1))]
-				s3 := fxImpactSoftHeavy[rl.GetRandomValue(int32(state), int32(len(fxImpactSoftHeavy)-1))]
+				s1 := fxSoftMediumImpacts[rl.GetRandomValue(int32(state), int32(len(fxSoftMediumImpacts)-1))]
+				s2 := fxGenericLightImpacts[rl.GetRandomValue(int32(state), int32(len(fxGenericLightImpacts)-1))]
+				s3 := fxSoftHeavyImpacts[rl.GetRandomValue(int32(state), int32(len(fxSoftHeavyImpacts)-1))]
 				rl.SetSoundVolume(s1, float32(rl.GetRandomValue(7, 10))/10.)
 				rl.SetSoundVolume(s2, float32(rl.GetRandomValue(4, 8))/10.)
 				rl.SetSoundVolume(s3, float32(rl.GetRandomValue(1, 4))/10.)
@@ -319,6 +360,21 @@ func Update() {
 
 				// Increment state
 				dirtStoneRockArray[i].NextState()
+			}
+		}
+	}
+
+	if rl.IsKeyDown(rl.KeyW) ||
+		rl.IsKeyDown(rl.KeyA) ||
+		rl.IsKeyDown(rl.KeyS) ||
+		rl.IsKeyDown(rl.KeyD) {
+		const fps = 60
+		const framesInterval = fps / 3.0
+		if framesCounter%int32(framesInterval) == 0 {
+			if !rl.Vector3Equals(oldPlayer.Position, player.Position) &&
+				rl.Vector3Distance(oldCam.Position, player.Position) > 1.0 &&
+				(player.Collisions.X == 0 && player.Collisions.Z == 0) {
+				rl.PlaySound(fxFootsteps[int(framesCounter)%len(fxFootsteps)])
 			}
 		}
 	}
