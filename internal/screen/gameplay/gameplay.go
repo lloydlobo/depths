@@ -376,15 +376,30 @@ func Draw() {
 
 		// Draw drill
 		const maxIndex = 2
-		{
-			// inner
-			bb1 := common.GetBoundingBoxFromPositionSizeV(common.Vector3Zero, rl.NewVector3(3, 1, 3))
+		{ // Draw door gate entry logic before changing scene to drill base
+			origin := common.Vector3Zero
+			bb1 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(3, 2, 3)) // player is inside
 			rl.DrawBoundingBox(bb1, rl.Red)
-			bb2 := common.GetBoundingBoxFromPositionSizeV(common.Vector3Zero, rl.NewVector3(5, 1, 5))
+			bb2 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(5, 2, 5)) // player is entering
 			rl.DrawBoundingBox(bb2, rl.Green)
-			bb3 := common.GetBoundingBoxFromPositionSizeV(common.Vector3Zero, rl.NewVector3(7, 1, 7))
+			bb3 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(7, 2, 7)) // bot barrier
 			rl.DrawBoundingBox(bb3, rl.Blue)
+			{
+				isEnteredInside := rl.CheckCollisionBoxes(player.BoundingBox, bb1)
+				isEnteringInside := rl.CheckCollisionBoxes(player.BoundingBox, bb2)
+				isInBarrierToEntry := rl.CheckCollisionBoxes(player.BoundingBox, bb3)
+				if isInBarrierToEntry && !isEnteringInside && !isEnteredInside {
+					playerCol = rl.Blue
+				} else if isEnteringInside && !isEnteredInside {
+					playerCol = rl.Green
+				} else if isEnteredInside {
+					playerCol = rl.Red
+				} else {
+					playerCol = rl.White
+				}
+			}
 		}
+
 		wallScale := rl.NewVector3(1., 1., 1.)
 		for i := float32(-maxIndex + 1); i < maxIndex; i++ {
 			var model rl.Model
