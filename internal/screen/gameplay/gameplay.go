@@ -256,6 +256,9 @@ func Update() {
 		}
 	}
 	for i := range dirtStoneRockCount {
+		if dirtStoneRockArray[i].State == maxDirtStoneRockStates-1 {
+			continue
+		}
 		if rl.CheckCollisionBoxes(
 			common.GetBoundingBoxFromPositionSizeV(dirtStoneRockArray[i].Pos, dirtStoneRockArray[i].Size),
 			player.BoundingBox,
