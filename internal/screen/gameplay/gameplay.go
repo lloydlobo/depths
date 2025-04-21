@@ -376,6 +376,15 @@ func Draw() {
 
 		// Draw drill
 		const maxIndex = 2
+		{
+			// inner
+			bb1 := common.GetBoundingBoxFromPositionSizeV(common.Vector3Zero, rl.NewVector3(3, 1, 3))
+			rl.DrawBoundingBox(bb1, rl.Red)
+			bb2 := common.GetBoundingBoxFromPositionSizeV(common.Vector3Zero, rl.NewVector3(5, 1, 5))
+			rl.DrawBoundingBox(bb2, rl.Green)
+			bb3 := common.GetBoundingBoxFromPositionSizeV(common.Vector3Zero, rl.NewVector3(7, 1, 7))
+			rl.DrawBoundingBox(bb3, rl.Blue)
+		}
 		wallScale := rl.NewVector3(1., 1., 1.)
 		for i := float32(-maxIndex + 1); i < maxIndex; i++ {
 			var model rl.Model
