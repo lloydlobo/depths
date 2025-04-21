@@ -23,6 +23,10 @@ var (
 
 	checkedTexture rl.Texture2D
 	checkedModel   rl.Model
+
+	impactSoftHeavy    []rl.Sound
+	impactSoftMedium   []rl.Sound
+	impactGenericLight []rl.Sound
 )
 
 // TEMPORARY
@@ -241,6 +245,29 @@ func Init() {
 	checkedModel = rl.LoadModelFromMesh(rl.GenMeshPlane(100, 100, 10, 10))
 	checkedModel.Materials.Maps.Texture = checkedTexture
 
+	sfxDir := filepath.Join("res", "fx", "kenney_impact-sounds", "Audio")
+	impactSoftHeavy = []rl.Sound{
+		rl.LoadSound(filepath.Join(sfxDir, "impactSoft_heavy_000.ogg")),
+		rl.LoadSound(filepath.Join(sfxDir, "impactSoft_heavy_001.ogg")),
+		rl.LoadSound(filepath.Join(sfxDir, "impactSoft_heavy_002.ogg")),
+		rl.LoadSound(filepath.Join(sfxDir, "impactSoft_heavy_003.ogg")),
+		rl.LoadSound(filepath.Join(sfxDir, "impactSoft_heavy_004.ogg")),
+	}
+	impactSoftMedium = []rl.Sound{
+		rl.LoadSound(filepath.Join(sfxDir, "impactSoft_medium_000.ogg")),
+		rl.LoadSound(filepath.Join(sfxDir, "impactSoft_medium_001.ogg")),
+		rl.LoadSound(filepath.Join(sfxDir, "impactSoft_medium_002.ogg")),
+		rl.LoadSound(filepath.Join(sfxDir, "impactSoft_medium_003.ogg")),
+		rl.LoadSound(filepath.Join(sfxDir, "impactSoft_medium_004.ogg")),
+	}
+	impactGenericLight = []rl.Sound{
+		rl.LoadSound(filepath.Join(sfxDir, "impactGeneric_light_000.ogg")),
+		rl.LoadSound(filepath.Join(sfxDir, "impactGeneric_light_001.ogg")),
+		rl.LoadSound(filepath.Join(sfxDir, "impactGeneric_light_002.ogg")),
+		rl.LoadSound(filepath.Join(sfxDir, "impactGeneric_light_003.ogg")),
+		rl.LoadSound(filepath.Join(sfxDir, "impactGeneric_light_004.ogg")),
+	}
+
 	rl.SetMusicVolume(common.Music.Theme, float32(cmp.Or(1.0, 0.125)))
 
 	rl.PlayMusicStream(common.Music.Theme)
@@ -295,43 +322,19 @@ func Update() {
 
 			// Trigger once while mining
 			if rl.IsKeyPressed(rl.KeySpace) {
-				{
-					sfxDir := filepath.Join("res", "fx", "kenney_impact-sounds", "Audio")
-					impactSoftHeavy := []rl.Sound{
-						rl.LoadSound(filepath.Join(sfxDir, "impactSoft_heavy_000.ogg")),
-						rl.LoadSound(filepath.Join(sfxDir, "impactSoft_heavy_001.ogg")),
-						rl.LoadSound(filepath.Join(sfxDir, "impactSoft_heavy_002.ogg")),
-						rl.LoadSound(filepath.Join(sfxDir, "impactSoft_heavy_003.ogg")),
-						rl.LoadSound(filepath.Join(sfxDir, "impactSoft_heavy_004.ogg")),
-					}
-					impactSoftMedium := []rl.Sound{
-						rl.LoadSound(filepath.Join(sfxDir, "impactSoft_medium_000.ogg")),
-						rl.LoadSound(filepath.Join(sfxDir, "impactSoft_medium_001.ogg")),
-						rl.LoadSound(filepath.Join(sfxDir, "impactSoft_medium_002.ogg")),
-						rl.LoadSound(filepath.Join(sfxDir, "impactSoft_medium_003.ogg")),
-						rl.LoadSound(filepath.Join(sfxDir, "impactSoft_medium_004.ogg")),
-					}
-					impactGenericLight := []rl.Sound{
-						rl.LoadSound(filepath.Join(sfxDir, "impactGeneric_light_000.ogg")),
-						rl.LoadSound(filepath.Join(sfxDir, "impactGeneric_light_001.ogg")),
-						rl.LoadSound(filepath.Join(sfxDir, "impactGeneric_light_002.ogg")),
-						rl.LoadSound(filepath.Join(sfxDir, "impactGeneric_light_003.ogg")),
-						rl.LoadSound(filepath.Join(sfxDir, "impactGeneric_light_004.ogg")),
-					}
-					primarySounds := impactSoftMedium     // kick drum
-					secondarySounds := impactGenericLight // snare like
-					tertiarySounds := impactSoftHeavy     // hollow thock with timbre
-					state := dirtStoneRockArray[i].State
-					ps := primarySounds[rl.GetRandomValue(int32(state), int32(len(primarySounds)-1))]
-					ss := secondarySounds[rl.GetRandomValue(int32(state), int32(len(secondarySounds)-1))]
-					ts := tertiarySounds[rl.GetRandomValue(int32(state), int32(len(tertiarySounds)-1))]
-					rl.SetSoundVolume(ps, float32(rl.GetRandomValue(7, 10))/10.)
-					rl.SetSoundVolume(ss, float32(rl.GetRandomValue(4, 8))/10.)
-					rl.SetSoundVolume(ts, float32(rl.GetRandomValue(1, 4))/10.)
-					rl.PlaySound(ps)
-					rl.PlaySound(ss)
-					rl.PlaySound(ts)
-				}
+				// Play mining sound with variations (s1:kick + s2:snare + s3:hollow-thock)
+				state := dirtStoneRockArray[i].State
+				s1 := impactSoftMedium[rl.GetRandomValue(int32(state), int32(len(impactSoftMedium)-1))]
+				s2 := impactGenericLight[rl.GetRandomValue(int32(state), int32(len(impactGenericLight)-1))]
+				s3 := impactSoftHeavy[rl.GetRandomValue(int32(state), int32(len(impactSoftHeavy)-1))]
+				rl.SetSoundVolume(s1, float32(rl.GetRandomValue(7, 10))/10.)
+				rl.SetSoundVolume(s2, float32(rl.GetRandomValue(4, 8))/10.)
+				rl.SetSoundVolume(s3, float32(rl.GetRandomValue(1, 4))/10.)
+				rl.PlaySound(s1)
+				rl.PlaySound(s2)
+				rl.PlaySound(s3)
+
+				// Increment state
 				dirtStoneRockArray[i].NextState()
 			}
 		}
