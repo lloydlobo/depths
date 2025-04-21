@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"log"
+	"path/filepath"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
@@ -180,56 +181,51 @@ func Init() {
 	InitFloor()
 	InitWall()
 
-	InitDirtStoneRockObjects(func() []rl.Vector3 {
-		var positions []rl.Vector3
-
-		floorY := (floor.BoundingBox.Min.Y + floor.BoundingBox.Max.Y) / 2.0
-
+	// - Avoid spawning where player is standing
+	// - Randomly skip a position
+	// - A noise map or simplex/perlin noise "can" serve better
+	InitMiningObjectPositions := func() []rl.Vector3 {
+		var a []rl.Vector3 // 61% of maxPositions
+		var (
+			maxPositions   = floor.Size.X * floor.Size.Z
+			maxSkipPosOdds = int32(3)
+			y              = (floor.BoundingBox.Min.Y + floor.BoundingBox.Max.Y) / 2.0
+		)
+	NextCol:
 		for x := floor.BoundingBox.Min.X + 1; x < floor.BoundingBox.Max.X; x++ {
-
-		NextIteration:
+		NextRow:
 			for z := floor.BoundingBox.Min.Z + 1; z < floor.BoundingBox.Max.Z; z++ {
-				// Avoid spawning where player is standing
+				if rl.GetRandomValue(0, maxSkipPosOdds) == 0 {
+					continue NextRow
+				}
+				if len(a) >= int(maxPositions) {
+					break NextCol
+				}
 				for i := float32(-4); i <= 4; i++ {
 					for k := float32(-4); k <= 4; k++ {
 						if i == x && k == z {
-							continue NextIteration
+							continue NextRow
 						}
 					}
 				}
-
-				// Randomly skip a position
-				const maxOddsOfSkipping = 3
-
-				// NOTE: A noise map or simplex/perlin noise can serve better
-				if rl.GetRandomValue(0, maxOddsOfSkipping) == 0 {
-					continue
-				}
-
-				// Finally set position to spawn at
-				positions = append(positions, rl.NewVector3(x, floorY, z))
+				a = append(a, rl.NewVector3(x, y, z))
 			}
 		}
-		return positions
-	}())
-	InitBarrels := func(positions []rl.Vector3) {
-		barrelSize = rl.NewVector3(0.5, 0.5, 0.5)
-		// barrelSize = rl.NewVector3(1.0, 1.0, 1.0)
-		for _, pos := range positions {
-			barrelPositions = append(barrelPositions, pos)
-			barrelBoundingBoxes = append(barrelBoundingBoxes, common.GetBoundingBoxFromPositionSizeV(pos, barrelSize))
-			barrelCount++
-		}
-		barrelModel = common.Model.OBJ.Barrel
-		// barrelModel = common.Model.OBJ.Dirt
-		rl.SetMaterialTexture(barrelModel.Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
+		return a
 	}
-	InitBarrels([]rl.Vector3{
-		rl.NewVector3(-5, 0, -8),
-		rl.NewVector3(-3, 0, -7),
-		rl.NewVector3(4, 0, 7),
-		rl.NewVector3(5, 0, -4),
-	})
+
+	InitDirtStoneRockObjects(InitMiningObjectPositions())
+	// InitBarrels := func(positions []rl.Vector3) {
+	// 	barrelSize = rl.NewVector3(0.5, 0.5, 0.5)
+	// 	for _, pos := range positions {
+	// 		barrelPositions = append(barrelPositions, pos)
+	// 		barrelBoundingBoxes = append(barrelBoundingBoxes, common.GetBoundingBoxFromPositionSizeV(pos, barrelSize))
+	// 		barrelCount++
+	// 	}
+	// 	barrelModel = common.Model.OBJ.Barrel
+	// 	rl.SetMaterialTexture(barrelModel.Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
+	// }
+	// InitBarrels([]rl.Vector3{ rl.NewVector3(-5, 0, -8), rl.NewVector3(-3, 0, -7), rl.NewVector3(4, 0, 7), rl.NewVector3(5, 0, -4), })
 
 	//						SCENES 0..3
 	//			SCENES 0..3
@@ -297,8 +293,45 @@ func Update() {
 		) {
 			RevertPlayerAndCameraPositions(oldPlayer, &player, oldCam, &camera)
 
-			// Trigger once
-			if rl.IsKeyPressed(rl.KeyF) {
+			// Trigger once while mining
+			if rl.IsKeyPressed(rl.KeySpace) {
+				{
+					sfxDir := filepath.Join("res", "fx", "kenney_impact-sounds", "Audio")
+					impactSoftHeavy := []rl.Sound{
+						rl.LoadSound(filepath.Join(sfxDir, "impactSoft_heavy_000.ogg")),
+						rl.LoadSound(filepath.Join(sfxDir, "impactSoft_heavy_001.ogg")),
+						rl.LoadSound(filepath.Join(sfxDir, "impactSoft_heavy_002.ogg")),
+						rl.LoadSound(filepath.Join(sfxDir, "impactSoft_heavy_003.ogg")),
+						rl.LoadSound(filepath.Join(sfxDir, "impactSoft_heavy_004.ogg")),
+					}
+					impactSoftMedium := []rl.Sound{
+						rl.LoadSound(filepath.Join(sfxDir, "impactSoft_medium_000.ogg")),
+						rl.LoadSound(filepath.Join(sfxDir, "impactSoft_medium_001.ogg")),
+						rl.LoadSound(filepath.Join(sfxDir, "impactSoft_medium_002.ogg")),
+						rl.LoadSound(filepath.Join(sfxDir, "impactSoft_medium_003.ogg")),
+						rl.LoadSound(filepath.Join(sfxDir, "impactSoft_medium_004.ogg")),
+					}
+					impactGenericLight := []rl.Sound{
+						rl.LoadSound(filepath.Join(sfxDir, "impactGeneric_light_000.ogg")),
+						rl.LoadSound(filepath.Join(sfxDir, "impactGeneric_light_001.ogg")),
+						rl.LoadSound(filepath.Join(sfxDir, "impactGeneric_light_002.ogg")),
+						rl.LoadSound(filepath.Join(sfxDir, "impactGeneric_light_003.ogg")),
+						rl.LoadSound(filepath.Join(sfxDir, "impactGeneric_light_004.ogg")),
+					}
+					primarySounds := impactSoftMedium     // kick drum
+					secondarySounds := impactGenericLight // snare like
+					tertiarySounds := impactSoftHeavy     // hollow thock with timbre
+					state := dirtStoneRockArray[i].State
+					ps := primarySounds[rl.GetRandomValue(int32(state), int32(len(primarySounds)-1))]
+					ss := secondarySounds[rl.GetRandomValue(int32(state), int32(len(secondarySounds)-1))]
+					ts := tertiarySounds[rl.GetRandomValue(int32(state), int32(len(tertiarySounds)-1))]
+					rl.SetSoundVolume(ps, float32(rl.GetRandomValue(7, 10))/10.)
+					rl.SetSoundVolume(ss, float32(rl.GetRandomValue(4, 8))/10.)
+					rl.SetSoundVolume(ts, float32(rl.GetRandomValue(1, 4))/10.)
+					rl.PlaySound(ps)
+					rl.PlaySound(ss)
+					rl.PlaySound(ts)
+				}
 				dirtStoneRockArray[i].NextState()
 			}
 		}
