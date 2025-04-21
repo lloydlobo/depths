@@ -10,6 +10,7 @@ import (
 	"example/depths/internal/common"
 	"example/depths/internal/floor"
 	"example/depths/internal/player"
+	"example/depths/internal/wall"
 )
 
 var (
@@ -226,7 +227,7 @@ func Init() {
 	Player.IsPlayerWallCollision = false
 
 	floor.InitFloor(&Floor)
-	InitWall()
+	wall.InitWall()
 	// - Avoid spawning where player is standing
 	// - Randomly skip a position
 	// - A noise map or simplex/perlin noise "can" serve better
@@ -377,14 +378,10 @@ func Draw() {
 		Floor.Draw()
 
 		// Use walls to avoid infinite-map generation
-		DrawWalls(
+		wall.DrawWalls(
 			Floor.Position,
 			Floor.Size,
-			rl.NewVector3(
-				1.,
-				cmp.Or(common.Phi, common.OneMinusInvPhi, float32(1.)),
-				1.,
-			),
+			rl.NewVector3(1., cmp.Or(common.Phi, common.OneMinusInvPhi, float32(1.)), 1.),
 		)
 
 		// Draw drill
