@@ -194,6 +194,11 @@ func Init() {
 					}
 				}
 			}
+			// Randomly skip a position (10% chance)
+			// NOTE: A noise map or simplex/perlin noise could serve better for this
+			if rl.GetRandomValue(0, 10) == 0 {
+				continue
+			}
 			positions = append(positions, rl.NewVector3(x, floorY, z))
 		}
 	}
