@@ -1,17 +1,14 @@
 package gameplay
 
 import (
-	"cmp"
-	"path/filepath"
-
 	rl "github.com/gen2brain/raylib-go/raylib"
 
 	"example/depths/internal/common"
 )
 
-const IS_ENABLE_FLOOR_SHADER = false
-
-var floorTextureTiling []float32
+var (
+	floorTileLargeModel rl.Model
+)
 
 type Floor struct {
 	Position    rl.Vector3
@@ -28,50 +25,26 @@ func NewFloor(pos, size rl.Vector3) Floor {
 }
 
 // InitFloor creates a new floor, loads a mesh, assigns material parameters and texture to a model.
-// Set floor model texture tiling and emissive color parameters on shader
 // NOTE: A basic plane shape can be generated instead of being loaded from a model file
 func InitFloor() {
-	pos := rl.NewVector3(0., -0.5, 0.)
-	size := rl.NewVector3(32., 1., 32.)
+	pos := rl.NewVector3(0., 0., 0.)
+	const scale = 3.0
+	size := rl.Vector3Multiply(rl.NewVector3(16., 0.001, 9.), rl.NewVector3(scale, 1., scale))
+
+	// Set global var in internal/game.go for bounds, vertex information
 	floor = NewFloor(pos, size)
-
-	// Load floor model mesh
-	const floorScale = 5
-	floorRoadPBRModel = cmp.Or(
-		rl.LoadModelFromMesh(cmp.Or(
-			rl.GenMeshCube(size.X/floorScale, size.Y/floorScale, size.Z/floorScale),
-			rl.GenMeshPlane(size.X/floorScale, size.Z/floorScale, 10, 10))),
-		rl.LoadModel(filepath.Join("res", "model", "plane.glb")),
-	)
-
-	if IS_ENABLE_FLOOR_SHADER {
-		// Assign material parameters
-		floorRoadPBRModel.Materials.Shader = common.Shader.PBR
-		floorRoadPBRModel.Materials.GetMap(rl.MapAlbedo).Color = rl.White
-		floorRoadPBRModel.Materials.GetMap(rl.MapMetalness).Value = 0.0
-		floorRoadPBRModel.Materials.GetMap(rl.MapRoughness).Value = 0.0
-		floorRoadPBRModel.Materials.GetMap(rl.MapOcclusion).Value = 1.0
-		floorRoadPBRModel.Materials.GetMap(rl.MapEmission).Color = rl.Black
-	}
-
-	// Assign texture parameters
-	floorRoadPBRModel.Materials.GetMap(rl.MapAlbedo).Texture =
-		rl.LoadTexture(filepath.Join("res", "texture", "road_a.png"))
-	floorRoadPBRModel.Materials.GetMap(rl.MapMetalness).Texture =
-		rl.LoadTexture(filepath.Join("res", "texture", "road_mra.png"))
-	floorRoadPBRModel.Materials.GetMap(rl.MapNormal).Texture =
-		rl.LoadTexture(filepath.Join("res", "texture", "road_n.png"))
-
-	textureTilingLoc = rl.GetShaderLocation(common.Shader.PBR, "tiling")
-	emissiveColorLoc = rl.GetShaderLocation(common.Shader.PBR, "emissiveColor")
-	floorTextureTiling = []float32{.5, .5}
+	floorTileLargeModel = common.Model.OBJ.Floor // Floor,FloorDetail
+	rl.SetMaterialTexture(floorTileLargeModel.Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
 }
 
 func (fl Floor) Draw() {
-	rl.SetShaderValue(common.Shader.PBR, textureTilingLoc, floorTextureTiling, rl.ShaderUniformVec2)
-	fecVector4 := rl.ColorNormalize(floorRoadPBRModel.Materials.GetMap(rl.MapEmission).Color)
-	floorEmissiveColor := []float32{fecVector4.X, fecVector4.Y, fecVector4.Z, fecVector4.W}
-	rl.SetShaderValue(common.Shader.PBR, emissiveColorLoc, floorEmissiveColor, rl.ShaderUniformVec2)
-
-	rl.DrawModel(floorRoadPBRModel, fl.Position, 5.0, rl.White)
+	for x := float32(floor.BoundingBox.Min.X) - 1/2; x < float32(floor.BoundingBox.Max.X)+1; x += 1 {
+		for z := float32(floor.BoundingBox.Min.Z) - 1/2; z < float32(floor.BoundingBox.Max.Z)+1; z += 1 {
+			position := rl.Vector3{X: x, Y: (floor.BoundingBox.Max.Y - floor.BoundingBox.Min.Y) / 2, Z: z}
+			rl.DrawModel(floorTileLargeModel, position, 1.0, rl.White)
+		}
+	}
+	rl.DrawBoundingBox(floor.BoundingBox, rl.DarkGray)
+	DrawXYZOrbitV(rl.Vector3Zero(), 2.)
+	DrawWorldXYZAxis()
 }

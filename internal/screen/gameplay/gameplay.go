@@ -4,13 +4,10 @@ import (
 	"cmp"
 	"fmt"
 	"log"
-	"log/slog"
-	"path/filepath"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
 	"example/depths/internal/common"
-	"example/depths/internal/light"
 )
 
 var (
@@ -23,85 +20,234 @@ var (
 	floor                 Floor
 	isPlayerWallCollision bool
 
-	textureTilingLoc     int32
-	emissiveColorLoc     int32
-	emissiveIntensityLoc int32
+	checkedTexture rl.Texture2D
+	checkedModel   rl.Model
+
+	// fxImpactsSoftHeavy    []rl.Sound
+	// fxImpactsSoftMedium   []rl.Sound
+	// fxImpactsGenericLight []rl.Sound
+	// fxConcreteFootsteps []rl.Sound
 )
 
 // TEMPORARY
-//
-//	TEMPORARY
+//		TEMPORARY
+//			TEMPORARY
+//				TEMPORARY
+//					TEMPORARY
+//						TEMPORARY
+//							TEMPORARY
+//								TEMPORARY
+//									TEMPORARY
+//										TEMPORARY
+//											TEMPORARY
+//												TEMPORARY
+//													TEMPORARY
+//														TEMPORARY
 
-var (
-	floorRoadPBRModel   rl.Model
-	floorTileLargeModel rl.Model
+const (
+	DirtMineObjState MineObjState = iota
+	RockMineObjState
+	StoneMineObjState
+	FloorDetailMineObjState // decorated floor tile
 
-	wallModel       rl.Model
-	wallCornerModel rl.Model
-
-	boxLargeModel         rl.Model
-	boxLargePositions     []rl.Vector3
-	boxLargeBoundingBoxes []rl.BoundingBox
-	boxLargeSize          = rl.NewVector3(1.5, 1.5, 1.5)
+	maxMineObjState
 )
 
-// 	TEMPORARY
+var (
+	mineObjArray  []MineObj
+	mineObjCount  int32
+	mineObjModels [maxMineObjState]rl.Model
+)
+
+type MineObjState uint8
+type MineObj struct {
+	Pos      rl.Vector3
+	Size     rl.Vector3
+	Rotn     float32
+	Health   float32 // [0..1]
+	State    MineObjState
+	IsActive bool
+}
+
+func NewMineObj(pos, size rl.Vector3) MineObj {
+	return MineObj{
+		Pos:      pos,
+		Size:     size,
+		Rotn:     0.0,
+		State:    DirtMineObjState,
+		IsActive: true,
+	}
+}
+
+func (o *MineObj) NextState() {
+	o.State++
+	if o.State >= maxMineObjState {
+		o.State = maxMineObjState - 1
+		o.IsActive = false
+	}
+}
+
+func InitMineObjPositions() []rl.Vector3 {
+	var positions []rl.Vector3 // 61% of maxPositions
+
+	var (
+		y    = (floor.BoundingBox.Min.Y + floor.BoundingBox.Max.Y) / 2.0
+		bb   = floor.BoundingBox
+		offX = float32(3)
+		offZ = float32(3)
+	)
+
+	var (
+		maxGridCells            = floor.Size.X * floor.Size.Z // just-in-case
+		maxSkipLoopPositionOdds = int32(2)                    // if 2 -> 0,1,2 -> 1/3 odds
+	)
+
+NextCol:
+	for x := bb.Min.X + 1; x < bb.Max.X; x++ {
+	NextRow:
+		for z := bb.Min.Z + 1; z < bb.Max.Z; z++ {
+			if len(positions) >= int(maxGridCells) {
+				break NextCol
+			}
+			// Reserve space for area in offset from origin
+			for i := -offX; i <= offX; i++ {
+				for k := -offZ; k <= offZ; k++ {
+					if i == x && k == z {
+						continue NextRow
+					}
+					if rl.Vector3Distance(rl.NewVector3(i, y, k), rl.NewVector3(x, y, z)) < (offX+offZ)/2 {
+						continue NextRow
+
+					}
+				}
+			}
+			if rl.GetRandomValue(0, maxSkipLoopPositionOdds) == 0 {
+				continue NextRow
+			}
+			positions = append(positions, rl.NewVector3(x, y, z))
+		}
+	}
+	return positions
+}
+
+func InitAllMineObj(positions []rl.Vector3) {
+	for i := range positions {
+		size := rl.Vector3Multiply(
+			rl.NewVector3(1, 1, 1),
+			rl.NewVector3(
+				float32(rl.GetRandomValue(88, 101))/100.,
+				float32(rl.GetRandomValue(161, 2*161))/100.,
+				float32(rl.GetRandomValue(88, 101))/100.))
+
+		obj := NewMineObj(positions[i], size)
+		obj.Rotn = cmp.Or(float32(rl.GetRandomValue(-50, 50)/10.), 0.)
+
+		mineObjArray = append(mineObjArray, obj)
+		mineObjCount++
+	}
+	for i := range maxMineObjState {
+		switch i {
+		case DirtMineObjState:
+			mineObjModels[i] = common.Model.OBJ.Dirt
+		case RockMineObjState:
+			mineObjModels[i] = common.Model.OBJ.Rocks
+		case StoneMineObjState:
+			mineObjModels[i] = common.Model.OBJ.Stones
+		case FloorDetailMineObjState:
+			mineObjModels[i] = common.Model.OBJ.FloorDetail
+		default:
+			panic(fmt.Sprintf("unexpected gameplay.MineObjState: %#v", i))
+		}
+		rl.SetMaterialTexture(mineObjModels[i].Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
+	}
+}
+
+// TODO: Implement
 //
-// 	TEMPORARY
+//	scene_1.go
+//	scene_2.go
+//	scene_3.go
+//	scene_4.go
+//	scene_5.go
+//	scene_6.go
+type SceneManager struct {
+	CurrentID  int32
+	PreviousID int32
+}
+
+func (sm *SceneManager) SwitchTo(id int32) {
+	sm.PreviousID = sm.CurrentID
+	sm.CurrentID = id
+}
+
+//														TEMPORARY
+//													TEMPORARY
+//												TEMPORARY
+//											TEMPORARY
+//										TEMPORARY
+//									TEMPORARY
+//								TEMPORARY
+//							TEMPORARY
+//						TEMPORARY
+//					TEMPORARY
+//				TEMPORARY
+//			TEMPORARY
+//		TEMPORARY
+// TEMPORARY
 
 func Init() {
 	framesCounter = 0
 	finishScreen = 0
 
 	camera = rl.Camera3D{
-		Position:   rl.NewVector3(0., 30., 30.),
-		Target:     rl.NewVector3(0., (1+0.5)-0.5, 0.),
+		Position:   rl.NewVector3(0., 16., 16.),
+		Target:     rl.NewVector3(0., .5, 0.),
 		Up:         rl.NewVector3(0., 1., 0.),
-		Fovy:       45.0,
+		Fovy:       15. * float32(cmp.Or(3., 4., 2.)),
 		Projection: rl.CameraPerspective,
 	} // See also https://github.com/raylib-extras/extras-c/blob/main/cameras/rlTPCamera/rlTPCamera.h
 
-	InitFloor() // Init floor and friends
-
-	player = NewPlayer()
+	// These props/tiles/objects share the same dungeon texture
+	// dungeonTexture = rl.LoadTexture(filepath.Join("res", "texture", "dungeon_texture.png"))
+	// dungeonTexture = common.Model.OBJ.Colormap
 
 	isPlayerWallCollision = false
+
+	// SCENES 0..3
+	// SCENES 0..3
+	// SCENES 0..3
+	// SCENES 0..3
+	// SCENES 0..3
+	// SCENES 0..3
+	// SCENES 0..3
+	//			SCENES 0..3
+	//						SCENES 0..3
+	InitPlayer()
+	InitFloor()
+	InitWall()
+	// - Avoid spawning where player is standing
+	// - Randomly skip a position
+	// - A noise map or simplex/perlin noise "can" serve better
+	InitAllMineObj(InitMineObjPositions())
+	//						SCENES 0..3
+	//			SCENES 0..3
+	// SCENES 0..3
+	// SCENES 0..3
+	// SCENES 0..3
+	// SCENES 0..3
+	// SCENES 0..3
+
+	checkedImg := rl.GenImageChecked(100, 100, 1, 1, rl.ColorBrightness(rl.Black, .25), rl.ColorBrightness(rl.Black, .2))
+	checkedTexture = rl.LoadTextureFromImage(checkedImg)
+	rl.UnloadImage(checkedImg)
+	checkedModel = rl.LoadModelFromMesh(rl.GenMeshPlane(100, 100, 10, 10))
+	checkedModel.Materials.Maps.Texture = checkedTexture
 
 	rl.SetMusicVolume(common.Music.Theme, float32(cmp.Or(1.0, 0.125)))
 
 	rl.PlayMusicStream(common.Music.Theme)
 
 	rl.DisableCursor() // for ThirdPersonPerspective
-
-	// Get location for shader parameters that can be modified in real time
-	emissiveIntensityLoc = rl.GetShaderLocation(common.Shader.PBR, "emissivePower")
-	emissiveColorLoc = rl.GetShaderLocation(common.Shader.PBR, "emissiveColor")
-	textureTilingLoc = rl.GetShaderLocation(common.Shader.PBR, "tiling")
-
-	{ // KayKit_DungeonRemastered_1.1_FREE/Assets/textures/dungeon_texture.png
-		dungeonTexture := rl.LoadTexture(filepath.Join("res", "texture", "dungeon_texture.png"))
-		floorTileLargeModel = rl.LoadModel(filepath.Join("res", "model", "obj", "floor_tile_large.obj"))
-		rl.SetMaterialTexture(floorTileLargeModel.Materials, rl.MapDiffuse, dungeonTexture)
-
-		wallModel = rl.LoadModel(filepath.Join("res", "model", "obj", "wall.obj"))
-		rl.SetMaterialTexture(wallModel.Materials, rl.MapDiffuse, dungeonTexture)
-
-		wallCornerModel = rl.LoadModel(filepath.Join("res", "model", "obj", "wall_corner.obj"))
-		rl.SetMaterialTexture(wallCornerModel.Materials, rl.MapDiffuse, dungeonTexture)
-
-		boxLargeModel = rl.LoadModel(filepath.Join("res", "model", "obj", "box_large.obj"))
-		rl.SetMaterialTexture(boxLargeModel.Materials, rl.MapDiffuse, dungeonTexture)
-	}
-
-	for _, pos := range []rl.Vector3{
-		rl.NewVector3(-5, 0, -8),
-		rl.NewVector3(-3, 0, -7),
-		rl.NewVector3(4, 0, 7),
-		rl.NewVector3(5, 0, -4),
-	} {
-		boxLargePositions = append(boxLargePositions, pos)
-		boxLargeBoundingBoxes = append(boxLargeBoundingBoxes, common.GetBoundingBoxFromPositionSizeV(pos, boxLargeSize))
-	}
 }
 
 func HandleUserInput() {
@@ -110,76 +256,109 @@ func HandleUserInput() {
 		finishScreen = 1
 		rl.PlaySound(common.FX.Coin)
 	}
-
 	if rl.IsKeyDown(rl.KeyF) {
 		log.Println("[F] Picked up item")
-	}
-
-	if false {
-		// Check key inputs to enable/disable lights
-		if rl.IsKeyPressed(rl.KeyOne) {
-			light.Lights[2].EnabledBinary = light.GetToggledEnabledBinary(2)
-		}
-		if rl.IsKeyPressed(rl.KeyTwo) {
-			light.Lights[1].EnabledBinary = light.GetToggledEnabledBinary(1)
-		}
-		if rl.IsKeyPressed(rl.KeyThree) {
-			light.Lights[3].EnabledBinary = light.GetToggledEnabledBinary(3)
-		}
-		if rl.IsKeyPressed(rl.KeyFour) {
-			light.Lights[0].EnabledBinary = light.GetToggledEnabledBinary(0)
-		}
 	}
 }
 
 func Update() {
-
-	rl.UpdateMusicStream(common.Music.Theme)
-
 	HandleUserInput()
 
 	// Save variables this frame
 	oldCam := camera
 	oldPlayer := player
 
-	dt := rl.GetFrameTime()
-	slog.Debug("Update", "dt", dt)
-
-	// Reset single frame flags/variables
+	// Reset flags/variables
 	player.Collisions = rl.Quaternion{}
 	isPlayerWallCollision = false
 
+	rl.UpdateMusicStream(common.Music.Theme)
 	rl.UpdateCamera(&camera, rl.CameraThirdPerson)
-
-	// Update the shader with the camera view vector (points towards { 0.0f, 0.0f, 0.0f })
-	camPos := [3]float32{oldCam.Position.X, oldCam.Position.Y, oldCam.Position.Z}
-	rl.SetShaderValue(common.Shader.PBR, common.Shader.PBR.GetLocation(rl.ShaderLocVectorView), camPos[:], rl.ShaderUniformVec3)
-
-	if false {
-		// Update light values on shader (actually, only enable/disable them)
-		for i := range light.MaxLights {
-			light.UpdateLight(common.Shader.PBR, light.Lights[i])
-		}
-	}
 
 	player.Update()
 
-	// Handle collisions
-
-	// Update player to wall objects
 	if isPlayerWallCollision {
 		RevertPlayerAndCameraPositions(oldPlayer, &player, oldCam, &camera)
 	}
-
-	// Update player to props objects
-	for _, bb := range boxLargeBoundingBoxes {
-		if rl.CheckCollisionBoxes(player.BoundingBox, bb) {
+	for i := range mineObjCount {
+		// Skip final mined object residue
+		if mineObjArray[i].State == maxMineObjState-1 {
+			continue
+		}
+		if rl.CheckCollisionBoxes(
+			common.GetBoundingBoxFromPositionSizeV(mineObjArray[i].Pos, mineObjArray[i].Size),
+			player.BoundingBox,
+		) {
+			// FIND OUT WHERE PLAYER TOUCHED THE BOX
+			// HACK
+			//		HACK
+			//			HACK
+			player.Collisions.Z = 1
+			dx := oldPlayer.Position.X - player.Position.X
+			if dx < 0.0 { // new <- old
+				player.Collisions.X = 1
+			} else if dx > 0.0 { // new -> old
+				player.Collisions.X = -1
+			} else {
+				if player.Collisions.X != 0 { // Placeholder (do not overwrite previous)
+					player.Collisions.X = 0
+				}
+			}
+			dz := oldPlayer.Position.Z - player.Position.Z
+			if dz < 0.0 { // new <- old
+				player.Collisions.Z = 1
+			} else if dz > 0.0 { // new -> old
+				player.Collisions.Z = -1
+			} else {
+				if player.Collisions.Z != 0 { // Placeholder (do not overwrite previous)
+					player.Collisions.Z = 0
+				}
+			}
+			//			HACK
+			//		HACK
+			// HACK
 			RevertPlayerAndCameraPositions(oldPlayer, &player, oldCam, &camera)
+
+			// Trigger once while mining
+			if (rl.IsKeyDown(rl.KeySpace) && framesCounter%16 == 0) ||
+				(rl.IsMouseButtonDown(rl.MouseLeftButton) && framesCounter%16 == 0) {
+				// Play mining sound with variations (s1:kick + s2:snare + s3:hollow-thock)
+				state := mineObjArray[i].State
+				s1 := common.FXS.ImpactsSoftMedium[rl.GetRandomValue(int32(state), int32(len(common.FXS.ImpactsSoftMedium)-1))]
+				s2 := common.FXS.ImpactsGenericLight[rl.GetRandomValue(int32(state), int32(len(common.FXS.ImpactsGenericLight)-1))]
+				s3 := common.FXS.ImpactsSoftHeavy[rl.GetRandomValue(int32(state), int32(len(common.FXS.ImpactsSoftHeavy)-1))]
+				rl.SetSoundVolume(s1, float32(rl.GetRandomValue(7, 10))/10.)
+				rl.SetSoundVolume(s2, float32(rl.GetRandomValue(4, 8))/10.)
+				rl.SetSoundVolume(s3, float32(rl.GetRandomValue(1, 4))/10.)
+				rl.PlaySound(s1)
+				rl.PlaySound(s2)
+				rl.PlaySound(s3)
+
+				// Increment state
+				mineObjArray[i].NextState()
+			}
+		}
+	}
+
+	if rl.IsKeyDown(rl.KeyW) ||
+		rl.IsKeyDown(rl.KeyA) ||
+		rl.IsKeyDown(rl.KeyS) ||
+		rl.IsKeyDown(rl.KeyD) {
+		const fps = 60
+		const framesInterval = fps / 3.0
+		if framesCounter%int32(framesInterval) == 0 {
+			if !rl.Vector3Equals(oldPlayer.Position, player.Position) &&
+				rl.Vector3Distance(oldCam.Position, player.Position) > 1.0 &&
+				(player.Collisions.X == 0 && player.Collisions.Z == 0) {
+				rl.PlaySound(common.FXS.FootStepsConcrete[int(framesCounter)%len(common.FXS.FootStepsConcrete)])
+			}
 		}
 	}
 
 	framesCounter++
 }
+
+var hasLeftDrillBase bool
 
 func Draw() {
 	screenW := int32(rl.GetScreenWidth())
@@ -188,95 +367,124 @@ func Draw() {
 	// 3D World
 	rl.BeginMode3D(camera)
 
-	bgCol := cmp.Or(
-		rl.Black,
-		rl.ColorBrightness(rl.DarkPurple, -.9),
-		rl.Gray,
-		rl.RayWhite,
-	)
-	rl.ClearBackground(bgCol)
+	rl.ClearBackground(rl.Black)
 
-	player.Draw()
+	{
+		player.Draw()
 
-	// Draw floor
-	if false {
 		floor.Draw()
-	} else {
-		const floorModelScale = 4
-		for x := float32(floor.BoundingBox.Min.X); x < float32(floor.BoundingBox.Max.X); x += floorModelScale {
-			for z := float32(floor.BoundingBox.Min.Z); z < float32(floor.BoundingBox.Max.Z); z += floorModelScale {
-				centerX, centerY, centerZ := x+(floorModelScale/4.)*2., float32(0.), z+(floorModelScale/4.)*2.
-				rl.DrawModel(floorTileLargeModel, rl.NewVector3(centerX, centerY, centerZ), floorModelScale/4., rl.White)
+
+		// Use walls to avoid infinite-map generation
+		DrawWalls(
+			floor.Position,
+			floor.Size,
+			rl.NewVector3(
+				1.,
+				cmp.Or(common.Phi, common.OneMinusInvPhi, float32(1.)),
+				1.,
+			),
+		)
+
+		// Draw drill
+		const maxIndex = 2
+		{ // Draw door gate entry logic before changing scene to drill base
+			origin := common.Vector3Zero
+			bb1 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(3, 2, 3)) // player is inside
+			rl.DrawBoundingBox(bb1, rl.Red)
+			bb2 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(5, 2, 5)) // player is entering
+			rl.DrawBoundingBox(bb2, rl.Green)
+			bb3 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(7, 2, 7)) // bot barrier
+			rl.DrawBoundingBox(bb3, rl.Blue)
+			{
+				isPlayerInsideBase := rl.CheckCollisionBoxes(player.BoundingBox, bb1)
+				isPlayerEnteringBase := rl.CheckCollisionBoxes(player.BoundingBox, bb2)
+				isPlayerInsideBotBarrier := rl.CheckCollisionBoxes(player.BoundingBox, bb3)
+				if isPlayerInsideBotBarrier && !isPlayerEnteringBase && !isPlayerInsideBase {
+					playerCol = rl.Blue
+				} else if isPlayerEnteringBase && !isPlayerInsideBase {
+					// HACK: Placeholder change scene check logic
+					if hasLeftDrillBase {
+						hasLeftDrillBase = false
+						if false {
+							Init()
+						}
+						finishScreen = 1 // HACK: Placeholder to shift scene
+						rl.PlaySound(common.FX.Coin)
+					}
+					playerCol = rl.Green
+				} else if isPlayerInsideBase {
+					playerCol = rl.Red
+				} else {
+					if !hasLeftDrillBase {
+						hasLeftDrillBase = true
+					}
+					playerCol = rl.White
+				}
 			}
 		}
-	}
-	if false {
-		rl.DrawBoundingBox(floor.BoundingBox, rl.Purple)
-	}
-	DrawXYZOrbitV(rl.Vector3Zero(), 2.)
-	DrawWorldXYZAxis()
 
-	// Draw walls
-	const wallLen = 4.
-	const wallThick = 1. / 2.
-	const wallBotY = 1. / 4.
-	wallTint := rl.White
-	wallPos := floor.Position
-	floorSize := floor.Size
-	for i := -float32(floorSize.Z/2) + wallLen/2; i < float32(floorSize.Z/2); i += wallLen { // Along Z axis
-		pos1 := rl.NewVector3(
-			wallPos.X-floorSize.X/2-wallThick,
-			wallPos.Y+wallBotY,
-			wallPos.Z+i)
-		pos2 := rl.NewVector3(
-			wallPos.X+floorSize.X/2+wallThick,
-			wallPos.Y+wallBotY,
-			wallPos.Z+i)
-		rl.DrawModelEx(wallModel, pos1, rl.NewVector3(0, 1, 0), 90, common.Vector3One, wallTint) // -X +-Z
-		rl.DrawModelEx(wallModel, pos2, rl.NewVector3(0, 1, 0), 90, common.Vector3One, wallTint) // +X +-Z
-	}
-	for i := -float32(floorSize.X/2) + wallLen/2; i < float32(floorSize.X/2); i += wallLen { // Along X axis
-		pos1 := rl.NewVector3(
-			wallPos.X-i,
-			wallPos.Y+wallBotY,
-			wallPos.Z-floorSize.Z/2-wallThick)
-		pos2 := rl.NewVector3(
-			wallPos.X+i,
-			wallPos.Y+wallBotY,
-			wallPos.Z+floorSize.Z/2+wallThick)
-		rl.DrawModelEx(wallModel, pos1, rl.NewVector3(0, 1, 0), 180, common.Vector3One, wallTint) // +-X -Z
-		rl.DrawModelEx(wallModel, pos2, rl.NewVector3(0, 1, 0), 180, common.Vector3One, wallTint) // +-X +Z
-	}
-	bottomLeft := rl.NewVector3(wallPos.X-floorSize.X/2-wallThick, wallPos.Y+wallBotY, wallPos.Z+floorSize.Z/2+wallThick)
-	bottomRight := rl.NewVector3(wallPos.X+floorSize.X/2+wallThick, wallPos.Y+wallBotY, wallPos.Z+floorSize.Z/2+wallThick)
-	topRight := rl.NewVector3(wallPos.X+floorSize.X/2+wallThick, wallPos.Y+wallBotY, wallPos.Z-floorSize.Z/2-wallThick)
-	topLeft := rl.NewVector3(wallPos.X-floorSize.X/2-wallThick, wallPos.Y+wallBotY, wallPos.Z-floorSize.Z/2-wallThick)
-	rl.DrawModelEx(wallCornerModel, topRight, rl.NewVector3(0, 1, 0), 0, common.Vector3One, wallTint)
-	rl.DrawModelEx(wallCornerModel, topLeft, rl.NewVector3(0, 1, 0), 90, common.Vector3One, wallTint)
-	rl.DrawModelEx(wallCornerModel, bottomLeft, rl.NewVector3(0, 1, 0), 180, common.Vector3One, wallTint)
-	rl.DrawModelEx(wallCornerModel, bottomRight, rl.NewVector3(0, 1, 0), 270, common.Vector3One, wallTint)
-
-	// Draw offgrid tiles
-	for _, pos := range boxLargePositions {
-		rl.DrawModel(boxLargeModel, pos, 1., rl.White)
-	}
-
-	if false {
-		for i := range light.MaxLights {
-			lightColor := rl.NewColor(
-				uint8(light.Lights[i].Color[0]*255),
-				uint8(light.Lights[i].Color[1]*255),
-				uint8(light.Lights[i].Color[2]*255),
-				uint8(light.Lights[i].Color[3]*255))
-			if light.Lights[i].EnabledBinary == 1 {
-				rl.DrawSphereEx(light.Lights[i].Position, .2, 8, 8, lightColor)
-			} else {
-				rl.DrawSphereWires(light.Lights[i].Position, .2, 8, 8, rl.Fade(lightColor, .3))
-			}
+		wallScale := rl.NewVector3(1., 1., 1.)
+		for i := float32(-maxIndex + 1); i < maxIndex; i++ {
+			var model rl.Model
+			var y float32
+			model = common.Model.OBJ.Column
+			y = 0.
+			rl.DrawModelEx(model, rl.NewVector3(i, y, maxIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
+			rl.DrawModelEx(model, rl.NewVector3(i, y, -maxIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
+			rl.DrawModelEx(model, rl.NewVector3(maxIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
+			rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
+			model = common.Model.OBJ.Wall
+			y = 1. + .125*.5
+			rl.DrawModelEx(model, rl.NewVector3(i, y, maxIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
+			rl.DrawModelEx(model, rl.NewVector3(i, y, -maxIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
+			rl.DrawModelEx(model, rl.NewVector3(maxIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
+			rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
+			model = common.Model.OBJ.Column
+			y = 2. + .125*.5
+			rl.DrawModelEx(model, rl.NewVector3(i, y, maxIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
+			rl.DrawModelEx(model, rl.NewVector3(i, y, -maxIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
+			rl.DrawModelEx(model, rl.NewVector3(maxIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
+			rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
 		}
-	}
-	if false {
-		DrawCubicmaps()
+
+		for i := range mineObjCount {
+			obj := mineObjArray[i]
+			rl.DrawModelEx(mineObjModels[obj.State], obj.Pos,
+				rl.NewVector3(0, 1, 0), obj.Rotn, obj.Size, rl.White)
+		}
+
+		if false {
+			rl.DrawModel(checkedModel, rl.NewVector3(0., -.05, 0.), 1., rl.RayWhite)
+		}
+
+		if false {
+			// Draw banners at floor corners
+			floorBBMin := floor.BoundingBox.Min
+			floorBBMax := floor.BoundingBox.Max
+			rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMin.X+1, 0, floorBBMin.Z+1), common.YAxis, 45, common.Vector3One, rl.White)  // leftback
+			rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMax.X-1, 0, floorBBMin.Z+1), common.YAxis, -45, common.Vector3One, rl.White) // rightback
+			rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMax.X, 0, floorBBMax.Z), common.YAxis, 45, common.Vector3One, rl.White)      // rightfront
+			rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMin.X, 0, floorBBMax.Z), common.YAxis, -45, common.Vector3One, rl.White)     // leftfront
+		}
+		if false {
+			// rl.DrawModel(common.Model.OBJ.Dirt, rl.NewVector3(0, common.Phi, 0), common.Phi, rl.White)
+			rl.DrawModel(common.Model.OBJ.WoodStructure, rl.NewVector3(0, 0, 0), 1., rl.White)
+
+			rl.DrawModel(common.Model.OBJ.CharacterHuman, common.Vector3One, 1., rl.Red)
+
+			rl.DrawModel(common.Model.OBJ.Dirt, rl.NewVector3(4, 0, 4), 1., rl.White)
+			rl.DrawModel(common.Model.OBJ.Rocks, rl.NewVector3(5, 0, 4), 1., rl.White)
+			rl.DrawModel(common.Model.OBJ.Dirt, rl.NewVector3(6, 0, 4), 1., rl.White)
+			rl.DrawModel(common.Model.OBJ.Stones, rl.NewVector3(7, 0, 4), 1., rl.White)
+
+			rl.DrawModel(common.Model.OBJ.Coin, rl.NewVector3(1, 0, 1), 1., rl.White)
+			rl.DrawModel(common.Model.OBJ.WoodSupport, rl.NewVector3(2, 0, 2), 1., rl.White)
+			rl.DrawModel(common.Model.OBJ.WoodStructure, rl.NewVector3(3, 0, 3), 1., rl.White)
+			rl.DrawModel(common.Model.OBJ.Dirt, rl.NewVector3(4, 0, 4), 1., rl.White)
+			rl.DrawModel(common.Model.OBJ.Rocks, rl.NewVector3(5, 0, 5), 1., rl.White)
+			rl.DrawModel(common.Model.OBJ.Stones, rl.NewVector3(6, 0, 6), 1., rl.White)
+			rl.DrawModel(common.Model.OBJ.Trap, rl.NewVector3(7, 0, 7), 1., rl.White)
+		}
 	}
 	rl.EndMode3D()
 
