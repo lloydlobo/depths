@@ -7,22 +7,24 @@ import (
 )
 
 var (
-	wallModel     rl.Model
-	wallHalfModel rl.Model
+	wallModel       rl.Model
+	wallCornerModel rl.Model
 )
 
 func InitWall() {
 	// wallModel = rl.LoadModel(filepath.Join("res", "model", "obj", "wall.obj"))
 	wallModel = common.Model.OBJ.Wall
-	wallModel = common.Model.OBJ.WallNarrow
-	wallModel = common.Model.OBJ.WallOpening
+	wallModel = common.Model.OBJ.Stairs
 	wallModel = common.Model.OBJ.WallHalf
+	wallModel = common.Model.OBJ.WallNarrow
+	wallModel = common.Model.OBJ.Dirt
+	wallModel = common.Model.OBJ.WallOpening
 
 	rl.SetMaterialTexture(wallModel.Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
 
-	// wallCornerModel = rl.LoadModel(filepath.Join("res", "model", "obj", "wall_corner.obj"))
-	wallHalfModel = common.Model.OBJ.Wall
-	rl.SetMaterialTexture(wallHalfModel.Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
+	wallCornerModel = common.Model.OBJ.Wall
+	wallCornerModel = common.Model.OBJ.Rocks
+	rl.SetMaterialTexture(wallCornerModel.Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
 }
 
 func DrawWalls(pos, size, scale rl.Vector3) {
@@ -54,8 +56,8 @@ func DrawWalls(pos, size, scale rl.Vector3) {
 	topRight := rl.NewVector3(pos.X+size.X/2+wallthick, pos.Y+wallboty, pos.Z-size.Z/2-wallthick)
 	topLeft := rl.NewVector3(pos.X-size.X/2-wallthick, pos.Y+wallboty, pos.Z-size.Z/2-wallthick)
 
-	rl.DrawModelEx(wallHalfModel, topRight, rotationAxis, 0, scale, tint)
-	rl.DrawModelEx(wallHalfModel, topLeft, rotationAxis, 90, scale, tint)
-	rl.DrawModelEx(wallHalfModel, bottomLeft, rotationAxis, 180, scale, tint)
-	rl.DrawModelEx(wallHalfModel, bottomRight, rotationAxis, 270, scale, tint)
+	rl.DrawModelEx(wallCornerModel, topRight, rotationAxis, 0, scale, tint)
+	rl.DrawModelEx(wallCornerModel, topLeft, rotationAxis, 90, scale, tint)
+	rl.DrawModelEx(wallCornerModel, bottomLeft, rotationAxis, 180, scale, tint)
+	rl.DrawModelEx(wallCornerModel, bottomRight, rotationAxis, 270, scale, tint)
 }

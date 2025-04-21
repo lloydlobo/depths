@@ -358,21 +358,32 @@ func Update() {
 	framesCounter++
 }
 
+var hasLeftDrillBase bool
+
 func Draw() {
 	screenW := int32(rl.GetScreenWidth())
 	screenH := int32(rl.GetScreenHeight())
 
 	// 3D World
 	rl.BeginMode3D(camera)
+
 	rl.ClearBackground(rl.Black)
+
 	{
 		player.Draw()
+
 		floor.Draw()
+
+		// Use walls to avoid infinite-map generation
 		DrawWalls(
 			floor.Position,
 			floor.Size,
-			rl.NewVector3(1., cmp.Or(float32(1.), common.OneMinusInvPhi), 1.),
-		) // Use walls to avoid infinite-map generation
+			rl.NewVector3(
+				1.,
+				cmp.Or(common.Phi, common.OneMinusInvPhi, float32(1.)),
+				1.,
+			),
+		)
 
 		// Draw drill
 		const maxIndex = 2
@@ -385,16 +396,28 @@ func Draw() {
 			bb3 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(7, 2, 7)) // bot barrier
 			rl.DrawBoundingBox(bb3, rl.Blue)
 			{
-				isEnteredInside := rl.CheckCollisionBoxes(player.BoundingBox, bb1)
-				isEnteringInside := rl.CheckCollisionBoxes(player.BoundingBox, bb2)
-				isInBarrierToEntry := rl.CheckCollisionBoxes(player.BoundingBox, bb3)
-				if isInBarrierToEntry && !isEnteringInside && !isEnteredInside {
+				isPlayerInsideBase := rl.CheckCollisionBoxes(player.BoundingBox, bb1)
+				isPlayerEnteringBase := rl.CheckCollisionBoxes(player.BoundingBox, bb2)
+				isPlayerInsideBotBarrier := rl.CheckCollisionBoxes(player.BoundingBox, bb3)
+				if isPlayerInsideBotBarrier && !isPlayerEnteringBase && !isPlayerInsideBase {
 					playerCol = rl.Blue
-				} else if isEnteringInside && !isEnteredInside {
+				} else if isPlayerEnteringBase && !isPlayerInsideBase {
+					// HACK: Placeholder change scene check logic
+					if hasLeftDrillBase {
+						hasLeftDrillBase = false
+						if false {
+							Init()
+						}
+						finishScreen = 1 // HACK: Placeholder to shift scene
+						rl.PlaySound(common.FX.Coin)
+					}
 					playerCol = rl.Green
-				} else if isEnteredInside {
+				} else if isPlayerInsideBase {
 					playerCol = rl.Red
 				} else {
+					if !hasLeftDrillBase {
+						hasLeftDrillBase = true
+					}
 					playerCol = rl.White
 				}
 			}
@@ -404,26 +427,20 @@ func Draw() {
 		for i := float32(-maxIndex + 1); i < maxIndex; i++ {
 			var model rl.Model
 			var y float32
-
 			model = common.Model.OBJ.Column
 			y = 0.
-
 			rl.DrawModelEx(model, rl.NewVector3(i, y, maxIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
 			rl.DrawModelEx(model, rl.NewVector3(i, y, -maxIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
 			rl.DrawModelEx(model, rl.NewVector3(maxIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
 			rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
-
 			model = common.Model.OBJ.Wall
 			y = 1. + .125*.5
-
 			rl.DrawModelEx(model, rl.NewVector3(i, y, maxIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
 			rl.DrawModelEx(model, rl.NewVector3(i, y, -maxIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
 			rl.DrawModelEx(model, rl.NewVector3(maxIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
 			rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
-
 			model = common.Model.OBJ.Column
 			y = 2. + .125*.5
-
 			rl.DrawModelEx(model, rl.NewVector3(i, y, maxIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
 			rl.DrawModelEx(model, rl.NewVector3(i, y, -maxIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
 			rl.DrawModelEx(model, rl.NewVector3(maxIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
@@ -436,7 +453,9 @@ func Draw() {
 				rl.NewVector3(0, 1, 0), obj.Rotn, obj.Size, rl.White)
 		}
 
-		rl.DrawModel(checkedModel, rl.NewVector3(0., -.05, 0.), 1., rl.RayWhite)
+		if false {
+			rl.DrawModel(checkedModel, rl.NewVector3(0., -.05, 0.), 1., rl.RayWhite)
+		}
 
 		if false {
 			// Draw banners at floor corners
