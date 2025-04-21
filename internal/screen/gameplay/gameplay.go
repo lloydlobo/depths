@@ -63,6 +63,7 @@ type DirtStoneRockState uint8
 type DirtStoneRockObj struct {
 	Pos      rl.Vector3
 	Size     rl.Vector3
+	Rotn     float32
 	Health   float32 // [0..1]
 	State    DirtStoneRockState
 	IsActive bool
@@ -72,6 +73,7 @@ func NewDirtStoneRockObj(pos, size rl.Vector3) DirtStoneRockObj {
 	return DirtStoneRockObj{
 		Pos:      pos,
 		Size:     size,
+		Rotn:     0.0,
 		State:    DirtDSR,
 		IsActive: true,
 	}
@@ -86,9 +88,16 @@ func (o *DirtStoneRockObj) NextState() {
 }
 
 func InitDirtStoneRockObjects(positions []rl.Vector3) {
-	size := rl.NewVector3(1, 1, 1)
 	for i := range positions {
-		dirtStoneRockArray = append(dirtStoneRockArray, NewDirtStoneRockObj(positions[i], size))
+		size := rl.Vector3Multiply(
+			rl.NewVector3(1, 1, 1),
+			rl.NewVector3(
+				float32(rl.GetRandomValue(94, 98))/100.,
+				float32(rl.GetRandomValue(84, 86))/100.,
+				float32(rl.GetRandomValue(94, 98))/100.))
+		obj := NewDirtStoneRockObj(positions[i], size)
+		obj.Rotn = cmp.Or(float32(rl.GetRandomValue(-30, 30)/10.), 0.)
+		dirtStoneRockArray = append(dirtStoneRockArray, obj)
 		dirtStoneRockCount++
 	}
 	for i := range maxDirtStoneRockStates {
@@ -327,26 +336,29 @@ func Draw() {
 	{
 		player.Draw()
 		floor.Draw()
+		DrawWalls(floor.Position, floor.Size, rl.NewVector3(1., common.InvPhi, 1.))
 		if true {
-			pos := floor.Position
-			size := rl.Vector3Multiply(floor.Size, rl.NewVector3(.1, 1., .2))
-			DrawWalls(pos, size)
+			DrawWalls(floor.Position, rl.Vector3Multiply(floor.Size, rl.NewVector3(.1, 1., .2)),
+				rl.NewVector3(1., common.OneMinusInvPhi, 1.))
 		}
+
 		for i := range dirtStoneRockCount {
-			chest := dirtStoneRockArray[i]
-			rl.DrawModelEx(dirtStoneRockModels[chest.State], chest.Pos, rl.NewVector3(0, 1, 0), 0., rl.NewVector3(1, 1, 1), rl.White)
+			obj := dirtStoneRockArray[i]
+			rl.DrawModelEx(dirtStoneRockModels[obj.State], obj.Pos,
+				rl.NewVector3(0, 1, 0), obj.Rotn, obj.Size, rl.White)
 		}
 
 		rl.DrawModel(checkedModel, rl.NewVector3(0., -.05, 0.), 1., rl.RayWhite)
 
-		// Draw banners at floor corners
-		floorBBMin := floor.BoundingBox.Min
-		floorBBMax := floor.BoundingBox.Max
-		rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMin.X+1, 0, floorBBMin.Z+1), common.YAxis, 45, common.Vector3One, rl.White)  // leftback
-		rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMax.X-1, 0, floorBBMin.Z+1), common.YAxis, -45, common.Vector3One, rl.White) // rightback
-		rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMax.X, 0, floorBBMax.Z), common.YAxis, 45, common.Vector3One, rl.White)      // rightfront
-		rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMin.X, 0, floorBBMax.Z), common.YAxis, -45, common.Vector3One, rl.White)     // leftfront
-
+		if false {
+			// Draw banners at floor corners
+			floorBBMin := floor.BoundingBox.Min
+			floorBBMax := floor.BoundingBox.Max
+			rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMin.X+1, 0, floorBBMin.Z+1), common.YAxis, 45, common.Vector3One, rl.White)  // leftback
+			rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMax.X-1, 0, floorBBMin.Z+1), common.YAxis, -45, common.Vector3One, rl.White) // rightback
+			rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMax.X, 0, floorBBMax.Z), common.YAxis, 45, common.Vector3One, rl.White)      // rightfront
+			rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMin.X, 0, floorBBMax.Z), common.YAxis, -45, common.Vector3One, rl.White)     // leftfront
+		}
 		if false {
 			// rl.DrawModel(common.Model.OBJ.Dirt, rl.NewVector3(0, common.Phi, 0), common.Phi, rl.White)
 			rl.DrawModel(common.Model.OBJ.WoodStructure, rl.NewVector3(0, 0, 0), 1., rl.White)
