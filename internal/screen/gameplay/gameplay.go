@@ -218,15 +218,46 @@ func Draw() {
 			rl.DrawLine3D(gamePlayer.Position, common.Vector3Zero, rl.Red)
 			rl.DrawLine3D(gamePlayer.Position, common.Vector3One, rl.Green)
 
-			offsetVector3 := rl.Vector3Multiply(rl.GetCameraForward(&camera), rl.NewVector3(5., .125, 5.))
+			cameraForwardProjectionVector3 := rl.Vector3Multiply(rl.GetCameraForward(&camera), rl.NewVector3(9., .125/2., 9.))
+
 			startPos := gamePlayer.Position
-			endPos := rl.Vector3Add(gamePlayer.Position, offsetVector3)
+			endPos := rl.Vector3Add(gamePlayer.Position, cameraForwardProjectionVector3)
 
 			// Draw Ray
-			rl.DrawLine3D(startPos, endPos, rl.Yellow)
+			rayCol := rl.Fade(rl.Yellow, .6)
+			rl.DrawLine3D(startPos, endPos, rayCol)
+			rayCol = rl.Fade(rl.Yellow, .3)
+			const n = float32(8.)
+			const rayGapFactor = 16 * n
+			for i := -n; i < n; i++ {
+				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(i/rayGapFactor, .0, .0)), rayCol)
+				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.0, .0, i/rayGapFactor)), rayCol)
+			}
+			if false {
+				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.1, .0, .0)), rayCol)
+				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.2, .0, .0)), rayCol)
+				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.3, .0, .0)), rayCol)
+				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.4, .0, .0)), rayCol)
+				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.5, .0, .0)), rayCol)
+				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(-.1, .0, .0)), rayCol)
+				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(-.2, .0, .0)), rayCol)
+				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(-.3, .0, .0)), rayCol)
+				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(-.4, .0, .0)), rayCol)
+				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(-.5, .0, .0)), rayCol)
+				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.0, .0, .1)), rayCol)
+				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.0, .0, .2)), rayCol)
+				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.0, .0, .3)), rayCol)
+				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.0, .0, .4)), rayCol)
+				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.0, .0, .5)), rayCol)
+				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.0, .0, -.1)), rayCol)
+				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.0, .0, -.2)), rayCol)
+				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.0, .0, -.3)), rayCol)
+				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.0, .0, -.4)), rayCol)
+				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.0, .0, -.5)), rayCol)
+			}
 
 			// Draw forward movement lookahead area
-			rl.DrawCapsule(startPos, endPos, 2, 7, 7, rl.Fade(rl.Blue, .3))
+			rl.DrawCapsule(startPos, endPos, 2, 7, 7, rl.Fade(rl.Gold, .125/2))
 
 		}
 
