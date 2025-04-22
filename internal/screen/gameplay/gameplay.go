@@ -17,192 +17,22 @@ var (
 	framesCounter int32
 	finishScreen  int
 
-	camera rl.Camera3D
+	Camera rl.Camera3D
 
 	Player player.Player
 	Floor  floor.Floor
-	// isPlayerWallCollision bool
 
 	checkedTexture rl.Texture2D
 	checkedModel   rl.Model
 
-	// fxImpactsSoftHeavy    []rl.Sound
-	// fxImpactsSoftMedium   []rl.Sound
-	// fxImpactsGenericLight []rl.Sound
-	// fxConcreteFootsteps []rl.Sound
+	hasPlayerLeftDrillBase bool
 )
-
-// TEMPORARY
-//		TEMPORARY
-//			TEMPORARY
-//				TEMPORARY
-//					TEMPORARY
-//						TEMPORARY
-//							TEMPORARY
-//								TEMPORARY
-//									TEMPORARY
-//										TEMPORARY
-//											TEMPORARY
-//												TEMPORARY
-//													TEMPORARY
-//														TEMPORARY
-
-const (
-	DirtMineObjState MineObjState = iota
-	RockMineObjState
-	StoneMineObjState
-	FloorDetailMineObjState // decorated floor tile
-
-	maxMineObjState
-)
-
-var (
-	mineObjArray  []MineObj
-	mineObjCount  int32
-	mineObjModels [maxMineObjState]rl.Model
-)
-
-type MineObjState uint8
-type MineObj struct {
-	Pos      rl.Vector3
-	Size     rl.Vector3
-	Rotn     float32
-	Health   float32 // [0..1]
-	State    MineObjState
-	IsActive bool
-}
-
-func NewMineObj(pos, size rl.Vector3) MineObj {
-	return MineObj{
-		Pos:      pos,
-		Size:     size,
-		Rotn:     0.0,
-		State:    DirtMineObjState,
-		IsActive: true,
-	}
-}
-
-func (o *MineObj) NextState() {
-	o.State++
-	if o.State >= maxMineObjState {
-		o.State = maxMineObjState - 1
-		o.IsActive = false
-	}
-}
-
-func InitMineObjPositions() []rl.Vector3 {
-	var positions []rl.Vector3 // 61% of maxPositions
-
-	var (
-		y    = (Floor.BoundingBox.Min.Y + Floor.BoundingBox.Max.Y) / 2.0
-		bb   = Floor.BoundingBox
-		offX = float32(3)
-		offZ = float32(3)
-	)
-
-	var (
-		maxGridCells            = Floor.Size.X * Floor.Size.Z // just-in-case
-		maxSkipLoopPositionOdds = int32(2)                    // if 2 -> 0,1,2 -> 1/3 odds
-	)
-
-NextCol:
-	for x := bb.Min.X + 1; x < bb.Max.X; x++ {
-	NextRow:
-		for z := bb.Min.Z + 1; z < bb.Max.Z; z++ {
-			if len(positions) >= int(maxGridCells) {
-				break NextCol
-			}
-			// Reserve space for area in offset from origin
-			for i := -offX; i <= offX; i++ {
-				for k := -offZ; k <= offZ; k++ {
-					if i == x && k == z {
-						continue NextRow
-					}
-					if rl.Vector3Distance(rl.NewVector3(i, y, k), rl.NewVector3(x, y, z)) < (offX+offZ)/2 {
-						continue NextRow
-
-					}
-				}
-			}
-			if rl.GetRandomValue(0, maxSkipLoopPositionOdds) == 0 {
-				continue NextRow
-			}
-			positions = append(positions, rl.NewVector3(x, y, z))
-		}
-	}
-	return positions
-}
-
-func InitAllMineObj(positions []rl.Vector3) {
-	for i := range positions {
-		size := rl.Vector3Multiply(
-			rl.NewVector3(1, 1, 1),
-			rl.NewVector3(
-				float32(rl.GetRandomValue(88, 101))/100.,
-				float32(rl.GetRandomValue(161, 2*161))/100.,
-				float32(rl.GetRandomValue(88, 101))/100.))
-
-		obj := NewMineObj(positions[i], size)
-		obj.Rotn = cmp.Or(float32(rl.GetRandomValue(-50, 50)/10.), 0.)
-
-		mineObjArray = append(mineObjArray, obj)
-		mineObjCount++
-	}
-	for i := range maxMineObjState {
-		switch i {
-		case DirtMineObjState:
-			mineObjModels[i] = common.Model.OBJ.Dirt
-		case RockMineObjState:
-			mineObjModels[i] = common.Model.OBJ.Rocks
-		case StoneMineObjState:
-			mineObjModels[i] = common.Model.OBJ.Stones
-		case FloorDetailMineObjState:
-			mineObjModels[i] = common.Model.OBJ.FloorDetail
-		default:
-			panic(fmt.Sprintf("unexpected gameplay.MineObjState: %#v", i))
-		}
-		rl.SetMaterialTexture(mineObjModels[i].Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
-	}
-}
-
-// TODO: Implement
-//
-//	scene_1.go
-//	scene_2.go
-//	scene_3.go
-//	scene_4.go
-//	scene_5.go
-//	scene_6.go
-type SceneManager struct {
-	CurrentID  int32
-	PreviousID int32
-}
-
-func (sm *SceneManager) SwitchTo(id int32) {
-	sm.PreviousID = sm.CurrentID
-	sm.CurrentID = id
-}
-
-//														TEMPORARY
-//													TEMPORARY
-//												TEMPORARY
-//											TEMPORARY
-//										TEMPORARY
-//									TEMPORARY
-//								TEMPORARY
-//							TEMPORARY
-//						TEMPORARY
-//					TEMPORARY
-//				TEMPORARY
-//			TEMPORARY
-//		TEMPORARY
-// TEMPORARY
 
 func Init() {
 	framesCounter = 0
 	finishScreen = 0
 
-	camera = rl.Camera3D{
+	Camera = rl.Camera3D{
 		Position:   rl.NewVector3(0., 16., 16.),
 		Target:     rl.NewVector3(0., .5, 0.),
 		Up:         rl.NewVector3(0., 1., 0.),
@@ -217,13 +47,9 @@ func Init() {
 	// SCENES 0..3
 	// SCENES 0..3
 	// SCENES 0..3
-	// SCENES 0..3
-	// SCENES 0..3
-	// SCENES 0..3
-	// SCENES 0..3
 	//			SCENES 0..3
 	//						SCENES 0..3
-	player.InitPlayer(&Player, camera)
+	player.InitPlayer(&Player, Camera)
 	Player.IsPlayerWallCollision = false
 
 	floor.InitFloor(&Floor)
@@ -248,7 +74,12 @@ func Init() {
 
 	rl.SetMusicVolume(common.Music.Theme, float32(cmp.Or(1.0, 0.125)))
 
-	rl.PlayMusicStream(common.Music.Theme)
+	switch isPlay := false; isPlay {
+	case true:
+		rl.PlayMusicStream(common.Music.Theme)
+	case false:
+		rl.PauseMusicStream(common.Music.Theme)
+	}
 
 	rl.DisableCursor() // for ThirdPersonPerspective
 }
@@ -268,7 +99,7 @@ func Update() {
 	HandleUserInput()
 
 	// Save variables this frame
-	oldCam := camera
+	oldCam := Camera
 	oldPlayer := Player
 
 	// Reset flags/variables
@@ -276,13 +107,14 @@ func Update() {
 	Player.IsPlayerWallCollision = false
 
 	rl.UpdateMusicStream(common.Music.Theme)
-	rl.UpdateCamera(&camera, rl.CameraThirdPerson)
+	rl.UpdateCamera(&Camera, rl.CameraThirdPerson)
 
-	Player.Update(camera, Floor)
+	Player.Update(Camera, Floor)
 
 	if Player.IsPlayerWallCollision {
-		player.RevertPlayerAndCameraPositions(oldPlayer, &Player, oldCam, &camera)
+		player.RevertPlayerAndCameraPositions(oldPlayer, &Player, oldCam, &Camera)
 	}
+
 	for i := range mineObjCount {
 		// Skip final mined object residue
 		if mineObjArray[i].State == maxMineObjState-1 {
@@ -320,7 +152,7 @@ func Update() {
 			//			HACK
 			//		HACK
 			// HACK
-			player.RevertPlayerAndCameraPositions(oldPlayer, &Player, oldCam, &camera)
+			player.RevertPlayerAndCameraPositions(oldPlayer, &Player, oldCam, &Camera)
 
 			// Trigger once while mining
 			if (rl.IsKeyDown(rl.KeySpace) && framesCounter%16 == 0) ||
@@ -343,10 +175,8 @@ func Update() {
 		}
 	}
 
-	if rl.IsKeyDown(rl.KeyW) ||
-		rl.IsKeyDown(rl.KeyA) ||
-		rl.IsKeyDown(rl.KeyS) ||
-		rl.IsKeyDown(rl.KeyD) {
+	// Move this in package player
+	if rl.IsKeyDown(rl.KeyW) || rl.IsKeyDown(rl.KeyA) || rl.IsKeyDown(rl.KeyS) || rl.IsKeyDown(rl.KeyD) {
 		const fps = 60
 		const framesInterval = fps / 3.0
 		if framesCounter%int32(framesInterval) == 0 {
@@ -361,14 +191,12 @@ func Update() {
 	framesCounter++
 }
 
-var hasLeftDrillBase bool
-
 func Draw() {
 	screenW := int32(rl.GetScreenWidth())
 	screenH := int32(rl.GetScreenHeight())
 
 	// 3D World
-	rl.BeginMode3D(camera)
+	rl.BeginMode3D(Camera)
 
 	rl.ClearBackground(rl.Black)
 
@@ -398,26 +226,23 @@ func Draw() {
 				isPlayerInsideBase := rl.CheckCollisionBoxes(Player.BoundingBox, bb1)
 				isPlayerEnteringBase := rl.CheckCollisionBoxes(Player.BoundingBox, bb2)
 				isPlayerInsideBotBarrier := rl.CheckCollisionBoxes(Player.BoundingBox, bb3)
+
 				if isPlayerInsideBotBarrier && !isPlayerEnteringBase && !isPlayerInsideBase {
 					player.PlayerCol = rl.Blue
 				} else if isPlayerEnteringBase && !isPlayerInsideBase {
-					// HACK: Placeholder change scene check logic
-					if hasLeftDrillBase {
-						hasLeftDrillBase = false
-						if false {
-							Init()
-						}
-						finishScreen = 1 // HACK: Placeholder to shift scene
+					if hasPlayerLeftDrillBase { // HACK: Placeholder change scene check logic
+						hasPlayerLeftDrillBase = false
+						finishScreen = 2 // HACK: Placeholder to shift scene
 						rl.PlaySound(common.FX.Coin)
 					}
 					player.PlayerCol = rl.Green
 				} else if isPlayerInsideBase {
 					player.PlayerCol = rl.Red
 				} else {
-					if !hasLeftDrillBase {
-						hasLeftDrillBase = true
+					if !hasPlayerLeftDrillBase {
+						hasPlayerLeftDrillBase = true
 					}
-					player.PlayerCol = rl.White
+					player.PlayerCol = rl.RayWhite
 				}
 			}
 		}
@@ -510,3 +335,151 @@ func Unload() {
 func Finish() int {
 	return finishScreen
 }
+
+// TEMPORARY
+//		TEMPORARY
+//			TEMPORARY
+//				TEMPORARY
+//					TEMPORARY
+//						TEMPORARY
+//							TEMPORARY
+//								TEMPORARY
+//									TEMPORARY
+//										TEMPORARY
+//											TEMPORARY
+//												TEMPORARY
+//													TEMPORARY
+//														TEMPORARY
+
+type MineObjState uint8
+
+const (
+	DirtMineObjState MineObjState = iota
+	RockMineObjState
+	StoneMineObjState
+	FloorDetailMineObjState // decorated floor tile
+
+	maxMineObjState
+)
+
+var (
+	mineObjArray  []MineObj
+	mineObjCount  int32
+	mineObjModels [maxMineObjState]rl.Model
+)
+
+type MineObj struct {
+	Pos      rl.Vector3
+	Size     rl.Vector3
+	Rotn     float32
+	Health   float32 // [0..1]
+	State    MineObjState
+	IsActive bool
+}
+
+func NewMineObj(pos, size rl.Vector3) MineObj {
+	return MineObj{
+		Pos:      pos,
+		Size:     size,
+		Rotn:     0.0,
+		State:    DirtMineObjState,
+		IsActive: true,
+	}
+}
+
+func (o *MineObj) NextState() {
+	o.State++
+	if o.State >= maxMineObjState {
+		o.State = maxMineObjState - 1
+		o.IsActive = false
+	}
+}
+
+func InitMineObjPositions() []rl.Vector3 {
+	var positions []rl.Vector3 // 61% of maxPositions
+
+	var (
+		y    = (Floor.BoundingBox.Min.Y + Floor.BoundingBox.Max.Y) / 2.0
+		bb   = Floor.BoundingBox
+		offX = float32(3)
+		offZ = float32(3)
+	)
+
+	var (
+		maxGridCells            = Floor.Size.X * Floor.Size.Z // just-in-case
+		maxSkipLoopPositionOdds = int32(2)                    // if 2 -> 0,1,2 -> 1/3 odds
+	)
+
+NextCol:
+	for x := bb.Min.X + 1; x < bb.Max.X; x++ {
+	NextRow:
+		for z := bb.Min.Z + 1; z < bb.Max.Z; z++ {
+			if len(positions) >= int(maxGridCells) {
+				break NextCol
+			}
+			// Reserve space for area in offset from origin
+			for i := -offX; i <= offX; i++ {
+				for k := -offZ; k <= offZ; k++ {
+					if i == x && k == z {
+						continue NextRow
+					}
+					if rl.Vector3Distance(rl.NewVector3(i, y, k), rl.NewVector3(x, y, z)) < (offX+offZ)/2 {
+						continue NextRow
+					}
+				}
+			}
+			if rl.GetRandomValue(0, maxSkipLoopPositionOdds) == 0 {
+				continue NextRow
+			}
+			positions = append(positions, rl.NewVector3(x, y, z))
+		}
+	}
+	return positions
+}
+
+func InitAllMineObj(positions []rl.Vector3) {
+	for i := range positions {
+		size := rl.Vector3Multiply(
+			rl.NewVector3(1, 1, 1),
+			rl.NewVector3(
+				float32(rl.GetRandomValue(88, 101))/100.,
+				float32(rl.GetRandomValue(100, 300))/100.,
+				float32(rl.GetRandomValue(88, 101))/100.))
+
+		obj := NewMineObj(positions[i], size)
+		obj.Rotn = cmp.Or(float32(rl.GetRandomValue(-50, 50)/10.), 0.)
+
+		mineObjArray = append(mineObjArray, obj)
+		mineObjCount++
+	}
+	for i := range maxMineObjState {
+		switch i {
+		case DirtMineObjState:
+			mineObjModels[i] = common.Model.OBJ.Dirt
+		case RockMineObjState:
+			mineObjModels[i] = common.Model.OBJ.Rocks
+		case StoneMineObjState:
+			mineObjModels[i] = common.Model.OBJ.Stones
+		case FloorDetailMineObjState:
+			mineObjModels[i] = common.Model.OBJ.FloorDetail
+		default:
+			panic(fmt.Sprintf("unexpected gameplay.MineObjState: %#v", i))
+		}
+		rl.SetMaterialTexture(mineObjModels[i].Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
+	}
+}
+
+//														TEMPORARY
+//													TEMPORARY
+//												TEMPORARY
+//											TEMPORARY
+//										TEMPORARY
+//									TEMPORARY
+//								TEMPORARY
+//							TEMPORARY
+//						TEMPORARY
+//					TEMPORARY
+//				TEMPORARY
+//			TEMPORARY
+//		TEMPORARY
+// TEMPORARY
