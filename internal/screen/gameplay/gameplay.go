@@ -17,10 +17,10 @@ var (
 	framesCounter int32
 	finishScreen  int
 
-	Camera rl.Camera3D
+	camera rl.Camera3D
 
-	Player player.Player
-	Floor  floor.Floor
+	gamePlayer player.Player
+	gameFloor  floor.Floor
 
 	checkedTexture rl.Texture2D
 	checkedModel   rl.Model
@@ -32,7 +32,7 @@ func Init() {
 	framesCounter = 0
 	finishScreen = 0
 
-	Camera = rl.Camera3D{
+	camera = rl.Camera3D{
 		Position:   rl.NewVector3(0., 16., 16.),
 		Target:     rl.NewVector3(0., .5, 0.),
 		Up:         rl.NewVector3(0., 1., 0.),
@@ -49,10 +49,10 @@ func Init() {
 	// SCENES 0..3
 	//			SCENES 0..3
 	//						SCENES 0..3
-	player.InitPlayer(&Player, Camera)
-	Player.IsPlayerWallCollision = false
+	player.InitPlayer(&gamePlayer, camera)
+	gamePlayer.IsPlayerWallCollision = false
 
-	floor.InitFloor(&Floor)
+	floor.InitFloor(&gameFloor)
 	wall.InitWall()
 	// - Avoid spawning where player is standing
 	// - Randomly skip a position
@@ -99,20 +99,20 @@ func Update() {
 	HandleUserInput()
 
 	// Save variables this frame
-	oldCam := Camera
-	oldPlayer := Player
+	oldCam := camera
+	oldPlayer := gamePlayer
 
 	// Reset flags/variables
-	Player.Collisions = rl.Quaternion{}
-	Player.IsPlayerWallCollision = false
+	gamePlayer.Collisions = rl.Quaternion{}
+	gamePlayer.IsPlayerWallCollision = false
 
 	rl.UpdateMusicStream(common.Music.Theme)
-	rl.UpdateCamera(&Camera, rl.CameraThirdPerson)
+	rl.UpdateCamera(&camera, rl.CameraThirdPerson)
 
-	Player.Update(Camera, Floor)
+	gamePlayer.Update(camera, gameFloor)
 
-	if Player.IsPlayerWallCollision {
-		player.RevertPlayerAndCameraPositions(oldPlayer, &Player, oldCam, &Camera)
+	if gamePlayer.IsPlayerWallCollision {
+		player.RevertPlayerAndCameraPositions(oldPlayer, &gamePlayer, oldCam, &camera)
 	}
 
 	for i := range mineObjCount {
@@ -122,37 +122,37 @@ func Update() {
 		}
 		if rl.CheckCollisionBoxes(
 			common.GetBoundingBoxFromPositionSizeV(mineObjArray[i].Pos, mineObjArray[i].Size),
-			Player.BoundingBox,
+			gamePlayer.BoundingBox,
 		) {
 			// FIND OUT WHERE PLAYER TOUCHED THE BOX
 			// HACK
 			//		HACK
 			//			HACK
-			Player.Collisions.Z = 1
-			dx := oldPlayer.Position.X - Player.Position.X
+			gamePlayer.Collisions.Z = 1
+			dx := oldPlayer.Position.X - gamePlayer.Position.X
 			if dx < 0.0 { // new <- old
-				Player.Collisions.X = 1
+				gamePlayer.Collisions.X = 1
 			} else if dx > 0.0 { // new -> old
-				Player.Collisions.X = -1
+				gamePlayer.Collisions.X = -1
 			} else {
-				if Player.Collisions.X != 0 { // Placeholder (do not overwrite previous)
-					Player.Collisions.X = 0
+				if gamePlayer.Collisions.X != 0 { // Placeholder (do not overwrite previous)
+					gamePlayer.Collisions.X = 0
 				}
 			}
-			dz := oldPlayer.Position.Z - Player.Position.Z
+			dz := oldPlayer.Position.Z - gamePlayer.Position.Z
 			if dz < 0.0 { // new <- old
-				Player.Collisions.Z = 1
+				gamePlayer.Collisions.Z = 1
 			} else if dz > 0.0 { // new -> old
-				Player.Collisions.Z = -1
+				gamePlayer.Collisions.Z = -1
 			} else {
-				if Player.Collisions.Z != 0 { // Placeholder (do not overwrite previous)
-					Player.Collisions.Z = 0
+				if gamePlayer.Collisions.Z != 0 { // Placeholder (do not overwrite previous)
+					gamePlayer.Collisions.Z = 0
 				}
 			}
 			//			HACK
 			//		HACK
 			// HACK
-			player.RevertPlayerAndCameraPositions(oldPlayer, &Player, oldCam, &Camera)
+			player.RevertPlayerAndCameraPositions(oldPlayer, &gamePlayer, oldCam, &camera)
 
 			// Trigger once while mining
 			if (rl.IsKeyDown(rl.KeySpace) && framesCounter%16 == 0) ||
@@ -180,9 +180,9 @@ func Update() {
 		const fps = 60
 		const framesInterval = fps / 3.0
 		if framesCounter%int32(framesInterval) == 0 {
-			if !rl.Vector3Equals(oldPlayer.Position, Player.Position) &&
-				rl.Vector3Distance(oldCam.Position, Player.Position) > 1.0 &&
-				(Player.Collisions.X == 0 && Player.Collisions.Z == 0) {
+			if !rl.Vector3Equals(oldPlayer.Position, gamePlayer.Position) &&
+				rl.Vector3Distance(oldCam.Position, gamePlayer.Position) > 1.0 &&
+				(gamePlayer.Collisions.X == 0 && gamePlayer.Collisions.Z == 0) {
 				rl.PlaySound(common.FXS.FootStepsConcrete[int(framesCounter)%len(common.FXS.FootStepsConcrete)])
 			}
 		}
@@ -196,19 +196,46 @@ func Draw() {
 	screenH := int32(rl.GetScreenHeight())
 
 	// 3D World
-	rl.BeginMode3D(Camera)
+	rl.BeginMode3D(camera)
 
 	rl.ClearBackground(rl.Black)
 
 	{
-		Player.Draw()
+		{
+			var cameraViewMatrix rl.Matrix = rl.GetCameraMatrix(camera)
+			var quat rl.Quaternion = rl.QuaternionFromMatrix(cameraViewMatrix)
+			quatEulerPos := rl.QuaternionToEuler(quat)
+			quatEulerLen := rl.Vector3Length(quatEulerPos)
+			originOffset := rl.NewVector3(0., 5., 0.)
+			position := rl.Vector3Add(quatEulerPos, originOffset)
+			rl.DrawCubeWiresV(position, rl.NewVector3(.125, quatEulerLen, .125), rl.Violet)
+			rl.DrawCubeWiresV(position, quatEulerPos, rl.Purple)
 
-		Floor.Draw()
+		}
+
+		gamePlayer.Draw()
+		{
+			rl.DrawLine3D(gamePlayer.Position, common.Vector3Zero, rl.Red)
+			rl.DrawLine3D(gamePlayer.Position, common.Vector3One, rl.Green)
+
+			offsetVector3 := rl.Vector3Multiply(rl.GetCameraForward(&camera), rl.NewVector3(5., .125, 5.))
+			startPos := gamePlayer.Position
+			endPos := rl.Vector3Add(gamePlayer.Position, offsetVector3)
+
+			// Draw Ray
+			rl.DrawLine3D(startPos, endPos, rl.Yellow)
+
+			// Draw forward movement lookahead area
+			rl.DrawCapsule(startPos, endPos, 2, 7, 7, rl.Fade(rl.Blue, .3))
+
+		}
+
+		gameFloor.Draw()
 
 		// Use walls to avoid infinite-map generation
 		wall.DrawWalls(
-			Floor.Position,
-			Floor.Size,
+			gameFloor.Position,
+			gameFloor.Size,
 			rl.NewVector3(1., cmp.Or(common.Phi, common.OneMinusInvPhi, float32(1.)), 1.),
 		)
 
@@ -223,9 +250,9 @@ func Draw() {
 			bb3 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(7, 2, 7)) // bot barrier
 			rl.DrawBoundingBox(bb3, rl.Blue)
 			{
-				isPlayerInsideBase := rl.CheckCollisionBoxes(Player.BoundingBox, bb1)
-				isPlayerEnteringBase := rl.CheckCollisionBoxes(Player.BoundingBox, bb2)
-				isPlayerInsideBotBarrier := rl.CheckCollisionBoxes(Player.BoundingBox, bb3)
+				isPlayerInsideBase := rl.CheckCollisionBoxes(gamePlayer.BoundingBox, bb1)
+				isPlayerEnteringBase := rl.CheckCollisionBoxes(gamePlayer.BoundingBox, bb2)
+				isPlayerInsideBotBarrier := rl.CheckCollisionBoxes(gamePlayer.BoundingBox, bb3)
 
 				if isPlayerInsideBotBarrier && !isPlayerEnteringBase && !isPlayerInsideBase {
 					player.PlayerCol = rl.Blue
@@ -283,8 +310,8 @@ func Draw() {
 
 		if false {
 			// Draw banners at floor corners
-			floorBBMin := Floor.BoundingBox.Min
-			floorBBMax := Floor.BoundingBox.Max
+			floorBBMin := gameFloor.BoundingBox.Min
+			floorBBMax := gameFloor.BoundingBox.Max
 			rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMin.X+1, 0, floorBBMin.Z+1), common.YAxis, 45, common.Vector3One, rl.White)  // leftback
 			rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMax.X-1, 0, floorBBMin.Z+1), common.YAxis, -45, common.Vector3One, rl.White) // rightback
 			rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMax.X, 0, floorBBMax.Z), common.YAxis, 45, common.Vector3One, rl.White)      // rightfront
@@ -321,6 +348,9 @@ func Draw() {
 		fmt.Sprintf("%.6f", rl.GetFrameTime()),
 		rl.NewVector2(10, 10+20*1),
 		fontSize*2./3., 1, rl.Lime)
+	rl.DrawText(fmt.Sprintf("camera forward:%.2f\ncamera right:%.2f\n",
+		rl.GetCameraForward(&camera), rl.GetCameraRight(&camera)), screenW-200,
+		screenH-40, 10, rl.Green)
 }
 
 func Unload() {
@@ -399,15 +429,15 @@ func InitMineObjPositions() []rl.Vector3 {
 	var positions []rl.Vector3 // 61% of maxPositions
 
 	var (
-		y    = (Floor.BoundingBox.Min.Y + Floor.BoundingBox.Max.Y) / 2.0
-		bb   = Floor.BoundingBox
+		y    = (gameFloor.BoundingBox.Min.Y + gameFloor.BoundingBox.Max.Y) / 2.0
+		bb   = gameFloor.BoundingBox
 		offX = float32(3)
 		offZ = float32(3)
 	)
 
 	var (
-		maxGridCells            = Floor.Size.X * Floor.Size.Z // just-in-case
-		maxSkipLoopPositionOdds = int32(2)                    // if 2 -> 0,1,2 -> 1/3 odds
+		maxGridCells            = gameFloor.Size.X * gameFloor.Size.Z // just-in-case
+		maxSkipLoopPositionOdds = int32(2)                            // if 2 -> 0,1,2 -> 1/3 odds
 	)
 
 NextCol:

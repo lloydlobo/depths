@@ -61,6 +61,8 @@ func NewPlayer(camera rl.Camera3D) Player {
 	}
 	player.BoundingBox = common.GetBoundingBoxFromPositionSizeV(camera.Target, player.Size)
 
+	// INIT
+
 	// Load gltf model
 	// See https://www.raylib.com/examples/models/loader.html?name=models_bone_socket
 	// See https://github.com/raysan5/raylib/tree/master/examples/models/resources/models/gltf
@@ -94,8 +96,8 @@ func NewPlayer(camera rl.Camera3D) Player {
 
 	// Search bones for sockets in -> [root,body_low,body_up,socket_hat,hand_L,hand_R,hip_L,leg_L,hip_R,leg_R,socket_hand_L,socket_hand_R]
 	for i := range CharacterModel.BoneCount {
-		var src [32]int8 = CharacterModel.GetBones()[i].Name
-		var name string = B2S(src[:])
+		var buf [32]int8 = CharacterModel.GetBones()[i].Name
+		var name string = B2S(buf[:])
 
 		// FIXME: String comparison not work with == operator
 		if bytes.Equal([]byte(name), []byte("socket_hat")) ||
@@ -127,6 +129,7 @@ func NewPlayer(camera rl.Camera3D) Player {
 
 func InitPlayer(player *Player, camera rl.Camera3D) {
 	*player = NewPlayer(camera)
+	// FIXME: Remove this or bring the one from NewPlayer here
 	playerModel = common.Model.OBJ.CharacterHuman
 	rl.SetMaterialTexture(playerModel.Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
 }
