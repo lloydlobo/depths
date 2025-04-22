@@ -92,23 +92,10 @@ func NewPlayer(camera rl.Camera3D) Player {
 		return sb.String()
 	}
 
-	// Search bones for sockets
+	// Search bones for sockets in -> [root,body_low,body_up,socket_hat,hand_L,hand_R,hip_L,leg_L,hip_R,leg_R,socket_hand_L,socket_hand_R]
 	for i := range CharacterModel.BoneCount {
 		var src [32]int8 = CharacterModel.GetBones()[i].Name
-
-		name := B2S(src[:])
-		// name: root
-		// name: body_low
-		// name: body_up
-		// name: socket_hat
-		// name: hand_L
-		// name: hand_R
-		// name: hip_L
-		// name: leg_L
-		// name: hip_R
-		// name: leg_R
-		// name: socket_hand_L
-		// name: socket_hand_R
+		var name string = B2S(src[:])
 
 		// FIXME: String comparison not work with == operator
 		if bytes.Equal([]byte(name), []byte("socket_hat")) ||
@@ -222,6 +209,7 @@ func (p Player) Draw() {
 			rl.NewVector3(0, 1, 0), 0.0,
 			rl.NewVector3(1., common.InvPhi, 1.), rl.White)
 	}
+
 	rl.DrawCapsule(
 		rl.Vector3Add(p.Position, rl.NewVector3(0, p.Size.Y/8, 0)),
 		rl.Vector3Add(p.Position, rl.NewVector3(0, -p.Size.Y/4, 0)),
@@ -229,9 +217,6 @@ func (p Player) Draw() {
 
 	// Debug
 	if true {
-		if p.IsPlayerWallCollision {
-			rl.DrawBoundingBox(p.BoundingBox, rl.Red)
-		}
 		size := rl.Vector3Scale(p.Size, .5)
 
 		if p.Collisions.X != 0 {
@@ -254,42 +239,67 @@ func (p Player) Draw() {
 			pos.Y += p.Collisions.W * p.Size.Y / 2
 			rl.DrawCubeV(pos, size, common.YAxisColor)
 		}
-
-		common.DrawXYZOrbitV(p.Position, 1./common.Phi)
+		if p.IsPlayerWallCollision {
+			rl.DrawBoundingBox(p.BoundingBox, rl.Red)
+		}
+		if true {
+			common.DrawXYZOrbitV(p.Position, 1./common.Phi)
+		}
 	}
 
-	// Draw character
-	characterRotate = rl.QuaternionFromAxisAngle(rl.NewVector3(0.0, 1.0, 0.0), float32(CharacterAngle)*rl.Deg2rad)
-	CharacterModel.Transform = rl.MatrixMultiply(rl.QuaternionToMatrix(characterRotate), rl.MatrixTranslate(p.Position.X, p.Position.Y, p.Position.Z))
-	rl.UpdateModelAnimation(CharacterModel, anim, int32(animCurrentFrame))
-	rl.DrawMesh(CharacterModel.GetMeshes()[0], CharacterModel.GetMaterials()[1], CharacterModel.Transform)
+	const scaleToReduceBy = 2.
+	const cameraTargetPlayerCenterYOffset = .5
 
-	// Draw equipments (hat, sword, shield)
-	for i := range MaxBoneSockets {
-		if !IsShowEquippedModels[i] {
-			continue
+	// Draw character and equipments
+	if true {
+		posX := p.Position.X
+		posY := (p.Position.Y - cameraTargetPlayerCenterYOffset)
+		posZ := p.Position.Z
+
+		// NOTE: Transformation is applied in inverse order (scale -> rotate -> translate)
+		rl.PushMatrix()
+		if true {
+			rl.Scalef(1.*1./scaleToReduceBy, 1.*1./scaleToReduceBy, 1.*1./scaleToReduceBy)
+			posX *= scaleToReduceBy
+			posY *= scaleToReduceBy
+			posZ *= scaleToReduceBy
 		}
-		if int(i) >= len(boneSocketsIndex) {
-			continue
+		if false {
+			rl.Translatef(2.0, 0.0, 0.0)
 		}
-		if anim.FramePoses == nil {
-			continue
+		if false {
+			rl.Rotatef(45, 0, 1, 0)
 		}
 
-		var transform rl.Transform = anim.GetFramePose(int(animCurrentFrame), boneSocketsIndex[i])
-		var inRotation rl.Quaternion = CharacterModel.GetBindPose()[boneSocketsIndex[i]].Rotation
-		var outRotation rl.Quaternion = transform.Rotation
+		// Draw character
+		characterRotate = rl.QuaternionFromAxisAngle(rl.NewVector3(0.0, 1.0, 0.0), float32(CharacterAngle)*rl.Deg2rad)
+		CharacterModel.Transform = rl.MatrixMultiply(rl.QuaternionToMatrix(characterRotate), rl.MatrixTranslate(posX, posY, posZ))
+		rl.UpdateModelAnimation(CharacterModel, anim, int32(animCurrentFrame))
+		rl.DrawMesh(CharacterModel.GetMeshes()[0],
+			CharacterModel.GetMaterials()[1], CharacterModel.Transform)
 
-		// Calculate socket rotation (angle between bone in initial pose and same bone in current animation frame)
-		var rotate rl.Quaternion = rl.QuaternionMultiply(outRotation, rl.QuaternionInvert(inRotation))
-		var matrixTransform rl.Matrix = rl.QuaternionToMatrix(rotate)
-		// Translate socket to its position in the current animation
-		matrixTransform = rl.MatrixMultiply(matrixTransform, rl.MatrixTranslate(transform.Translation.X, transform.Translation.Y, transform.Translation.Z))
-		// Transform the socket using the transform of the character (angle and translate)
-		matrixTransform = rl.MatrixMultiply(matrixTransform, CharacterModel.Transform)
+		// Draw equipments (hat, sword, shield)
+		for i := range MaxBoneSockets {
+			if !IsShowEquippedModels[i] || anim.FramePoses == nil || CharacterModel.BindPose == nil {
+				continue
+			}
+			var transform rl.Transform = anim.GetFramePose(int(animCurrentFrame), boneSocketsIndex[i])
+			var inRotation rl.Quaternion = CharacterModel.GetBindPose()[boneSocketsIndex[i]].Rotation
+			var outRotation rl.Quaternion = transform.Rotation
 
-		// Draw mesh at socket position with socket angle rotation
-		rl.DrawMesh(EquippedModels[i].GetMeshes()[0], EquippedModels[i].GetMaterials()[1], matrixTransform)
+			// Calculate socket rotation (angle between bone in initial pose and same bone in current animation frame)
+			var rotate rl.Quaternion = rl.QuaternionMultiply(outRotation, rl.QuaternionInvert(inRotation))
+			var matrixTransform rl.Matrix = rl.QuaternionToMatrix(rotate)
+			// Translate socket to its position in the current animation
+			matrixTransform = rl.MatrixMultiply(matrixTransform, rl.MatrixTranslate(transform.Translation.X, transform.Translation.Y, transform.Translation.Z))
+			// Transform the socket using the transform of the character (angle and translate)
+			matrixTransform = rl.MatrixMultiply(matrixTransform, CharacterModel.Transform)
+
+			// Draw mesh at socket position with socket angle rotation
+			rl.DrawMesh(EquippedModels[i].GetMeshes()[0], EquippedModels[i].GetMaterials()[1], matrixTransform)
+		}
+
+		rl.PopMatrix()
 	}
 }
 
