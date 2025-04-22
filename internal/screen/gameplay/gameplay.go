@@ -75,7 +75,7 @@ func Init() {
 
 	rl.SetMusicVolume(common.Music.Theme, float32(cmp.Or(1.0, 0.125)))
 
-	switch isPlay := false; isPlay {
+	switch isPlay := true; isPlay {
 	case true:
 		rl.PlayMusicStream(common.Music.Theme)
 	case false:
@@ -249,10 +249,20 @@ func Draw() {
 			cachedCameraForward = cameraForward // Cache in update method
 
 			{
-				// Thanks to https://discussions.unity.com/t/angle-between-camera-and-object/450430/9
-				// function Angle2D(x1:float, y1:float, x2:float, y2:float) {
-				// 	return Mathf.Atan2(y2-y1, x2-x1)*Mathf.Rad2Deg;
-				// }
+				// Thanks to [hippocoder](https://discussions.unity.com/t/angle-between-camera-and-object/450430/9)
+				// Best understand the tried and tested old school methods with
+				// euler angles. This is the old way everyone has done since
+				// time began. Behold the code in 2D (which you probably need
+				// if you’re not bothered about all the angles):
+				//
+				//	function Angle2D(x1:float, y1:float, x2:float, y2:float) {
+				// 		return Mathf.Atan2(y2-y1, x2-x1)*Mathf.Rad2Deg;
+				// 	}
+				//
+				// What we do is use Atan2 and plug in two positions, a source
+				// and a destination, which is converted to degrees. If you
+				// want to use a different angle, just plug in x and z for
+				// example or y and z. Have fun.
 				Angle2D := func(x1, y1, x2, y2 float32) float32 {
 					return mathutil.Atan2F(y2-y1, x2-x1) * rl.Rad2deg
 				}
