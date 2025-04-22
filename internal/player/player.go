@@ -213,10 +213,9 @@ func (p Player) Draw() {
 			rl.Vector3Add(p.Position, rl.NewVector3(0, -p.Size.Y/4, 0)),
 			p.Size.X/2, 8, 8, PlayerCol)
 	} else {
-		// NOTE: Transformation is applied in inverse order (scale -> rotate -> translate)
+		// Draw character and equipments
 		rl.PushMatrix()
 
-		// Draw character and equipments
 		const scaleToReduceBy = 3.
 		const cameraTargetPlayerCenterYOffset = .5
 
@@ -224,17 +223,18 @@ func (p Player) Draw() {
 		posY := (p.Position.Y - cameraTargetPlayerCenterYOffset)
 		posZ := p.Position.Z
 
-		if true {
-			rl.Scalef(1.*1./scaleToReduceBy, 1.*1./scaleToReduceBy, 1.*1./scaleToReduceBy)
-			posX *= scaleToReduceBy
-			posY *= scaleToReduceBy
-			posZ *= scaleToReduceBy
-		}
+		// NOTE: Transformation is applied in inverse order (scale -> rotate -> translate)
 		if false {
 			rl.Translatef(2.0, 0.0, 0.0)
 		}
 		if false {
 			rl.Rotatef(45, 0, 1, 0)
+		}
+		if true {
+			rl.Scalef(1.*1./scaleToReduceBy, 1.*1./scaleToReduceBy, 1.*1./scaleToReduceBy)
+			posX *= scaleToReduceBy
+			posY *= scaleToReduceBy
+			posZ *= scaleToReduceBy
 		}
 
 		// Draw character
