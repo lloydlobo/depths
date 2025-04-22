@@ -25,6 +25,7 @@ func AbsF[T NumberType](x T) float32       { return float32(math.Abs(float64(x))
 func SqrtF[T NumberType](x T) float32      { return float32(math.Sqrt(float64(x))) }
 func CosF[T NumberType](x T) float32       { return float32(math.Cos(float64(x))) }
 func SinF[T NumberType](x T) float32       { return float32(math.Sin(float64(x))) }
+func Atan2F[T NumberType](x, y T) float32  { return float32(math.Atan2(float64(x), float64(y))) }
 func SignF[T NumberType](x T) float32      { return cmp.Or(float32(math.Abs(float64(x))/float64(x)), 0) }
 func FloorF[T NumberType](x T) float32     { return float32(math.Floor(float64(x))) }
 func CeilF[T NumberType](x T) float32      { return float32(math.Ceil(float64(x))) }

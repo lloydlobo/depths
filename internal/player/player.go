@@ -25,6 +25,7 @@ const (
 type Player struct {
 	Position              rl.Vector3
 	Size                  rl.Vector3
+	Rotation              int32
 	BoundingBox           rl.BoundingBox
 	Collisions            rl.Quaternion
 	IsPlayerWallCollision bool
@@ -136,6 +137,13 @@ func InitPlayer(player *Player, camera rl.Camera3D) {
 
 func (p *Player) Update(camera rl.Camera3D, flr floor.Floor) {
 	// Rotate character
+	if int32(p.Rotation) != CharacterAngle {
+		if p.Rotation < 0 {
+			CharacterAngle = (int32(p.Rotation) + 1*0) % 360
+		} else {
+			CharacterAngle = (360 + int32(p.Rotation) - 1*0) % 360
+		}
+	}
 	if rl.IsKeyDown(rl.KeyH) {
 		CharacterAngle = (CharacterAngle + 1) % 360
 	} else if rl.IsKeyDown(rl.KeyL) {

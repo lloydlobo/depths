@@ -10,6 +10,7 @@ import (
 	"example/depths/internal/common"
 	"example/depths/internal/floor"
 	"example/depths/internal/player"
+	"example/depths/internal/util/mathutil"
 	"example/depths/internal/wall"
 )
 
@@ -191,6 +192,8 @@ func Update() {
 	framesCounter++
 }
 
+var cachedCameraForward rl.Vector3
+
 func Draw() {
 	screenW := int32(rl.GetScreenWidth())
 	screenH := int32(rl.GetScreenHeight())
@@ -214,51 +217,48 @@ func Draw() {
 		}
 
 		gamePlayer.Draw()
+
+		// Draw player to camera direction
 		{
 			rl.DrawLine3D(gamePlayer.Position, common.Vector3Zero, rl.Red)
 			rl.DrawLine3D(gamePlayer.Position, common.Vector3One, rl.Green)
 
-			cameraForwardProjectionVector3 := rl.Vector3Multiply(rl.GetCameraForward(&camera), rl.NewVector3(9., .125/2., 9.))
+			cameraForward := rl.GetCameraForward(&camera)
+			cameraForwardProjectionVector3 := rl.Vector3Multiply(cameraForward, rl.NewVector3(9., .125/2., 9.))
 
 			startPos := gamePlayer.Position
 			endPos := rl.Vector3Add(gamePlayer.Position, cameraForwardProjectionVector3)
+			if false {
+				endPos.Y = startPos.Y // Maintain consistent y level as we cast parallel to XZ plane and perpendicular to Y axis
+			}
 
-			// Draw Ray
-			rayCol := rl.Fade(rl.Yellow, .6)
+			// Draw Rays
+			rayCol := rl.Fade(rl.LightGray, .3)
 			rl.DrawLine3D(startPos, endPos, rayCol)
-			rayCol = rl.Fade(rl.Yellow, .3)
-			const n = float32(8.)
-			const rayGapFactor = 16 * n
-			for i := -n; i < n; i++ {
+
+			rayCol = rl.Fade(rayCol, .1)
+			const maxRays = float32(8.)
+			const rayGapFactor = 16 * maxRays
+			for i := -maxRays; i < maxRays; i++ {
 				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(i/rayGapFactor, .0, .0)), rayCol)
 				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.0, .0, i/rayGapFactor)), rayCol)
 			}
-			if false {
-				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.1, .0, .0)), rayCol)
-				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.2, .0, .0)), rayCol)
-				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.3, .0, .0)), rayCol)
-				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.4, .0, .0)), rayCol)
-				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.5, .0, .0)), rayCol)
-				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(-.1, .0, .0)), rayCol)
-				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(-.2, .0, .0)), rayCol)
-				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(-.3, .0, .0)), rayCol)
-				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(-.4, .0, .0)), rayCol)
-				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(-.5, .0, .0)), rayCol)
-				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.0, .0, .1)), rayCol)
-				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.0, .0, .2)), rayCol)
-				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.0, .0, .3)), rayCol)
-				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.0, .0, .4)), rayCol)
-				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.0, .0, .5)), rayCol)
-				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.0, .0, -.1)), rayCol)
-				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.0, .0, -.2)), rayCol)
-				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.0, .0, -.3)), rayCol)
-				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.0, .0, -.4)), rayCol)
-				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.0, .0, -.5)), rayCol)
-			}
 
 			// Draw forward movement lookahead area
-			rl.DrawCapsule(startPos, endPos, 2, 7, 7, rl.Fade(rl.Gold, .125/2))
+			rl.DrawCapsule(startPos, endPos, 2, 7, 7, rl.Fade(rl.Gray, .125/2))
+			cachedCameraForward = cameraForward // Cache in update method
 
+			{
+				// Thanks to https://discussions.unity.com/t/angle-between-camera-and-object/450430/9
+				// function Angle2D(x1:float, y1:float, x2:float, y2:float) {
+				// 	return Mathf.Atan2(y2-y1, x2-x1)*Mathf.Rad2Deg;
+				// }
+				Angle2D := func(x1, y1, x2, y2 float32) float32 {
+					return mathutil.Atan2F(y2-y1, x2-x1) * rl.Rad2deg
+				}
+				degree := Angle2D(startPos.X, startPos.Z, endPos.X, endPos.Z)
+				gamePlayer.Rotation = -90 + int32(degree)
+			}
 		}
 
 		gameFloor.Draw()
@@ -338,7 +338,6 @@ func Draw() {
 		if false {
 			rl.DrawModel(checkedModel, rl.NewVector3(0., -.05, 0.), 1., rl.RayWhite)
 		}
-
 		if false {
 			// Draw banners at floor corners
 			floorBBMin := gameFloor.BoundingBox.Min
@@ -347,25 +346,6 @@ func Draw() {
 			rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMax.X-1, 0, floorBBMin.Z+1), common.YAxis, -45, common.Vector3One, rl.White) // rightback
 			rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMax.X, 0, floorBBMax.Z), common.YAxis, 45, common.Vector3One, rl.White)      // rightfront
 			rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMin.X, 0, floorBBMax.Z), common.YAxis, -45, common.Vector3One, rl.White)     // leftfront
-		}
-		if false {
-			// rl.DrawModel(common.Model.OBJ.Dirt, rl.NewVector3(0, common.Phi, 0), common.Phi, rl.White)
-			rl.DrawModel(common.Model.OBJ.WoodStructure, rl.NewVector3(0, 0, 0), 1., rl.White)
-
-			rl.DrawModel(common.Model.OBJ.CharacterHuman, common.Vector3One, 1., rl.Red)
-
-			rl.DrawModel(common.Model.OBJ.Dirt, rl.NewVector3(4, 0, 4), 1., rl.White)
-			rl.DrawModel(common.Model.OBJ.Rocks, rl.NewVector3(5, 0, 4), 1., rl.White)
-			rl.DrawModel(common.Model.OBJ.Dirt, rl.NewVector3(6, 0, 4), 1., rl.White)
-			rl.DrawModel(common.Model.OBJ.Stones, rl.NewVector3(7, 0, 4), 1., rl.White)
-
-			rl.DrawModel(common.Model.OBJ.Coin, rl.NewVector3(1, 0, 1), 1., rl.White)
-			rl.DrawModel(common.Model.OBJ.WoodSupport, rl.NewVector3(2, 0, 2), 1., rl.White)
-			rl.DrawModel(common.Model.OBJ.WoodStructure, rl.NewVector3(3, 0, 3), 1., rl.White)
-			rl.DrawModel(common.Model.OBJ.Dirt, rl.NewVector3(4, 0, 4), 1., rl.White)
-			rl.DrawModel(common.Model.OBJ.Rocks, rl.NewVector3(5, 0, 5), 1., rl.White)
-			rl.DrawModel(common.Model.OBJ.Stones, rl.NewVector3(6, 0, 6), 1., rl.White)
-			rl.DrawModel(common.Model.OBJ.Trap, rl.NewVector3(7, 0, 7), 1., rl.White)
 		}
 	}
 	rl.EndMode3D()
