@@ -11,8 +11,7 @@ import (
 type GameStorageLevelJSON struct {
 	Version string `json:"version"`
 	LevelID int32  `json:"levelID"`
-
-	Data map[string]any `json:"data"`
+	Data    []byte `json:"data"`
 
 	// ....
 }
@@ -86,7 +85,7 @@ func LoadStorageLevel(ID int32) (*GameStorageLevelJSON, error) {
 	var l GameStorageLevelJSON
 	dec := json.NewDecoder(f)
 	if err := dec.Decode(&l); err != nil {
-		return nil, fmt.Errorf("encode level: %w", err)
+		return nil, fmt.Errorf("decode level: %w", err)
 	}
 
 	return &l, nil

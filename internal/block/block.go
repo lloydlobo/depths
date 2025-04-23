@@ -92,10 +92,15 @@ func InitAllBlocks(dst *[]Block, positions []rl.Vector3) {
 }
 
 func (b Block) Draw() {
-	rl.DrawModelEx(blockModels[b.State], b.Pos,
-		rl.NewVector3(0, 1, 0), b.Rotn, b.Size, rl.White)
+	if /* b.State > 0 && */ b.IsActive {
+		rl.DrawModelEx(blockModels[b.State], b.Pos,
+			rl.NewVector3(0, 1, 0), b.Rotn, b.Size, rl.White)
+	}
 }
 
+// - Avoid spawning where player is standing
+// - Randomly skip a position
+// - A noise map or simplex/perlin noise "can" serve better
 func GenerateRandomBlockPositions(gameFloor floor.Floor) []rl.Vector3 {
 	var positions []rl.Vector3 // 61% of maxPositions
 

@@ -1,10 +1,15 @@
 package gameplay
 
 import (
+	"bytes"
 	"cmp"
+	"encoding/json"
 	"fmt"
 	"log"
+	"log/slog"
+	"os"
 	"path/filepath"
+	"strconv"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
@@ -16,9 +21,6 @@ import (
 	"example/depths/internal/util/mathutil"
 	"example/depths/internal/wall"
 )
-
-type Gameplay struct {
-}
 
 var (
 	// Core data
@@ -35,7 +37,7 @@ var (
 
 	// Additional data
 
-	blockArray []block.Block
+	blocks []block.Block
 )
 
 var (
@@ -44,6 +46,7 @@ var (
 )
 
 func Init() {
+
 	framesCounter = 0
 	finishScreen = 0
 
@@ -64,16 +67,42 @@ func Init() {
 	// SCENES 0..3
 	//			SCENES 0..3
 	//						SCENES 0..3
+
+	// Core data
+
 	player.InitPlayer(&gamePlayer, camera)
 	gamePlayer.IsPlayerWallCollision = false
-
 	floor.InitFloor(&gameFloor)
 	wall.InitWall()
-	// - Avoid spawning where player is standing
-	// - Randomly skip a position
-	// - A noise map or simplex/perlin noise "can" serve better
+	{ // Does not load models/textures etc
+		data, err := loadCoreGameData()
+		if err != nil {
+			slog.Error(err.Error()) // WARN: improve error handling
+		} else {
+			finishScreen = 0  //data.FinishScreen
+			framesCounter = 0 // data.FramesCounter
+			camera = data.Camera
+			gameFloor = data.GameFloor
+			gamePlayer = data.GamePlayer
+			hasPlayerLeftDrillBase = data.HasPlayerLeftDrillBase
+			hasPlayerLeftDrillBase = false
+		}
+	}
+
+	// Additional data
+
 	blockPositions := block.GenerateRandomBlockPositions(gameFloor)
-	block.InitAllBlocks(&blockArray, blockPositions)
+	block.InitAllBlocks(&blocks, blockPositions)
+	{ // Does not load models/textures etc
+		data, err := loadAdditionalGameData()
+		if err != nil {
+			slog.Error(err.Error()) // WARN: improve error handling
+		} else {
+			blocks = make([]block.Block, len(data.Blocks))
+			copy(blocks, data.Blocks)
+		}
+	}
+
 	//						SCENES 0..3
 	//			SCENES 0..3
 	// SCENES 0..3
@@ -85,6 +114,7 @@ func Init() {
 	checkedImg := rl.GenImageChecked(100, 100, 1, 1, rl.ColorBrightness(rl.Black, .25), rl.ColorBrightness(rl.Black, .2))
 	checkedTexture = rl.LoadTextureFromImage(checkedImg)
 	rl.UnloadImage(checkedImg)
+
 	checkedModel = rl.LoadModelFromMesh(rl.GenMeshPlane(100, 100, 10, 10))
 	checkedModel.Materials.Maps.Texture = checkedTexture
 
@@ -141,13 +171,13 @@ func Update() {
 		player.RevertPlayerAndCameraPositions(oldPlayer, &gamePlayer, oldCam, &camera)
 	}
 
-	for i := range blockArray {
+	for i := range blocks {
 		// Skip final broken/mined block residue
-		if blockArray[i].State == block.MaxBlockState-1 {
+		if blocks[i].State == block.MaxBlockState-1 {
 			continue
 		}
 		if rl.CheckCollisionBoxes(
-			common.GetBoundingBoxFromPositionSizeV(blockArray[i].Pos, blockArray[i].Size),
+			common.GetBoundingBoxFromPositionSizeV(blocks[i].Pos, blocks[i].Size),
 			gamePlayer.BoundingBox,
 		) {
 			// FIND OUT WHERE PLAYER TOUCHED THE BOX
@@ -184,7 +214,7 @@ func Update() {
 			if (rl.IsKeyDown(rl.KeySpace) && framesCounter%16 == 0) ||
 				(rl.IsMouseButtonDown(rl.MouseLeftButton) && framesCounter%16 == 0) {
 				// Play mining sound with variations (s1:kick + s2:snare + s3:hollow-thock)
-				state := blockArray[i].State
+				state := blocks[i].State
 				s1 := common.FXS.ImpactsSoftMedium[rl.GetRandomValue(int32(state), int32(len(common.FXS.ImpactsSoftMedium)-1))]
 				s2 := common.FXS.ImpactsGenericLight[rl.GetRandomValue(int32(state), int32(len(common.FXS.ImpactsGenericLight)-1))]
 				s3 := common.FXS.ImpactsSoftHeavy[rl.GetRandomValue(int32(state), int32(len(common.FXS.ImpactsSoftHeavy)-1))]
@@ -196,7 +226,7 @@ func Update() {
 				rl.PlaySound(s3)
 
 				// Increment state
-				blockArray[i].NextState()
+				blocks[i].NextState()
 			}
 		}
 	}
@@ -256,93 +286,98 @@ func Draw() {
 
 	rl.ClearBackground(rl.Black)
 
-	{
-		gameFloor.Draw()
+	gameFloor.Draw()
 
-		if true { // ‥ Draw pseudo-infinite(ish) floor backdrop
-			rl.DrawModel(checkedModel, rl.NewVector3(0., -.05, 0.), 1., rl.RayWhite)
+	if true { // ‥ Draw pseudo-infinite(ish) floor backdrop
+		rl.DrawModel(checkedModel, rl.NewVector3(0., -.05, 0.), 1., rl.RayWhite)
+	}
+
+	wall.DrawBatch(gameFloor.Position, gameFloor.Size, common.Vector3One)
+
+	for i := range blocks {
+		blocks[i].Draw()
+	}
+
+	gamePlayer.Draw()
+	{ // ‥ Draw player to camera forward projected direction
+		const maxRays = float32(8.)
+		const rayGapFactor = 16 * maxRays
+		rayCol := rl.Fade(rl.LightGray, .3)
+		startPos := gamePlayer.Position // NOTE: startPos.Y and endPos.Y may fluctuate
+		endPos := rl.Vector3Add(
+			gamePlayer.Position,
+			rl.Vector3Multiply(
+				rl.GetCameraForward(&camera),
+				rl.NewVector3(9., .125/2., 9.),
+			),
+		)
+		rl.DrawLine3D(startPos, endPos, rayCol) // Draw middle ray
+		rayCol = rl.Fade(rayCol, .1)
+		for i := -maxRays; i < maxRays; i++ { // Draw spread-out rays
+			rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(i/rayGapFactor, .0, .0)), rayCol)
+			rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.0, .0, i/rayGapFactor)), rayCol)
+		}
+		rl.DrawCapsule(startPos, endPos, 2, 7, 7, rl.Fade(rl.Gray, .125/2)) // Draw forward movement lookahead area
+	}
+
+	{ // ‥ Draw drill
+		const maxIndex = 2
+		wallScale := rl.NewVector3(1., 1., 1.)
+		for i := float32(-maxIndex + 1); i < maxIndex; i++ {
+			var model rl.Model
+			var y float32
+			model = common.Model.OBJ.Column
+			y = 0.
+			rl.DrawModelEx(model, rl.NewVector3(i, y, maxIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
+			rl.DrawModelEx(model, rl.NewVector3(i, y, -maxIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
+			rl.DrawModelEx(model, rl.NewVector3(maxIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
+			rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
+			model = common.Model.OBJ.Wall
+			y = 1. + .125*.5
+			rl.DrawModelEx(model, rl.NewVector3(i, y, maxIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
+			rl.DrawModelEx(model, rl.NewVector3(i, y, -maxIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
+			rl.DrawModelEx(model, rl.NewVector3(maxIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
+			rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
+			model = common.Model.OBJ.Column
+			y = 2. + .125*.5
+			rl.DrawModelEx(model, rl.NewVector3(i, y, maxIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
+			rl.DrawModelEx(model, rl.NewVector3(i, y, -maxIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
+			rl.DrawModelEx(model, rl.NewVector3(maxIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
+			rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
 		}
 
-		wall.DrawBatch(gameFloor.Position, gameFloor.Size, common.Vector3One)
+		{ // ‥ DEBUG: Draw drill door gate entry logic before changing scene to drill base
+			origin := common.Vector3Zero
+			bb1 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(3, 2, 3)) // player is inside
+			bb2 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(5, 2, 5)) // player is entering
+			bb3 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(7, 2, 7)) // bot barrier
 
-		for i := range blockArray {
-			blockArray[i].Draw()
-		}
-
-		gamePlayer.Draw()
-		{ // ‥ Draw player to camera forward projected direction
-			const maxRays = float32(8.)
-			const rayGapFactor = 16 * maxRays
-			rayCol := rl.Fade(rl.LightGray, .3)
-			startPos := gamePlayer.Position // NOTE: startPos.Y and endPos.Y may fluctuate
-			endPos := rl.Vector3Add(gamePlayer.Position, rl.Vector3Multiply(rl.GetCameraForward(&camera), rl.NewVector3(9., .125/2., 9.)))
-			rl.DrawLine3D(startPos, endPos, rayCol) // Draw middle ray
-			rayCol = rl.Fade(rayCol, .1)
-			for i := -maxRays; i < maxRays; i++ { // Draw spread-out rays
-				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(i/rayGapFactor, .0, .0)), rayCol)
-				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.0, .0, i/rayGapFactor)), rayCol)
-			}
-			rl.DrawCapsule(startPos, endPos, 2, 7, 7, rl.Fade(rl.Gray, .125/2)) // Draw forward movement lookahead area
-		}
-
-		{ // ‥ Draw drill
-			const maxIndex = 2
-			wallScale := rl.NewVector3(1., 1., 1.)
-			for i := float32(-maxIndex + 1); i < maxIndex; i++ {
-				var model rl.Model
-				var y float32
-				model = common.Model.OBJ.Column
-				y = 0.
-				rl.DrawModelEx(model, rl.NewVector3(i, y, maxIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
-				rl.DrawModelEx(model, rl.NewVector3(i, y, -maxIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
-				rl.DrawModelEx(model, rl.NewVector3(maxIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
-				rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
-				model = common.Model.OBJ.Wall
-				y = 1. + .125*.5
-				rl.DrawModelEx(model, rl.NewVector3(i, y, maxIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
-				rl.DrawModelEx(model, rl.NewVector3(i, y, -maxIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
-				rl.DrawModelEx(model, rl.NewVector3(maxIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
-				rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
-				model = common.Model.OBJ.Column
-				y = 2. + .125*.5
-				rl.DrawModelEx(model, rl.NewVector3(i, y, maxIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
-				rl.DrawModelEx(model, rl.NewVector3(i, y, -maxIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
-				rl.DrawModelEx(model, rl.NewVector3(maxIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
-				rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
-			}
-
-			{ // ‥ DEBUG: Draw drill door gate entry logic before changing scene to drill base
-				origin := common.Vector3Zero
-				bb1 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(3, 2, 3)) // player is inside
-				bb2 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(5, 2, 5)) // player is entering
-				bb3 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(7, 2, 7)) // bot barrier
-
-				rl.DrawBoundingBox(bb1, rl.Red)
-				rl.DrawBoundingBox(bb2, rl.Green)
-				rl.DrawBoundingBox(bb3, rl.Blue)
-			}
-		}
-
-		if true { // ‥ Draw banners at floor corners
-			floorBBMin := gameFloor.BoundingBox.Min
-			floorBBMax := gameFloor.BoundingBox.Max
-			rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMin.X+1, 0, floorBBMin.Z+1), common.YAxis, 45, common.Vector3One, rl.White)  // leftback
-			rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMax.X-1, 0, floorBBMin.Z+1), common.YAxis, -45, common.Vector3One, rl.White) // rightback
-			rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMax.X, 0, floorBBMax.Z), common.YAxis, 45, common.Vector3One, rl.White)      // rightfront
-			rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMin.X, 0, floorBBMax.Z), common.YAxis, -45, common.Vector3One, rl.White)     // leftfront
-		}
-
-		if false { //  ‥ DEBUG: Draw camera movement gimble-like interpretation
-			var cameraViewMatrix rl.Matrix = rl.GetCameraMatrix(camera)
-			var quat rl.Quaternion = rl.QuaternionFromMatrix(cameraViewMatrix)
-			quatEulerPos := rl.QuaternionToEuler(quat)
-			quatEulerLen := rl.Vector3Length(quatEulerPos)
-			originOffset := rl.NewVector3(0., 5., 0.)
-			position := rl.Vector3Add(quatEulerPos, originOffset)
-			rl.DrawCubeWiresV(position, rl.NewVector3(.125, quatEulerLen, .125), rl.Violet)
-			rl.DrawCubeWiresV(position, quatEulerPos, rl.Purple)
+			rl.DrawBoundingBox(bb1, rl.Red)
+			rl.DrawBoundingBox(bb2, rl.Green)
+			rl.DrawBoundingBox(bb3, rl.Blue)
 		}
 	}
+
+	if true { // ‥ Draw banners at floor corners
+		floorBBMin := gameFloor.BoundingBox.Min
+		floorBBMax := gameFloor.BoundingBox.Max
+		rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMin.X+1, 0, floorBBMin.Z+1), common.YAxis, 45, common.Vector3One, rl.White)  // leftback
+		rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMax.X-1, 0, floorBBMin.Z+1), common.YAxis, -45, common.Vector3One, rl.White) // rightback
+		rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMax.X, 0, floorBBMax.Z), common.YAxis, 45, common.Vector3One, rl.White)      // rightfront
+		rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMin.X, 0, floorBBMax.Z), common.YAxis, -45, common.Vector3One, rl.White)     // leftfront
+	}
+
+	if false { //  ‥ DEBUG: Draw camera movement gimble-like interpretation
+		var cameraViewMatrix rl.Matrix = rl.GetCameraMatrix(camera)
+		var quat rl.Quaternion = rl.QuaternionFromMatrix(cameraViewMatrix)
+		quatEulerPos := rl.QuaternionToEuler(quat)
+		quatEulerLen := rl.Vector3Length(quatEulerPos)
+		originOffset := rl.NewVector3(0., 5., 0.)
+		position := rl.Vector3Add(quatEulerPos, originOffset)
+		rl.DrawCubeWiresV(position, rl.NewVector3(.125, quatEulerLen, .125), rl.Violet)
+		rl.DrawCubeWiresV(position, quatEulerPos, rl.Purple)
+	}
+
 	rl.EndMode3D()
 
 	// 2D World
@@ -364,15 +399,19 @@ func Unload() {
 	if rl.IsCursorHidden() {
 		rl.EnableCursor() // without 3d ThirdPersonPerspective
 	}
+
+	// Commented out as it hinders switching to drill room or menu/ending (on pause/restart)
 	// rl.UnloadMusicStream(music)
 }
 
 // Gameplay screen should finish?
 func Finish() int {
-	// PERF: Find way to reduce size.
-	//       Size of "additional level state" is 117x times size of "core level state"
-	saveCoreLevelState()       // 705 bytes   (player,camera,...)
-	saveAdditionalLevelState() // 82871 bytes (blocks,...)
+	//
+	// PERF: Find way to reduce size. => Size of "additional level state" is
+	//       117x times size of "core level state"
+	//
+	saveCoreLevelState()       // (player,camera,...) 705 bytes
+	saveAdditionalLevelState() // (blocks,...)        82871 bytes
 
 	return finishScreen
 }
@@ -424,31 +463,134 @@ var GameCoreLevelDataVersions = map[string]map[string]any{
 	"0.0.2": {},
 }
 
+type GameCoreData struct {
+	Camera                 rl.Camera3D   `json:"camera"`
+	FinishScreen           int           `json:"finishScreen"`
+	FramesCounter          int32         `json:"framesCounter"`
+	GameFloor              floor.Floor   `json:"gameFloor"`
+	GamePlayer             player.Player `json:"gamePlayer"`
+	HasPlayerLeftDrillBase bool          `json:"hasPlayerLeftDrillBase"`
+}
+
+type GameAdditionalData struct {
+	Blocks []block.Block `json:"blocks"`
+}
+
+func saveCoreLevelState() {
+	input := GameCoreData{
+		Camera:                 camera,
+		FinishScreen:           finishScreen,
+		FramesCounter:          framesCounter,
+		GameFloor:              gameFloor,
+		GamePlayer:             gamePlayer,
+		HasPlayerLeftDrillBase: hasPlayerLeftDrillBase,
+	}
+	var b []byte
+	bb := bytes.NewBuffer(b)
+	{
+		enc := json.NewEncoder(bb)
+		if err := enc.Encode(input); err != nil {
+			panic(fmt.Errorf("encode level: %w", err))
+		}
+	}
+	dataJSON := storage.GameStorageLevelJSON{
+		Version: "0.0.0",
+		LevelID: levelID,
+		Data:    bb.Bytes(),
+	}
+	storage.SaveStorageLevel(dataJSON)
+
+}
+
 func saveAdditionalLevelState() {
+	input := GameAdditionalData{
+		Blocks: blocks,
+	}
+	var b []byte
+	bb := bytes.NewBuffer(b)
+	{
+		enc := json.NewEncoder(bb)
+		if err := enc.Encode(input); err != nil {
+			panic(fmt.Errorf("encode level: %w", err))
+		}
+	}
 	data := storage.GameStorageLevelJSON{
 		Version: "0.0.0-blocks",
 		LevelID: levelID,
-		Data: map[string]any{
-			"blockArray": blockArray,
-		},
+		Data:    bb.Bytes(),
 	}
 	storage.SaveStorageLevelEx(data, "blocks")
 }
 
-func saveCoreLevelState() {
-	data := storage.GameStorageLevelJSON{
-		Version: "0.0.0",
-		LevelID: levelID,
-		Data: map[string]any{
-			"camera":                 camera,
-			"finishScreen":           finishScreen,
-			"framesCounter":          framesCounter,
-			"gameFloor":              gameFloor,
-			"gamePlayer":             gamePlayer,
-			"hasPlayerLeftDrillBase": hasPlayerLeftDrillBase,
-		},
+func loadCoreGameData() (*GameCoreData, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("get working directory: %w", err)
 	}
-	storage.SaveStorageLevel(data)
+
+	saveDir := filepath.Join(cwd, "storage")
+	name := filepath.Join(saveDir, "level_"+strconv.Itoa(int(levelID))+".json")
+
+	f, err := os.OpenFile(name, os.O_RDONLY, 0644)
+	if err != nil {
+		return nil, fmt.Errorf("create %q: %w", name, err)
+	}
+
+	dest := &storage.GameStorageLevelJSON{}
+	dec := json.NewDecoder(f)
+	if err := dec.Decode(&dest); err != nil {
+		return nil, fmt.Errorf("decode level: %w", err)
+	}
+
+	// return dest,nil
+	// Upto here.. same as storage.LoadStorageLevel
+
+	switch version := dest.Version; version {
+	case "0.0.0":
+		var v *GameCoreData
+		if err := json.Unmarshal(dest.Data, &v); err != nil {
+			return nil, err
+		}
+		return v, nil
+	default:
+		return nil, fmt.Errorf("invalid game core data version %q", version)
+	}
+}
+
+func loadAdditionalGameData() (*GameAdditionalData, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("get working directory: %w", err)
+	}
+
+	saveDir := filepath.Join(cwd, "storage")
+	name := filepath.Join(saveDir, "level_"+strconv.Itoa(int(levelID))+"_blocks"+".json")
+
+	f, err := os.OpenFile(name, os.O_RDONLY, 0644)
+	if err != nil {
+		return nil, fmt.Errorf("create %q: %w", name, err)
+	}
+
+	dest := &storage.GameStorageLevelJSON{}
+	dec := json.NewDecoder(f)
+	if err := dec.Decode(&dest); err != nil {
+		return nil, fmt.Errorf("decode level: %w", err)
+	}
+
+	// return dest,nil
+	// Upto here.. same as storage.LoadStorageLevel
+
+	switch version := dest.Version; version {
+	case "0.0.0-blocks":
+		var v *GameAdditionalData
+		if err := json.Unmarshal(dest.Data, &v); err != nil {
+			return nil, err
+		}
+		fmt.Printf("v: %v\n", v)
+		return v, nil
+	default:
+		return nil, fmt.Errorf("invalid game additional data version %q", version)
+	}
 }
 
 //														TEMPORARY
