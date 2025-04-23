@@ -3,6 +3,8 @@ package mathutil
 import (
 	"cmp"
 	"math"
+
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 // Copied from Go's cmp.Ordered
@@ -38,3 +40,18 @@ func MinF[T NumberType](x T, y T) float32 { return float32(min(float64(x), float
 func PowF[T NumberType](x T, y T) float32 { return float32(math.Pow(float64(x), float64(y))) }
 func MaxI[T NumberType](x T, y T) int32   { return int32(max(float64(x), float64(y))) }
 func MinI[T NumberType](x T, y T) int32   { return int32(min(float64(x), float64(y))) }
+
+// Thanks to [hippocoder](https://discussions.unity.com/t/angle-between-camera-and-object/450430/9)
+// Best understand the tried and tested old school methods with euler angles. This is the old way everyone has done since time began.
+// Behold the code in 2D (which you probably need if you’re not bothered about all the angles):
+//
+//	function Angle2D(x1:float, y1:float, x2:float, y2:float) {
+//		return Mathf.Atan2(y2-y1, x2-x1)*Mathf.Rad2Deg;
+//	}
+//
+// What we do is use Atan2 and plug in two positions, a source and a destination, which is converted to degrees.
+// If you want to use a different angle, just plug in x and z for example or y and z. Have fun.
+func Angle2D(x1, y1, x2, y2 float32) float32 {
+	// const rl.Rad2deg untyped float = 57.295776 // 57.2958
+	return Atan2F(y2-y1, x2-x1) * rl.Rad2deg
+}

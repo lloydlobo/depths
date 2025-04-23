@@ -1,8 +1,12 @@
 package block
 
 import (
+	"cmp"
+	"fmt"
+
 	rl "github.com/gen2brain/raylib-go/raylib"
 
+	"example/depths/internal/common"
 	"example/depths/internal/floor"
 )
 
@@ -34,7 +38,7 @@ type Block struct {
 }
 
 var (
-	BlockModels [MaxBlockState]rl.Model
+	blockModels [MaxBlockState]rl.Model
 )
 
 func NewBlock(pos, size rl.Vector3) Block {
@@ -53,6 +57,43 @@ func (o *Block) NextState() {
 		o.State = MaxBlockState - 1
 		o.IsActive = false
 	}
+}
+
+func InitAllBlocks(dst *[]Block, positions []rl.Vector3) {
+	for i := range positions {
+		size := rl.Vector3Multiply(
+			rl.NewVector3(1, 1, 1),
+			rl.NewVector3(
+				float32(rl.GetRandomValue(88, 101))/100.,
+				float32(rl.GetRandomValue(100, 300))/100.,
+				float32(rl.GetRandomValue(88, 101))/100.))
+
+		obj := NewBlock(positions[i], size)
+		obj.Rotn = cmp.Or(float32(rl.GetRandomValue(-50, 50)/10.), 0.)
+
+		*dst = append(*dst, obj)
+	}
+
+	for i := range MaxBlockState {
+		switch i {
+		case DirtBlockState:
+			blockModels[i] = common.Model.OBJ.Dirt
+		case RockBlockState:
+			blockModels[i] = common.Model.OBJ.Rocks
+		case StoneBlockState:
+			blockModels[i] = common.Model.OBJ.Stones
+		case FloorDetailBlockState:
+			blockModels[i] = common.Model.OBJ.FloorDetail
+		default:
+			panic(fmt.Sprintf("unexpected gameplay.BlockState: %#v", i))
+		}
+		rl.SetMaterialTexture(blockModels[i].Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
+	}
+}
+
+func (b Block) Draw() {
+	rl.DrawModelEx(blockModels[b.State], b.Pos,
+		rl.NewVector3(0, 1, 0), b.Rotn, b.Size, rl.White)
 }
 
 func GenerateRandomBlockPositions(gameFloor floor.Floor) []rl.Vector3 {

@@ -36,7 +36,6 @@ var (
 	// Additional data
 
 	blockArray []block.Block
-	blockCount int32
 )
 
 var (
@@ -73,7 +72,8 @@ func Init() {
 	// - Avoid spawning where player is standing
 	// - Randomly skip a position
 	// - A noise map or simplex/perlin noise "can" serve better
-	InitAllBlocks(block.GenerateRandomBlockPositions(gameFloor))
+	blockPositions := block.GenerateRandomBlockPositions(gameFloor)
+	block.InitAllBlocks(&blockArray, blockPositions)
 	//						SCENES 0..3
 	//			SCENES 0..3
 	// SCENES 0..3
@@ -129,12 +129,19 @@ func Update() {
 	rl.UpdateCamera(&camera, rl.CameraThirdPerson)
 
 	gamePlayer.Update(camera, gameFloor)
+	// Update player rotation.. based on camera forward projection
+	{
+		startPos := gamePlayer.Position
+		endPos := rl.Vector3Add(gamePlayer.Position, rl.GetCameraForward(&camera))
+		degree := mathutil.Angle2D(startPos.X, startPos.Z, endPos.X, endPos.Z)
+		gamePlayer.Rotation = -90 + int32(degree)
+	}
 
 	if gamePlayer.IsPlayerWallCollision {
 		player.RevertPlayerAndCameraPositions(oldPlayer, &gamePlayer, oldCam, &camera)
 	}
 
-	for i := range blockCount {
+	for i := range blockArray {
 		// Skip final broken/mined block residue
 		if blockArray[i].State == block.MaxBlockState-1 {
 			continue
@@ -194,6 +201,36 @@ func Update() {
 		}
 	}
 
+	// Update player─block collision+breaking/mining
+	{
+		origin := common.Vector3Zero
+		bb1 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(3, 2, 3)) // player is inside
+		bb2 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(5, 2, 5)) // player is entering
+		bb3 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(7, 2, 7)) // bot barrier
+
+		isPlayerInsideBase := rl.CheckCollisionBoxes(gamePlayer.BoundingBox, bb1)
+		isPlayerEnteringBase := rl.CheckCollisionBoxes(gamePlayer.BoundingBox, bb2)
+		isPlayerInsideBotBarrier := rl.CheckCollisionBoxes(gamePlayer.BoundingBox, bb3)
+
+		if isPlayerInsideBotBarrier && !isPlayerEnteringBase && !isPlayerInsideBase {
+			player.PlayerCol = rl.Blue
+		} else if isPlayerEnteringBase && !isPlayerInsideBase {
+			if hasPlayerLeftDrillBase { // HACK: Placeholder change scene check logic
+				hasPlayerLeftDrillBase = false
+				finishScreen = 2 // HACK: Placeholder to shift scene
+				rl.PlaySound(common.FX.Coin)
+			}
+			player.PlayerCol = rl.Green
+		} else if isPlayerInsideBase {
+			player.PlayerCol = rl.Red
+		} else {
+			if !hasPlayerLeftDrillBase {
+				hasPlayerLeftDrillBase = true
+			}
+			player.PlayerCol = rl.RayWhite
+		}
+	}
+
 	// Move this in package player
 	if rl.IsKeyDown(rl.KeyW) || rl.IsKeyDown(rl.KeyA) || rl.IsKeyDown(rl.KeyS) || rl.IsKeyDown(rl.KeyD) {
 		const fps = 60
@@ -209,8 +246,6 @@ func Update() {
 
 	framesCounter++
 }
-
-var cachedCameraForward rl.Vector3
 
 func Draw() {
 	screenW := int32(rl.GetScreenWidth())
@@ -235,28 +270,22 @@ func Draw() {
 		}
 
 		gamePlayer.Draw()
-
-		// Draw player to camera direction
 		{
-			rl.DrawLine3D(gamePlayer.Position, common.Vector3Zero, rl.Red)
-			rl.DrawLine3D(gamePlayer.Position, common.Vector3One, rl.Green)
-
-			cameraForward := rl.GetCameraForward(&camera)
-			cameraForwardProjectionVector3 := rl.Vector3Multiply(cameraForward, rl.NewVector3(9., .125/2., 9.))
-
+			// Draw player to camera forward projected direction
 			startPos := gamePlayer.Position
-			endPos := rl.Vector3Add(gamePlayer.Position, cameraForwardProjectionVector3)
-			if false {
-				endPos.Y = startPos.Y // Maintain consistent y level as we cast parallel to XZ plane and perpendicular to Y axis
+			endPos := rl.Vector3Add(gamePlayer.Position, rl.Vector3Multiply(rl.GetCameraForward(&camera), rl.NewVector3(9., .125/2., 9.)))
+			if false { // Maintain consistent y level as we cast parallel to XZ plane and perpendicular to Y axis
+				endPos.Y = startPos.Y
 			}
-
-			// Draw Rays
 			rayCol := rl.Fade(rl.LightGray, .3)
+
+			// Draw middle ray
 			rl.DrawLine3D(startPos, endPos, rayCol)
 
-			rayCol = rl.Fade(rayCol, .1)
+			// Draw spread-out rays
 			const maxRays = float32(8.)
 			const rayGapFactor = 16 * maxRays
+			rayCol = rl.Fade(rayCol, .1)
 			for i := -maxRays; i < maxRays; i++ {
 				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(i/rayGapFactor, .0, .0)), rayCol)
 				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.0, .0, i/rayGapFactor)), rayCol)
@@ -264,29 +293,6 @@ func Draw() {
 
 			// Draw forward movement lookahead area
 			rl.DrawCapsule(startPos, endPos, 2, 7, 7, rl.Fade(rl.Gray, .125/2))
-			cachedCameraForward = cameraForward // Cache in update method
-
-			{
-				// Thanks to [hippocoder](https://discussions.unity.com/t/angle-between-camera-and-object/450430/9)
-				// Best understand the tried and tested old school methods with
-				// euler angles. This is the old way everyone has done since
-				// time began. Behold the code in 2D (which you probably need
-				// if you’re not bothered about all the angles):
-				//
-				//	function Angle2D(x1:float, y1:float, x2:float, y2:float) {
-				// 		return Mathf.Atan2(y2-y1, x2-x1)*Mathf.Rad2Deg;
-				// 	}
-				//
-				// What we do is use Atan2 and plug in two positions, a source
-				// and a destination, which is converted to degrees. If you
-				// want to use a different angle, just plug in x and z for
-				// example or y and z. Have fun.
-				Angle2D := func(x1, y1, x2, y2 float32) float32 {
-					return mathutil.Atan2F(y2-y1, x2-x1) * rl.Rad2deg
-				}
-				degree := Angle2D(startPos.X, startPos.Z, endPos.X, endPos.Z)
-				gamePlayer.Rotation = -90 + int32(degree)
-			}
 		}
 
 		gameFloor.Draw()
@@ -300,36 +306,18 @@ func Draw() {
 
 		// Draw drill
 		const maxIndex = 2
-		{ // Draw door gate entry logic before changing scene to drill base
-			origin := common.Vector3Zero
-			bb1 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(3, 2, 3)) // player is inside
-			rl.DrawBoundingBox(bb1, rl.Red)
-			bb2 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(5, 2, 5)) // player is entering
-			rl.DrawBoundingBox(bb2, rl.Green)
-			bb3 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(7, 2, 7)) // bot barrier
-			rl.DrawBoundingBox(bb3, rl.Blue)
-			{
-				isPlayerInsideBase := rl.CheckCollisionBoxes(gamePlayer.BoundingBox, bb1)
-				isPlayerEnteringBase := rl.CheckCollisionBoxes(gamePlayer.BoundingBox, bb2)
-				isPlayerInsideBotBarrier := rl.CheckCollisionBoxes(gamePlayer.BoundingBox, bb3)
+		{
 
-				if isPlayerInsideBotBarrier && !isPlayerEnteringBase && !isPlayerInsideBase {
-					player.PlayerCol = rl.Blue
-				} else if isPlayerEnteringBase && !isPlayerInsideBase {
-					if hasPlayerLeftDrillBase { // HACK: Placeholder change scene check logic
-						hasPlayerLeftDrillBase = false
-						finishScreen = 2 // HACK: Placeholder to shift scene
-						rl.PlaySound(common.FX.Coin)
-					}
-					player.PlayerCol = rl.Green
-				} else if isPlayerInsideBase {
-					player.PlayerCol = rl.Red
-				} else {
-					if !hasPlayerLeftDrillBase {
-						hasPlayerLeftDrillBase = true
-					}
-					player.PlayerCol = rl.RayWhite
-				}
+			// Draw door gate entry logic before changing scene to drill base
+			{
+				origin := common.Vector3Zero
+				bb1 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(3, 2, 3)) // player is inside
+				bb2 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(5, 2, 5)) // player is entering
+				bb3 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(7, 2, 7)) // bot barrier
+
+				rl.DrawBoundingBox(bb1, rl.Red)
+				rl.DrawBoundingBox(bb2, rl.Green)
+				rl.DrawBoundingBox(bb3, rl.Blue)
 			}
 		}
 
@@ -357,10 +345,8 @@ func Draw() {
 			rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
 		}
 
-		for i := range blockCount {
-			obj := blockArray[i]
-			rl.DrawModelEx(block.BlockModels[obj.State], obj.Pos,
-				rl.NewVector3(0, 1, 0), obj.Rotn, obj.Size, rl.White)
+		for i := range blockArray {
+			blockArray[i].Draw()
 		}
 
 		if false {
@@ -433,7 +419,6 @@ var GameAdditionalLevelDataVersions = map[string]map[string]any{
 		"levelID": levelID,
 		"data": map[string]any{
 			"blockArray": []block.Block{},
-			"blockCount": int32(0),
 		},
 	},
 	"0.0.1": {},
@@ -462,7 +447,9 @@ func saveAdditionalLevelState() {
 	data := storage.GameStorageLevelJSON{
 		Version: "0.0.0-blocks",
 		LevelID: levelID,
-		Data:    map[string]any{"blockArray": blockArray, "blockCount": blockCount},
+		Data: map[string]any{
+			"blockArray": blockArray,
+		},
 	}
 	storage.SaveStorageLevelEx(data, "blocks")
 }
@@ -481,38 +468,6 @@ func saveCoreLevelState() {
 		},
 	}
 	storage.SaveStorageLevel(data)
-}
-
-func InitAllBlocks(positions []rl.Vector3) {
-	for i := range positions {
-		size := rl.Vector3Multiply(
-			rl.NewVector3(1, 1, 1),
-			rl.NewVector3(
-				float32(rl.GetRandomValue(88, 101))/100.,
-				float32(rl.GetRandomValue(100, 300))/100.,
-				float32(rl.GetRandomValue(88, 101))/100.))
-
-		obj := block.NewBlock(positions[i], size)
-		obj.Rotn = cmp.Or(float32(rl.GetRandomValue(-50, 50)/10.), 0.)
-
-		blockArray = append(blockArray, obj)
-		blockCount++
-	}
-	for i := range block.MaxBlockState {
-		switch i {
-		case block.DirtBlockState:
-			block.BlockModels[i] = common.Model.OBJ.Dirt
-		case block.RockBlockState:
-			block.BlockModels[i] = common.Model.OBJ.Rocks
-		case block.StoneBlockState:
-			block.BlockModels[i] = common.Model.OBJ.Stones
-		case block.FloorDetailBlockState:
-			block.BlockModels[i] = common.Model.OBJ.FloorDetail
-		default:
-			panic(fmt.Sprintf("unexpected gameplay.BlockState: %#v", i))
-		}
-		rl.SetMaterialTexture(block.BlockModels[i].Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
-	}
 }
 
 //														TEMPORARY
