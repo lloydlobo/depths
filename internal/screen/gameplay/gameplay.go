@@ -42,6 +42,13 @@ var (
 )
 
 var (
+	// FX control variables
+
+	currentMusic  rl.Music
+	previousMusic rl.Music
+
+	// Other
+
 	checkedTexture rl.Texture2D
 	checkedModel   rl.Model
 )
@@ -82,6 +89,39 @@ func Init() {
 		rl.PlayMusicStream(common.Music.OpenWorld000)
 	case false:
 		rl.PauseMusicStream(common.Music.OpenWorld000)
+	musicChoices := []rl.Music{
+		common.Music.OpenWorld000,
+		common.Music.OpenWorld001,
+	}
+	tempMusic := musicChoices[rl.GetRandomValue(0, int32(len(musicChoices)-1))]
+	if tempMusic != currentMusic {
+		if rl.GetMusicTimePlayed(currentMusic) > 0 { // Already playing
+			if !rl.IsMusicStreamPlaying(currentMusic) {
+				rl.PlayMusicStream(currentMusic)
+			}
+		} else {
+			if !rl.IsMusicStreamPlaying(tempMusic) {
+				rl.PlayMusicStream(tempMusic)
+				previousMusic = currentMusic
+				currentMusic = tempMusic
+			}
+		}
+	} else {
+		isLoop := true
+		for isLoop {
+			tempMusic = musicChoices[rl.GetRandomValue(0, int32(len(musicChoices)-1))]
+			if tempMusic != currentMusic {
+				isLoop = false
+				break // Just in case
+			}
+		}
+		if rl.GetMusicTimePlayed(currentMusic) >= 0.5*rl.GetMusicTimeLength(currentMusic) { // Played 50% already
+			rl.PlayMusicStream(tempMusic)
+			previousMusic = currentMusic
+			currentMusic = tempMusic
+		} else {
+			rl.PlayMusicStream(currentMusic) // Finally play the same music
+		}
 	}
 
 	rl.DisableCursor() // for ThirdPersonPerspective
@@ -187,7 +227,7 @@ func HandleUserInput() {
 }
 
 func Update() {
-	rl.UpdateMusicStream(common.Music.OpenWorld000)
+	rl.UpdateMusicStream(currentMusic)
 
 	HandleUserInput()
 
