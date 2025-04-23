@@ -38,12 +38,17 @@ var (
 
 	// Additional data
 
-	blocks        []block.Block
-	currentMusic  rl.Music
-	previousMusic rl.Music
+	blocks []block.Block
 )
 
 var (
+	// FX control variables
+
+	currentMusic  rl.Music
+	previousMusic rl.Music
+
+	// Other
+
 	checkedTexture rl.Texture2D
 	checkedModel   rl.Model
 )
@@ -436,7 +441,10 @@ func Update() {
 			if hasPlayerLeftDrillBase { // HACK: Placeholder change scene check logic
 				hasPlayerLeftDrillBase = false
 				finishScreen = 2 // HACK: Placeholder to shift scene
-				rl.PlaySound(common.FX.Coin)
+				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "footstep05.ogg")))
+				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "metalClick.ogg")))
+				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "creak3.ogg")))
+				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "doorOpen_2.ogg")))
 			}
 			player.SetColor(rl.Green)
 		} else if isPlayerInsideBase {
@@ -535,7 +543,7 @@ func Draw() {
 			rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
 		}
 
-		{ // ‥ DEBUG: Draw drill door gate entry logic before changing scene to drill base
+		if false { // ‥ DEBUG: Draw drill door gate entry logic before changing scene to drill base
 			origin := common.Vector3Zero
 			bb1 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(3, 2, 3)) // player is inside
 			bb2 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(5, 2, 5)) // player is entering
