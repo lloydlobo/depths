@@ -47,13 +47,31 @@ func Run() {
 	common.Font.Primary = rl.GetFontDefault()
 	common.Font.Secondary = rl.LoadFont("res/mecha.png")
 
-	common.Music.Theme = rl.LoadMusicStream(filepath.Join("res", "music", "sinnesloschen-beam-117362.mp3"))
-	common.Music.Theme.Looping = true
-	rl.SetMusicVolume(common.Music.Theme, 1.0)
-	rl.PauseMusicStream(common.Music.Theme)
+	common.Music.UIScreen000 = rl.LoadMusicStream(filepath.Join("res", "music", "inspiring-cinematic-ambient-116199.mp3")) // Menu/Options/Credits
+	common.Music.UIScreen000.Looping = true
+	rl.SetMusicVolume(common.Music.UIScreen000, common.InvPhi)
+	rl.PauseMusicStream(common.Music.UIScreen000)
 
-	common.Music.Ambient = rl.LoadMusicStream(filepath.Join("res", "music", "ambient.ogg"))
-	common.Music.Ambient.Looping = true
+	common.Music.OpenWorld000 = rl.LoadMusicStream(filepath.Join("res", "music", "serenity-329278.mp3"))
+	common.Music.OpenWorld001 = rl.LoadMusicStream(filepath.Join("res", "music", "sinnesloschen-beam-117362.mp3"))
+	common.Music.OpenWorld000.Looping = true
+	common.Music.OpenWorld001.Looping = true
+	rl.SetMusicVolume(common.Music.OpenWorld000, 1.0)
+	rl.SetMusicVolume(common.Music.OpenWorld001, 1.0)
+	rl.PauseMusicStream(common.Music.OpenWorld000)
+	rl.PauseMusicStream(common.Music.OpenWorld001)
+
+	common.Music.DrillRoom000 = rl.LoadMusicStream(filepath.Join("res", "music", "mandarin-dream-118311.mp3"))
+	common.Music.DrillRoom001 = rl.LoadMusicStream(filepath.Join("res", "music", "ambient-music-329699.mp3"))
+	common.Music.DrillRoom000.Looping = true
+	common.Music.DrillRoom001.Looping = true
+	rl.SetMusicVolume(common.Music.DrillRoom000, 1.0)
+	rl.SetMusicVolume(common.Music.DrillRoom001, 1.0)
+	rl.PauseMusicStream(common.Music.DrillRoom000)
+	rl.PauseMusicStream(common.Music.DrillRoom001)
+
+	common.Music.Ambient000 = rl.LoadMusicStream(filepath.Join("res", "music", "ambient.ogg"))
+	common.Music.Ambient000.Looping = true
 
 	common.FX.Coin = rl.LoadSound("res/fx/coin.wav")
 	rl.SetSoundVolume(common.FX.Coin, 0.3)
@@ -191,8 +209,8 @@ func Run() {
 	// Unload global data loaded
 	rl.UnloadFont(common.Font.Primary)
 	rl.UnloadFont(common.Font.Secondary)
-	rl.UnloadMusicStream(common.Music.Theme)
-	rl.UnloadMusicStream(common.Music.Ambient)
+	rl.UnloadMusicStream(common.Music.OpenWorld001)
+	rl.UnloadMusicStream(common.Music.Ambient000)
 	rl.UnloadSound(common.FX.Coin)
 
 	// Close audio context
@@ -326,7 +344,7 @@ func UpdateDrawFrame() {
 	// Update
 
 	if false {
-		rl.UpdateMusicStream(common.Music.Theme)
+		rl.UpdateMusicStream(common.Music.OpenWorld001)
 
 		// Modify processing variables
 		if rl.IsKeyPressed(rl.KeyLeft) {

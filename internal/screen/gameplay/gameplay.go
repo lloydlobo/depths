@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"log"
+	"path/filepath"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
@@ -73,30 +74,34 @@ func Init() {
 	checkedModel = rl.LoadModelFromMesh(rl.GenMeshPlane(100, 100, 10, 10))
 	checkedModel.Materials.Maps.Texture = checkedTexture
 
-	rl.SetMusicVolume(common.Music.Theme, float32(cmp.Or(1.0, 0.125)))
-
 	switch isPlay := true; isPlay {
 	case true:
-		rl.PlayMusicStream(common.Music.Theme)
+		rl.PlayMusicStream(common.Music.OpenWorld000)
 	case false:
-		rl.PauseMusicStream(common.Music.Theme)
+		rl.PauseMusicStream(common.Music.OpenWorld000)
 	}
 
 	rl.DisableCursor() // for ThirdPersonPerspective
 }
 
 func HandleUserInput() {
+	if rl.IsKeyDown(rl.KeyF) {
+		log.Println("[F] Picked up item")
+	}
+
 	// Press enter or tap to change to ending game screen
 	if rl.IsKeyDown(rl.KeyF10) { /* || rl.IsGestureDetected(rl.GestureDrag) */
 		finishScreen = 1
-		rl.PlaySound(common.FX.Coin)
-	}
-	if rl.IsKeyDown(rl.KeyF) {
-		log.Println("[F] Picked up item")
+		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "rollover3.ogg")))
+		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "switch_33.ogg")))
+		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", "confirmation_001.ogg")))
+
 	}
 }
 
 func Update() {
+	rl.UpdateMusicStream(common.Music.OpenWorld000)
+
 	HandleUserInput()
 
 	// Save variables this frame
@@ -107,7 +112,6 @@ func Update() {
 	gamePlayer.Collisions = rl.Quaternion{}
 	gamePlayer.IsPlayerWallCollision = false
 
-	rl.UpdateMusicStream(common.Music.Theme)
 	rl.UpdateCamera(&camera, rl.CameraThirdPerson)
 
 	gamePlayer.Update(camera, gameFloor)

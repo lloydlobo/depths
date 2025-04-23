@@ -19,9 +19,16 @@ import (
 
 var (
 	Font  struct{ Primary, Secondary rl.Font }
-	Music struct{ Theme, Ambient rl.Music }
-	FX    struct{ Coin rl.Sound }
-	FXS   struct {
+	Music struct {
+		OpenWorld000,
+		OpenWorld001,
+		DrillRoom000,
+		DrillRoom001,
+		UIScreen000,
+		Ambient000 rl.Music
+	}
+	FX  struct{ Coin rl.Sound }
+	FXS struct {
 		ImpactsSoftHeavy, ImpactsSoftMedium, ImpactsGenericLight,
 		FootStepsConcrete []rl.Sound
 	}

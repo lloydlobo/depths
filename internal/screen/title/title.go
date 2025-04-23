@@ -1,6 +1,8 @@
 package title
 
 import (
+	"path/filepath"
+
 	rl "github.com/gen2brain/raylib-go/raylib"
 
 	"example/depths/internal/common"
@@ -10,16 +12,21 @@ func Init() {
 	// TODO: Initialize title game screen variables here!
 	framesCounter = 0
 	finishScreen = 0
+	if !rl.IsMusicStreamPlaying(common.Music.UIScreen000) {
+		rl.PlayMusicStream(common.Music.UIScreen000)
+	}
 }
 
 func Update() {
-	// TODO: Update title screen variables here!
+	rl.UpdateMusicStream(common.Music.UIScreen000)
 
 	// Press enter or tap to change to GAMEPLAY screen
 	if rl.IsKeyPressed(rl.KeyEnter) || rl.IsGestureDetected(rl.GestureDoubletap) {
 		// finishScreen=1// optionsGameScreen
 		finishScreen = 2 // gameplayGameScreen
-		rl.PlaySound(common.FX.Coin)
+		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "rollover3.ogg")))
+		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "switch_33.ogg")))
+		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", "confirmation_001.ogg")))
 	}
 }
 
