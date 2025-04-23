@@ -27,7 +27,8 @@ func InitWall() {
 	rl.SetMaterialTexture(wallCornerModel.Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
 }
 
-func DrawWalls(pos, size, scale rl.Vector3) {
+// Use walls to avoid infinite-map generation
+func DrawBatch(pos, size, scale rl.Vector3) {
 	wallLen := float32(1.)
 	wallthick := float32(1. / 2.)
 	wallboty := size.Y

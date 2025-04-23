@@ -257,59 +257,61 @@ func Draw() {
 	rl.ClearBackground(rl.Black)
 
 	{
-		{
-			var cameraViewMatrix rl.Matrix = rl.GetCameraMatrix(camera)
-			var quat rl.Quaternion = rl.QuaternionFromMatrix(cameraViewMatrix)
-			quatEulerPos := rl.QuaternionToEuler(quat)
-			quatEulerLen := rl.Vector3Length(quatEulerPos)
-			originOffset := rl.NewVector3(0., 5., 0.)
-			position := rl.Vector3Add(quatEulerPos, originOffset)
-			rl.DrawCubeWiresV(position, rl.NewVector3(.125, quatEulerLen, .125), rl.Violet)
-			rl.DrawCubeWiresV(position, quatEulerPos, rl.Purple)
+		gameFloor.Draw()
 
+		if true { // ‥ Draw pseudo-infinite(ish) floor backdrop
+			rl.DrawModel(checkedModel, rl.NewVector3(0., -.05, 0.), 1., rl.RayWhite)
+		}
+
+		wall.DrawBatch(gameFloor.Position, gameFloor.Size, common.Vector3One)
+
+		for i := range blockArray {
+			blockArray[i].Draw()
 		}
 
 		gamePlayer.Draw()
-		{
-			// Draw player to camera forward projected direction
-			startPos := gamePlayer.Position
-			endPos := rl.Vector3Add(gamePlayer.Position, rl.Vector3Multiply(rl.GetCameraForward(&camera), rl.NewVector3(9., .125/2., 9.)))
-			if false { // Maintain consistent y level as we cast parallel to XZ plane and perpendicular to Y axis
-				endPos.Y = startPos.Y
-			}
-			rayCol := rl.Fade(rl.LightGray, .3)
-
-			// Draw middle ray
-			rl.DrawLine3D(startPos, endPos, rayCol)
-
-			// Draw spread-out rays
+		{ // ‥ Draw player to camera forward projected direction
 			const maxRays = float32(8.)
 			const rayGapFactor = 16 * maxRays
+			rayCol := rl.Fade(rl.LightGray, .3)
+			startPos := gamePlayer.Position // NOTE: startPos.Y and endPos.Y may fluctuate
+			endPos := rl.Vector3Add(gamePlayer.Position, rl.Vector3Multiply(rl.GetCameraForward(&camera), rl.NewVector3(9., .125/2., 9.)))
+			rl.DrawLine3D(startPos, endPos, rayCol) // Draw middle ray
 			rayCol = rl.Fade(rayCol, .1)
-			for i := -maxRays; i < maxRays; i++ {
+			for i := -maxRays; i < maxRays; i++ { // Draw spread-out rays
 				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(i/rayGapFactor, .0, .0)), rayCol)
 				rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.0, .0, i/rayGapFactor)), rayCol)
 			}
-
-			// Draw forward movement lookahead area
-			rl.DrawCapsule(startPos, endPos, 2, 7, 7, rl.Fade(rl.Gray, .125/2))
+			rl.DrawCapsule(startPos, endPos, 2, 7, 7, rl.Fade(rl.Gray, .125/2)) // Draw forward movement lookahead area
 		}
 
-		gameFloor.Draw()
+		{ // ‥ Draw drill
+			const maxIndex = 2
+			wallScale := rl.NewVector3(1., 1., 1.)
+			for i := float32(-maxIndex + 1); i < maxIndex; i++ {
+				var model rl.Model
+				var y float32
+				model = common.Model.OBJ.Column
+				y = 0.
+				rl.DrawModelEx(model, rl.NewVector3(i, y, maxIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
+				rl.DrawModelEx(model, rl.NewVector3(i, y, -maxIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
+				rl.DrawModelEx(model, rl.NewVector3(maxIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
+				rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
+				model = common.Model.OBJ.Wall
+				y = 1. + .125*.5
+				rl.DrawModelEx(model, rl.NewVector3(i, y, maxIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
+				rl.DrawModelEx(model, rl.NewVector3(i, y, -maxIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
+				rl.DrawModelEx(model, rl.NewVector3(maxIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
+				rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
+				model = common.Model.OBJ.Column
+				y = 2. + .125*.5
+				rl.DrawModelEx(model, rl.NewVector3(i, y, maxIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
+				rl.DrawModelEx(model, rl.NewVector3(i, y, -maxIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
+				rl.DrawModelEx(model, rl.NewVector3(maxIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
+				rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
+			}
 
-		// Use walls to avoid infinite-map generation
-		wall.DrawWalls(
-			gameFloor.Position,
-			gameFloor.Size,
-			rl.NewVector3(1., cmp.Or(common.Phi, common.OneMinusInvPhi, float32(1.)), 1.),
-		)
-
-		// Draw drill
-		const maxIndex = 2
-		{
-
-			// Draw door gate entry logic before changing scene to drill base
-			{
+			{ // ‥ DEBUG: Draw drill door gate entry logic before changing scene to drill base
 				origin := common.Vector3Zero
 				bb1 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(3, 2, 3)) // player is inside
 				bb2 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(5, 2, 5)) // player is entering
@@ -321,45 +323,24 @@ func Draw() {
 			}
 		}
 
-		wallScale := rl.NewVector3(1., 1., 1.)
-		for i := float32(-maxIndex + 1); i < maxIndex; i++ {
-			var model rl.Model
-			var y float32
-			model = common.Model.OBJ.Column
-			y = 0.
-			rl.DrawModelEx(model, rl.NewVector3(i, y, maxIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
-			rl.DrawModelEx(model, rl.NewVector3(i, y, -maxIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
-			rl.DrawModelEx(model, rl.NewVector3(maxIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
-			rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
-			model = common.Model.OBJ.Wall
-			y = 1. + .125*.5
-			rl.DrawModelEx(model, rl.NewVector3(i, y, maxIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
-			rl.DrawModelEx(model, rl.NewVector3(i, y, -maxIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
-			rl.DrawModelEx(model, rl.NewVector3(maxIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
-			rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
-			model = common.Model.OBJ.Column
-			y = 2. + .125*.5
-			rl.DrawModelEx(model, rl.NewVector3(i, y, maxIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
-			rl.DrawModelEx(model, rl.NewVector3(i, y, -maxIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
-			rl.DrawModelEx(model, rl.NewVector3(maxIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
-			rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
-		}
-
-		for i := range blockArray {
-			blockArray[i].Draw()
-		}
-
-		if false {
-			rl.DrawModel(checkedModel, rl.NewVector3(0., -.05, 0.), 1., rl.RayWhite)
-		}
-		if false {
-			// Draw banners at floor corners
+		if true { // ‥ Draw banners at floor corners
 			floorBBMin := gameFloor.BoundingBox.Min
 			floorBBMax := gameFloor.BoundingBox.Max
 			rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMin.X+1, 0, floorBBMin.Z+1), common.YAxis, 45, common.Vector3One, rl.White)  // leftback
 			rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMax.X-1, 0, floorBBMin.Z+1), common.YAxis, -45, common.Vector3One, rl.White) // rightback
 			rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMax.X, 0, floorBBMax.Z), common.YAxis, 45, common.Vector3One, rl.White)      // rightfront
 			rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMin.X, 0, floorBBMax.Z), common.YAxis, -45, common.Vector3One, rl.White)     // leftfront
+		}
+
+		if false { //  ‥ DEBUG: Draw camera movement gimble-like interpretation
+			var cameraViewMatrix rl.Matrix = rl.GetCameraMatrix(camera)
+			var quat rl.Quaternion = rl.QuaternionFromMatrix(cameraViewMatrix)
+			quatEulerPos := rl.QuaternionToEuler(quat)
+			quatEulerLen := rl.Vector3Length(quatEulerPos)
+			originOffset := rl.NewVector3(0., 5., 0.)
+			position := rl.Vector3Add(quatEulerPos, originOffset)
+			rl.DrawCubeWiresV(position, rl.NewVector3(.125, quatEulerLen, .125), rl.Violet)
+			rl.DrawCubeWiresV(position, quatEulerPos, rl.Purple)
 		}
 	}
 	rl.EndMode3D()
