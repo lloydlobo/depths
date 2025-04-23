@@ -61,6 +61,9 @@ func (o *Block) NextState() {
 }
 
 func InitBlocks(dst *[]Block, positions []rl.Vector3) {
+	var mu sync.Mutex
+	mu.Lock()
+
 	for i := range positions {
 		size := rl.Vector3Multiply(
 			rl.NewVector3(1, 1, 1),
@@ -74,6 +77,7 @@ func InitBlocks(dst *[]Block, positions []rl.Vector3) {
 
 		*dst = append(*dst, obj)
 	}
+	mu.Unlock()
 }
 
 func SetupBlockModels() {

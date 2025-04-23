@@ -38,17 +38,12 @@ var (
 
 	// Additional data
 
-	blocks []block.Block
+	blocks        []block.Block
+	currentMusic  rl.Music
+	previousMusic rl.Music
 )
 
 var (
-	// FX control variables
-
-	currentMusic  rl.Music
-	previousMusic rl.Music
-
-	// Other
-
 	checkedTexture rl.Texture2D
 	checkedModel   rl.Model
 )
@@ -58,37 +53,104 @@ func Init() {
 	finishScreen = 0
 
 	camera = rl.Camera3D{
-		Position:   rl.NewVector3(0., 16., 16.),
+		Position:   rl.NewVector3(0., 8., 8.),
 		Target:     rl.NewVector3(0., .5, 0.),
 		Up:         rl.NewVector3(0., 1., 0.),
 		Fovy:       15. * float32(cmp.Or(3., 4., 2.)),
 		Projection: rl.CameraPerspective,
 	} // See also https://github.com/raylib-extras/extras-c/blob/main/cameras/rlTPCamera/rlTPCamera.h
 
-	// INIT WOULD REQUIRE A LEVEL ID?
-	//		OR CREATE MULTIPLE gameplay000.go files
+	// INIT WOULD REQUIRE A LEVEL ID? OR CREATE MULTIPLE gameplay000.go files
+	loadNewCoreData := func() {
+		var mu sync.Mutex
 
-	// SCENES 0..3
-	// SCENES 0..3
-	// SCENES 0..3
-	//			SCENES 0..3
-	//						SCENES 0..3
+		mu.Lock()
+		defer mu.Unlock()
 
-	InitWorld()
+		finishScreen = 0
+		framesCounter = 0
 
-	//						SCENES 0..3
-	//			SCENES 0..3
-	// SCENES 0..3
-	// SCENES 0..3
-	// SCENES 0..3
-	// SCENES 0..3
-	// SCENES 0..3
+		// Order is maybe important
+		player.InitPlayer(&gamePlayer, camera)
+		floor.InitFloor(&gameFloor)
+		wall.InitWall() // NOTE: Empty func for convention
 
-	switch isPlay := true; isPlay {
-	case true:
-		rl.PlayMusicStream(common.Music.OpenWorld000)
-	case false:
-		rl.PauseMusicStream(common.Music.OpenWorld000)
+		hasPlayerLeftDrillBase = false
+		gamePlayer.IsPlayerWallCollision = false
+	}
+
+	loadNewAdditionalData := func() {
+		var mu sync.Mutex
+
+		mu.Lock()
+		defer mu.Unlock()
+
+		blocks = []block.Block{} // Clear
+		block.InitBlocks(&blocks, block.GenerateRandomBlockPositions(gameFloor))
+	}
+
+	const isNewGame = false
+
+	// Core resources
+	floor.SetupFloorModel()
+	wall.SetupWallModel()
+	player.SetupPlayerModel() // FIXME: in this func, use package common for models
+
+	// Core data
+	if !isNewGame {
+		data, err := loadCoreGameData()
+		if err == nil { // OK
+			finishScreen = 0
+			framesCounter = 0
+			camera = data.Camera
+			gameFloor = data.GameFloor
+			gamePlayer = data.GamePlayer
+			if false {
+				hasPlayerLeftDrillBase = data.HasPlayerLeftDrillBase
+			} else {
+				hasPlayerLeftDrillBase = false
+			}
+			gamePlayer.IsPlayerWallCollision = false
+			saveCoreLevelState() // Save ASAP
+		} else { // ERR
+			slog.Warn(err.Error())
+			loadNewCoreData()
+		}
+	} else {
+		loadNewCoreData()
+	}
+
+	// Additional resources
+	block.SetupBlockModels()
+
+	// Additional data
+	if !isNewGame {
+		additionalGameData, err := loadAdditionalGameData()
+		if err == nil { // OK
+			blocks = make([]block.Block, len(additionalGameData.Blocks))
+			copiedBlockCount := copy(blocks, additionalGameData.Blocks)
+			if copiedBlockCount != 0 {
+				log.Printf("blocks copied: %v", copiedBlockCount)
+			} else {
+				log.Panic("Incorrect saved file. Please delete it")
+			}
+			saveAdditionalLevelState() // Save ASAP
+		} else { // ERR
+			slog.Warn(err.Error())
+			loadNewAdditionalData()
+		}
+	} else {
+		loadNewAdditionalData()
+	}
+
+	{
+		checkedImg := rl.GenImageChecked(100, 100, 1, 1, rl.ColorBrightness(rl.Black, .24), rl.ColorBrightness(rl.Black, .20))
+		checkedTexture = rl.LoadTextureFromImage(checkedImg)
+		rl.UnloadImage(checkedImg)
+		checkedModel = rl.LoadModelFromMesh(rl.GenMeshPlane(100, 100, 10, 10))
+		checkedModel.Materials.Maps.Texture = checkedTexture
+	}
+
 	musicChoices := []rl.Music{
 		common.Music.OpenWorld000,
 		common.Music.OpenWorld001,
@@ -127,7 +189,12 @@ func Init() {
 	rl.DisableCursor() // for ThirdPersonPerspective
 }
 
+// InitWorld loads resources each time it is called.
+// Prefers loading data from saved game files if any, else generates new data.
+// If new game flag is turned on, generates new game.
 func InitWorld() {
+	const isNewGame = false
+
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 
@@ -159,34 +226,67 @@ func InitWorld() {
 		defer wg.Done()
 		mu.Lock()
 		defer mu.Unlock()
+		loadNewData := func() {
+			var mu sync.Mutex
 
-		data, err := loadCoreGameData()
-		if err != nil {
-			slog.Warn(err.Error()) // WARN: improve error handling
+			mu.Lock()
+			defer mu.Unlock()
+
+			finishScreen = 0  //data.FinishScreen
+			framesCounter = 0 // data.FramesCounter
 			player.InitPlayer(&gamePlayer, camera)
 			floor.InitFloor(&gameFloor)
 			wall.InitWall()
-		} else { // Resume from saved state
-			finishScreen = 0  //data.FinishScreen
-			framesCounter = 0 // data.FramesCounter
-			camera = data.Camera
-			gameFloor = data.GameFloor
-			gamePlayer = data.GamePlayer
-			hasPlayerLeftDrillBase = data.HasPlayerLeftDrillBase
 			hasPlayerLeftDrillBase = false
+			gamePlayer.IsPlayerWallCollision = false
 		}
-		gamePlayer.IsPlayerWallCollision = false
+		if isNewGame {
+			loadNewData()
+		} else {
+			data, err := loadCoreGameData()
+			if err != nil {
+				slog.Warn(err.Error()) // WARN: improve error handling
+				loadNewData()
+			} else { // Resume from saved state
+				finishScreen = 0  // data.FinishScreen
+				framesCounter = 0 // data.FramesCounter
+				camera = data.Camera
+				gameFloor = data.GameFloor
+				gamePlayer = data.GamePlayer
+				if false { // Should recalculate if player positiion is inside drill.. else default to false
+					hasPlayerLeftDrillBase = data.HasPlayerLeftDrillBase
+				} else {
+					hasPlayerLeftDrillBase = false
+				}
+				gamePlayer.IsPlayerWallCollision = false
+				saveCoreLevelState()
+			}
+		}
 	}()
 
 	// Additional resources
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	if true { // FIXES: Unloaded huge blocks saved file
+		block.SetupBlockModels()
+	} else {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			mu.Lock()
+			defer mu.Unlock()
+
+			block.SetupBlockModels()
+		}()
+	}
+
+	loadNewAdditionalData := func() {
+		var mu sync.Mutex
 		mu.Lock()
 		defer mu.Unlock()
-
-		block.SetupBlockModels()
-	}()
+		if len(blocks) >= 0 {
+			blocks = []block.Block{} // Clear all blocks
+		}
+		block.InitBlocks(&blocks, block.GenerateRandomBlockPositions(gameFloor))
+	}
 
 	// Additional data
 	wg.Add(1)
@@ -195,15 +295,20 @@ func InitWorld() {
 		mu.Lock()
 		defer mu.Unlock()
 
-		additionalGameData, err := loadAdditionalGameData()
-		if err != nil {
-			slog.Warn(err.Error()) // WARN: improve error handling
-
-			block.InitBlocks(&blocks, block.GenerateRandomBlockPositions(gameFloor))
-		} else { // Resume from saved state
-			blocks = make([]block.Block, len(additionalGameData.Blocks)) // PERF: Make this a static array and use a counter
-			copiedBlockCount := copy(blocks, additionalGameData.Blocks)
-			log.Println(fmt.Sprintf("blocks copied: %v", copiedBlockCount))
+		if isNewGame {
+			loadNewAdditionalData()
+		} else {
+			additionalGameData, err := loadAdditionalGameData()
+			fmt.Printf("additionalGameData: %v\n", additionalGameData)
+			if err != nil {
+				slog.Warn(err.Error()) // WARN: improve error handling
+				loadNewAdditionalData()
+			} else { // Resume from saved state
+				blocks = make([]block.Block, len(additionalGameData.Blocks)) // PERF: Make this a static array and use a counter
+				copiedBlockCount := copy(blocks, additionalGameData.Blocks)
+				log.Println(fmt.Sprintf("blocks copied: %v", copiedBlockCount))
+				saveAdditionalLevelState()
+			}
 		}
 	}()
 
@@ -220,7 +325,7 @@ func HandleUserInput() {
 	if rl.IsKeyDown(rl.KeyF10) { /* || rl.IsGestureDetected(rl.GestureDrag) */
 		finishScreen = 1
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "rollover3.ogg")))
-		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "switch_33.ogg")))
+		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "switch33.ogg")))
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", "confirmation_001.ogg")))
 
 	}
@@ -670,7 +775,6 @@ func loadAdditionalGameData() (*GameAdditionalData, error) {
 		if err := json.Unmarshal(dest.Data, &v); err != nil {
 			return nil, err
 		}
-		fmt.Printf("v: %v\n", v)
 		return v, nil
 	default:
 		return nil, fmt.Errorf("invalid game additional data version %q", version)

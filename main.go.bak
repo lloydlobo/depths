@@ -529,7 +529,6 @@ func runPreviousVersion() {
 		if levelPlaceholder == nil {
 			log.Fatalln("LoadStorageLevel", "levelPlaceholder==nil")
 		}
-		fmt.Printf("levelPlaceholder: %v\n", levelPlaceholder)
 	}
 
 	// rl.DisableCursor()
