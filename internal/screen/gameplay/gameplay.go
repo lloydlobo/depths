@@ -11,23 +11,36 @@ import (
 	"example/depths/internal/common"
 	"example/depths/internal/floor"
 	"example/depths/internal/player"
+	"example/depths/internal/storage"
 	"example/depths/internal/util/mathutil"
 	"example/depths/internal/wall"
 )
 
+type Gameplay struct {
+}
+
 var (
-	framesCounter int32
+	// Core data
+
+	levelID int32
+
 	finishScreen  int
+	framesCounter int32
 
-	camera rl.Camera3D
+	camera                 rl.Camera3D
+	gameFloor              floor.Floor
+	gamePlayer             player.Player
+	hasPlayerLeftDrillBase bool
 
-	gamePlayer player.Player
-	gameFloor  floor.Floor
+	// Additional data
 
+	blockArray []Block
+	blockCount int32
+)
+
+var (
 	checkedTexture rl.Texture2D
 	checkedModel   rl.Model
-
-	hasPlayerLeftDrillBase bool
 )
 
 func Init() {
@@ -59,7 +72,7 @@ func Init() {
 	// - Avoid spawning where player is standing
 	// - Randomly skip a position
 	// - A noise map or simplex/perlin noise "can" serve better
-	InitAllMineObj(InitMineObjPositions())
+	InitAllBlocks(GenerateRandomBlockPositions())
 	//						SCENES 0..3
 	//			SCENES 0..3
 	// SCENES 0..3
@@ -120,13 +133,13 @@ func Update() {
 		player.RevertPlayerAndCameraPositions(oldPlayer, &gamePlayer, oldCam, &camera)
 	}
 
-	for i := range mineObjCount {
-		// Skip final mined object residue
-		if mineObjArray[i].State == maxMineObjState-1 {
+	for i := range blockCount {
+		// Skip final broken/mined block residue
+		if blockArray[i].State == MaxBlockState-1 {
 			continue
 		}
 		if rl.CheckCollisionBoxes(
-			common.GetBoundingBoxFromPositionSizeV(mineObjArray[i].Pos, mineObjArray[i].Size),
+			common.GetBoundingBoxFromPositionSizeV(blockArray[i].Pos, blockArray[i].Size),
 			gamePlayer.BoundingBox,
 		) {
 			// FIND OUT WHERE PLAYER TOUCHED THE BOX
@@ -163,7 +176,7 @@ func Update() {
 			if (rl.IsKeyDown(rl.KeySpace) && framesCounter%16 == 0) ||
 				(rl.IsMouseButtonDown(rl.MouseLeftButton) && framesCounter%16 == 0) {
 				// Play mining sound with variations (s1:kick + s2:snare + s3:hollow-thock)
-				state := mineObjArray[i].State
+				state := blockArray[i].State
 				s1 := common.FXS.ImpactsSoftMedium[rl.GetRandomValue(int32(state), int32(len(common.FXS.ImpactsSoftMedium)-1))]
 				s2 := common.FXS.ImpactsGenericLight[rl.GetRandomValue(int32(state), int32(len(common.FXS.ImpactsGenericLight)-1))]
 				s3 := common.FXS.ImpactsSoftHeavy[rl.GetRandomValue(int32(state), int32(len(common.FXS.ImpactsSoftHeavy)-1))]
@@ -175,7 +188,7 @@ func Update() {
 				rl.PlaySound(s3)
 
 				// Increment state
-				mineObjArray[i].NextState()
+				blockArray[i].NextState()
 			}
 		}
 	}
@@ -343,9 +356,9 @@ func Draw() {
 			rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
 		}
 
-		for i := range mineObjCount {
-			obj := mineObjArray[i]
-			rl.DrawModelEx(mineObjModels[obj.State], obj.Pos,
+		for i := range blockCount {
+			obj := blockArray[i]
+			rl.DrawModelEx(blockModels[obj.State], obj.Pos,
 				rl.NewVector3(0, 1, 0), obj.Rotn, obj.Size, rl.White)
 		}
 
@@ -388,6 +401,11 @@ func Unload() {
 
 // Gameplay screen should finish?
 func Finish() int {
+	// PERF: Find way to reduce size.
+	//       Size of "additional level state" is 117x times size of "core level state"
+	saveCoreLevelState()       // 705 bytes   (player,camera,...)
+	saveAdditionalLevelState() // 82871 bytes (blocks,...)
+
 	return finishScreen
 }
 
@@ -406,51 +424,114 @@ func Finish() int {
 //													TEMPORARY
 //														TEMPORARY
 
-type MineObjState uint8
+// Migration/Reference/Example
+// Refactors huge blocks data state from main game data state
+var GameAdditionalLevelDataVersions = map[string]map[string]any{
+	"0.0.0-blocks": {
+		"version": "0.0.0-blocks",
+		"levelID": levelID,
+		"data": map[string]any{
+			"blockArray": []Block{},
+			"blockCount": int32(0),
+		},
+	},
+	"0.0.1": {},
+	"0.0.2": {},
+}
+
+// Migration/Reference/Example
+var GameCoreLevelDataVersions = map[string]map[string]any{
+	"0.0.0": {
+		"version": "0.0.0",
+		"levelID": levelID,
+		"data": map[string]any{
+			"camera":                 rl.Camera3D{},
+			"finishScreen":           int(0),
+			"framesCounter":          int32(0),
+			"gameFloor":              floor.Floor{},
+			"gamePlayer":             player.Player{},
+			"hasPlayerLeftDrillBase": false,
+		},
+	},
+	"0.0.1": {},
+	"0.0.2": {},
+}
+
+func saveAdditionalLevelState() {
+	data := storage.GameStorageLevelJSON{
+		Version: "0.0.0-blocks",
+		LevelID: levelID,
+		Data:    map[string]any{"blockArray": blockArray, "blockCount": blockCount},
+	}
+	storage.SaveStorageLevelEx(data, "blocks")
+}
+
+func saveCoreLevelState() {
+	data := storage.GameStorageLevelJSON{
+		Version: "0.0.0",
+		LevelID: levelID,
+		Data: map[string]any{
+			"camera":                 camera,
+			"finishScreen":           finishScreen,
+			"framesCounter":          framesCounter,
+			"gameFloor":              gameFloor,
+			"gamePlayer":             gamePlayer,
+			"hasPlayerLeftDrillBase": hasPlayerLeftDrillBase,
+		},
+	}
+	storage.SaveStorageLevel(data)
+}
+
+// The game world is composed of rough 3D objects—mainly cubes, referred to as
+// blocks—representing various materials, such as dirt, stone, ores, tree
+// trunks, water, and lava. The core gameplay revolves around picking up and
+// placing these objects. These blocks are arranged in a 3D grid, while players
+// can move freely around the world. Players can break, or mine, blocks and
+// then place them elsewhere, enabling them to build
+// things.[6](https://en.wikipedia.org/wiki/Minecraft#cite_note-10)
+type BlockState uint8
 
 const (
-	DirtMineObjState MineObjState = iota
-	RockMineObjState
-	StoneMineObjState
-	FloorDetailMineObjState // decorated floor tile
+	DirtBlockState BlockState = iota
+	RockBlockState
+	StoneBlockState
+	FloorDetailBlockState // decorated floor tile
 
-	maxMineObjState
+	MaxBlockState
 )
 
-var (
-	mineObjArray  []MineObj
-	mineObjCount  int32
-	mineObjModels [maxMineObjState]rl.Model
-)
-
-type MineObj struct {
+type Block struct {
 	Pos      rl.Vector3
 	Size     rl.Vector3
 	Rotn     float32
 	Health   float32 // [0..1]
-	State    MineObjState
 	IsActive bool
+	State    BlockState
 }
 
-func NewMineObj(pos, size rl.Vector3) MineObj {
-	return MineObj{
+var (
+	blockModels [MaxBlockState]rl.Model
+)
+
+func NewBlock(pos, size rl.Vector3) Block {
+	return Block{
 		Pos:      pos,
 		Size:     size,
 		Rotn:     0.0,
-		State:    DirtMineObjState,
+		State:    DirtBlockState,
 		IsActive: true,
 	}
 }
 
-func (o *MineObj) NextState() {
+func (o *Block) NextState() {
 	o.State++
-	if o.State >= maxMineObjState {
-		o.State = maxMineObjState - 1
+	if o.State >= MaxBlockState {
+		o.State = MaxBlockState - 1
 		o.IsActive = false
 	}
 }
 
-func InitMineObjPositions() []rl.Vector3 {
+func GenerateRandomBlockPositions() []rl.Vector3 {
 	var positions []rl.Vector3 // 61% of maxPositions
 
 	var (
@@ -492,7 +573,7 @@ NextCol:
 	return positions
 }
 
-func InitAllMineObj(positions []rl.Vector3) {
+func InitAllBlocks(positions []rl.Vector3) {
 	for i := range positions {
 		size := rl.Vector3Multiply(
 			rl.NewVector3(1, 1, 1),
@@ -501,26 +582,26 @@ func InitAllMineObj(positions []rl.Vector3) {
 				float32(rl.GetRandomValue(100, 300))/100.,
 				float32(rl.GetRandomValue(88, 101))/100.))
 
-		obj := NewMineObj(positions[i], size)
+		obj := NewBlock(positions[i], size)
 		obj.Rotn = cmp.Or(float32(rl.GetRandomValue(-50, 50)/10.), 0.)
 
-		mineObjArray = append(mineObjArray, obj)
-		mineObjCount++
+		blockArray = append(blockArray, obj)
+		blockCount++
 	}
-	for i := range maxMineObjState {
+	for i := range MaxBlockState {
 		switch i {
-		case DirtMineObjState:
-			mineObjModels[i] = common.Model.OBJ.Dirt
-		case RockMineObjState:
-			mineObjModels[i] = common.Model.OBJ.Rocks
-		case StoneMineObjState:
-			mineObjModels[i] = common.Model.OBJ.Stones
-		case FloorDetailMineObjState:
-			mineObjModels[i] = common.Model.OBJ.FloorDetail
+		case DirtBlockState:
+			blockModels[i] = common.Model.OBJ.Dirt
+		case RockBlockState:
+			blockModels[i] = common.Model.OBJ.Rocks
+		case StoneBlockState:
+			blockModels[i] = common.Model.OBJ.Stones
+		case FloorDetailBlockState:
+			blockModels[i] = common.Model.OBJ.FloorDetail
 		default:
-			panic(fmt.Sprintf("unexpected gameplay.MineObjState: %#v", i))
+			panic(fmt.Sprintf("unexpected gameplay.BlockState: %#v", i))
 		}
-		rl.SetMaterialTexture(mineObjModels[i].Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
+		rl.SetMaterialTexture(blockModels[i].Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
 	}
 }
 
