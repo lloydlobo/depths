@@ -59,7 +59,7 @@ func (o *Block) NextState() {
 	}
 }
 
-func InitAllBlocks(dst *[]Block, positions []rl.Vector3) {
+func InitBlocks(dst *[]Block, positions []rl.Vector3) {
 	for i := range positions {
 		size := rl.Vector3Multiply(
 			rl.NewVector3(1, 1, 1),
@@ -73,7 +73,9 @@ func InitAllBlocks(dst *[]Block, positions []rl.Vector3) {
 
 		*dst = append(*dst, obj)
 	}
+}
 
+func SetupBlockModels() {
 	for i := range MaxBlockState {
 		switch i {
 		case DirtBlockState:

@@ -70,15 +70,20 @@ func Init() {
 
 	// Core data
 
-	player.InitPlayer(&gamePlayer, camera)
-	gamePlayer.IsPlayerWallCollision = false
-	floor.InitFloor(&gameFloor)
-	wall.InitWall()
-	{ // Does not load models/textures etc
+	player.SetupPlayerModel()
+	floor.SetupFloorModel()
+	wall.SetupWallModel()
+
+	// Does not load models/textures etc
+	{
 		data, err := loadCoreGameData()
 		if err != nil {
-			slog.Error(err.Error()) // WARN: improve error handling
-		} else {
+			slog.Warn(err.Error()) // WARN: improve error handling
+
+			player.InitPlayer(&gamePlayer, camera)
+			floor.InitFloor(&gameFloor)
+			wall.InitWall()
+		} else { // Resume from saved state
 			finishScreen = 0  //data.FinishScreen
 			framesCounter = 0 // data.FramesCounter
 			camera = data.Camera
@@ -88,19 +93,21 @@ func Init() {
 			hasPlayerLeftDrillBase = false
 		}
 	}
+	gamePlayer.IsPlayerWallCollision = false
 
 	// Additional data
 
-	blockPositions := block.GenerateRandomBlockPositions(gameFloor)
-	block.InitAllBlocks(&blocks, blockPositions)
-	{ // Does not load models/textures etc
-		data, err := loadAdditionalGameData()
-		if err != nil {
-			slog.Error(err.Error()) // WARN: improve error handling
-		} else {
-			blocks = make([]block.Block, len(data.Blocks))
-			copy(blocks, data.Blocks)
-		}
+	block.SetupBlockModels() // Arranges models and sets textures
+
+	additionalGameData, err := loadAdditionalGameData() // Does not load models/textures etc
+	if err != nil {
+		slog.Warn(err.Error()) // WARN: improve error handling
+
+		block.InitBlocks(&blocks, block.GenerateRandomBlockPositions(gameFloor))
+	} else { // Resume from saved state
+		blocks = make([]block.Block, len(additionalGameData.Blocks)) // PERF: Make this a static array and use a counter
+		copiedBlockCount := copy(blocks, additionalGameData.Blocks)
+		log.Println(fmt.Sprintf("blocks copied: %v", copiedBlockCount))
 	}
 
 	//						SCENES 0..3

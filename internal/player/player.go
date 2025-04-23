@@ -62,6 +62,18 @@ func NewPlayer(camera rl.Camera3D) Player {
 	}
 	player.BoundingBox = common.GetBoundingBoxFromPositionSizeV(camera.Target, player.Size)
 
+	return player
+}
+
+func InitPlayer(player *Player, camera rl.Camera3D) {
+	*player = NewPlayer(camera)
+	// FIXME: Remove this or bring the one from NewPlayer here
+}
+
+func SetupPlayerModel() {
+	playerModel = common.Model.OBJ.CharacterHuman
+	rl.SetMaterialTexture(playerModel.Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
+
 	// INIT
 
 	// Load gltf model
@@ -124,15 +136,6 @@ func NewPlayer(camera rl.Camera3D) Player {
 	if got, want := boneSocketsIndex[:], [3]int{3, 11, 10}; !slices.Equal(got[:], want[:]) { // boneSocketIndex => initial [-1,-1,-1] => want [3,11,10]
 		panic(fmt.Sprintln("NewPlayer: boneSocketIndex", "got", got, "want", want))
 	}
-
-	return player
-}
-
-func InitPlayer(player *Player, camera rl.Camera3D) {
-	*player = NewPlayer(camera)
-	// FIXME: Remove this or bring the one from NewPlayer here
-	playerModel = common.Model.OBJ.CharacterHuman
-	rl.SetMaterialTexture(playerModel.Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
 }
 
 func (p *Player) Update(camera rl.Camera3D, flr floor.Floor) {

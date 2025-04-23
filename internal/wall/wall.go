@@ -11,7 +11,9 @@ var (
 	wallCornerModel rl.Model
 )
 
-func InitWall() {
+func InitWall() {}
+
+func SetupWallModel() {
 	// wallModel = rl.LoadModel(filepath.Join("res", "model", "obj", "wall.obj"))
 	wallModel = common.Model.OBJ.Wall
 	wallModel = common.Model.OBJ.Stairs
