@@ -47,10 +47,14 @@ func Run() {
 	common.Font.Primary = rl.GetFontDefault()
 	common.Font.Secondary = rl.LoadFont("res/mecha.png")
 
-	common.Music.UIScreen000 = rl.LoadMusicStream(filepath.Join("res", "music", "inspiring-cinematic-ambient-116199.mp3")) // Menu/Options/Credits
+	common.Music.UIScreen000 = rl.LoadMusicStream(filepath.Join("res", "music", "inspiring-cinematic-ambient-116199.mp3")) // Menu/Options
 	common.Music.UIScreen000.Looping = true
 	rl.SetMusicVolume(common.Music.UIScreen000, common.InvPhi)
 	rl.PauseMusicStream(common.Music.UIScreen000)
+	common.Music.UIScreen001 = rl.LoadMusicStream(filepath.Join("res", "music", "emotional-depth-323009.mp3")) // Credits
+	common.Music.UIScreen001.Looping = true
+	rl.SetMusicVolume(common.Music.UIScreen001, common.InvPhi)
+	rl.PauseMusicStream(common.Music.UIScreen001)
 
 	common.Music.OpenWorld000 = rl.LoadMusicStream(filepath.Join("res", "music", "ambient-music-329699.mp3"))
 	common.Music.OpenWorld001 = rl.LoadMusicStream(filepath.Join("res", "music", "serenity-329278.mp3"))

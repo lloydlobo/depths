@@ -25,6 +25,7 @@ var (
 		DrillRoom000,
 		DrillRoom001,
 		UIScreen000,
+		UIScreen001,
 		Ambient000 rl.Music
 	}
 	FX  struct{ Coin rl.Sound }
