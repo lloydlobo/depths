@@ -31,6 +31,18 @@ type Player struct {
 	IsPlayerWallCollision bool
 }
 
+type ActionType int32
+
+const (
+	Idle ActionType = iota
+	IdleSway
+	Walk
+	Mine
+)
+
+var (
+	action ActionType = Idle
+)
 var (
 	CharacterModel       rl.Model
 	CharacterAngle       int32
@@ -139,28 +151,59 @@ func SetupPlayerModel() {
 }
 
 func (p *Player) Update(camera rl.Camera3D, flr floor.Floor) {
+	if rl.IsKeyDown(rl.KeyW) ||
+		rl.IsKeyDown(rl.KeyA) ||
+		rl.IsKeyDown(rl.KeyS) ||
+		rl.IsKeyDown(rl.KeyD) {
+		action = Walk
+	} else {
+		action = IdleSway
+	}
+
+	// Overide movement actions
+	if rl.IsKeyDown(rl.KeySpace) {
+		action = Mine
+	}
+
 	// Rotate character
-	if int32(p.Rotation) != CharacterAngle {
+	if int32(p.Rotation) != characterAngle {
 		if p.Rotation < 0 {
-			CharacterAngle = (int32(p.Rotation) + 1*0) % 360
+			characterAngle = (int32(p.Rotation) + 1*0) % 360
 		} else {
-			CharacterAngle = (360 + int32(p.Rotation) - 1*0) % 360
+			characterAngle = (360 + int32(p.Rotation) - 1*0) % 360
 		}
 	}
 	if rl.IsKeyDown(rl.KeyH) {
-		CharacterAngle = (CharacterAngle + 1) % 360
+		characterAngle = (characterAngle + 1) % 360
 	} else if rl.IsKeyDown(rl.KeyL) {
-		CharacterAngle = (360 + CharacterAngle - 1) % 360
+		characterAngle = (360 + characterAngle - 1) % 360
 	}
-
 	// Select current animation
-	if rl.IsKeyPressed(rl.KeyT) {
-		if animsCount > 0 {
-			animIndex = (animIndex + 1) % animsCount
+	if true {
+		switch action {
+		case Idle:
+			animIndex = 0
+		case IdleSway:
+			animIndex = 1
+		case Walk:
+			animIndex = 2
+		case Mine:
+			animIndex = 3
+		default:
+			panic(fmt.Sprintf("unexpected player.ActionType: %#v", action))
 		}
-	} else if rl.IsKeyPressed(rl.KeyG) {
-		if animsCount > 0 {
-			animIndex = (animIndex + animsCount - 1) % animsCount
+		if animIndex >= animsCount {
+			panic(fmt.Sprintf("unexpected player.animIndex: %#v", animIndex))
+		}
+	} else { // DEBUG
+		if rl.IsKeyPressed(rl.KeyT) {
+			if animsCount > 0 {
+				animIndex = (animIndex + 1) % animsCount
+			}
+		} else if rl.IsKeyPressed(rl.KeyG) {
+			if animsCount > 0 {
+				animIndex = (animIndex + animsCount - 1) % animsCount
+			}
 		}
 	}
 
