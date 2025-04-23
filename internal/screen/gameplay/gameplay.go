@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
@@ -46,7 +47,6 @@ var (
 )
 
 func Init() {
-
 	framesCounter = 0
 	finishScreen = 0
 
@@ -58,9 +58,8 @@ func Init() {
 		Projection: rl.CameraPerspective,
 	} // See also https://github.com/raylib-extras/extras-c/blob/main/cameras/rlTPCamera/rlTPCamera.h
 
-	// These props/tiles/objects share the same dungeon texture
-	// dungeonTexture = rl.LoadTexture(filepath.Join("res", "texture", "dungeon_texture.png"))
-	// dungeonTexture = common.Model.OBJ.Colormap
+	// INIT WOULD REQUIRE A LEVEL ID?
+	//		OR CREATE MULTIPLE gameplay000.go files
 
 	// SCENES 0..3
 	// SCENES 0..3
@@ -68,18 +67,62 @@ func Init() {
 	//			SCENES 0..3
 	//						SCENES 0..3
 
-	// Core data
+	InitWorld()
 
-	player.SetupPlayerModel()
-	floor.SetupFloorModel()
-	wall.SetupWallModel()
+	//						SCENES 0..3
+	//			SCENES 0..3
+	// SCENES 0..3
+	// SCENES 0..3
+	// SCENES 0..3
+	// SCENES 0..3
+	// SCENES 0..3
 
-	// Does not load models/textures etc
+	switch isPlay := true; isPlay {
+	case true:
+		rl.PlayMusicStream(common.Music.OpenWorld000)
+	case false:
+		rl.PauseMusicStream(common.Music.OpenWorld000)
+	}
+
+	rl.DisableCursor() // for ThirdPersonPerspective
+}
+
+func InitWorld() {
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
 	{
+		checkedImg := rl.GenImageChecked(100, 100, 1, 1, rl.ColorBrightness(rl.Black, .24), rl.ColorBrightness(rl.Black, .20))
+		checkedTexture = rl.LoadTextureFromImage(checkedImg)
+		rl.UnloadImage(checkedImg)
+
+		checkedModel = rl.LoadModelFromMesh(rl.GenMeshPlane(100, 100, 10, 10))
+		checkedModel.Materials.Maps.Texture = checkedTexture
+	}
+
+	// Core resources
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		mu.Lock()
+		defer mu.Unlock()
+
+		floor.SetupFloorModel()
+		wall.SetupWallModel()
+	}()
+
+	player.SetupPlayerModel() // FIXME: This has File i/o logic.. Should use resources loaded common to load models apriori
+
+	// Core data
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		mu.Lock()
+		defer mu.Unlock()
+
 		data, err := loadCoreGameData()
 		if err != nil {
 			slog.Warn(err.Error()) // WARN: improve error handling
-
 			player.InitPlayer(&gamePlayer, camera)
 			floor.InitFloor(&gameFloor)
 			wall.InitWall()
@@ -92,47 +135,40 @@ func Init() {
 			hasPlayerLeftDrillBase = data.HasPlayerLeftDrillBase
 			hasPlayerLeftDrillBase = false
 		}
-	}
-	gamePlayer.IsPlayerWallCollision = false
+		gamePlayer.IsPlayerWallCollision = false
+	}()
+
+	// Additional resources
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		mu.Lock()
+		defer mu.Unlock()
+
+		block.SetupBlockModels()
+	}()
 
 	// Additional data
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		mu.Lock()
+		defer mu.Unlock()
 
-	block.SetupBlockModels() // Arranges models and sets textures
+		additionalGameData, err := loadAdditionalGameData()
+		if err != nil {
+			slog.Warn(err.Error()) // WARN: improve error handling
 
-	additionalGameData, err := loadAdditionalGameData() // Does not load models/textures etc
-	if err != nil {
-		slog.Warn(err.Error()) // WARN: improve error handling
+			block.InitBlocks(&blocks, block.GenerateRandomBlockPositions(gameFloor))
+		} else { // Resume from saved state
+			blocks = make([]block.Block, len(additionalGameData.Blocks)) // PERF: Make this a static array and use a counter
+			copiedBlockCount := copy(blocks, additionalGameData.Blocks)
+			log.Println(fmt.Sprintf("blocks copied: %v", copiedBlockCount))
+		}
+	}()
 
-		block.InitBlocks(&blocks, block.GenerateRandomBlockPositions(gameFloor))
-	} else { // Resume from saved state
-		blocks = make([]block.Block, len(additionalGameData.Blocks)) // PERF: Make this a static array and use a counter
-		copiedBlockCount := copy(blocks, additionalGameData.Blocks)
-		log.Println(fmt.Sprintf("blocks copied: %v", copiedBlockCount))
-	}
-
-	//						SCENES 0..3
-	//			SCENES 0..3
-	// SCENES 0..3
-	// SCENES 0..3
-	// SCENES 0..3
-	// SCENES 0..3
-	// SCENES 0..3
-
-	checkedImg := rl.GenImageChecked(100, 100, 1, 1, rl.ColorBrightness(rl.Black, .25), rl.ColorBrightness(rl.Black, .2))
-	checkedTexture = rl.LoadTextureFromImage(checkedImg)
-	rl.UnloadImage(checkedImg)
-
-	checkedModel = rl.LoadModelFromMesh(rl.GenMeshPlane(100, 100, 10, 10))
-	checkedModel.Materials.Maps.Texture = checkedTexture
-
-	switch isPlay := true; isPlay {
-	case true:
-		rl.PlayMusicStream(common.Music.OpenWorld000)
-	case false:
-		rl.PauseMusicStream(common.Music.OpenWorld000)
-	}
-
-	rl.DisableCursor() // for ThirdPersonPerspective
+	// Wait blocks until the WaitGroup counter is zero
+	wg.Wait()
 }
 
 func HandleUserInput() {
@@ -175,7 +211,7 @@ func Update() {
 	}
 
 	if gamePlayer.IsPlayerWallCollision {
-		player.RevertPlayerAndCameraPositions(oldPlayer, &gamePlayer, oldCam, &camera)
+		player.RevertPlayerAndCameraPositions(&gamePlayer, oldPlayer, &camera, oldCam)
 	}
 
 	for i := range blocks {
@@ -215,7 +251,7 @@ func Update() {
 			//			HACK
 			//		HACK
 			// HACK
-			player.RevertPlayerAndCameraPositions(oldPlayer, &gamePlayer, oldCam, &camera)
+			player.RevertPlayerAndCameraPositions(&gamePlayer, oldPlayer, &camera, oldCam)
 
 			// Trigger once while mining
 			if (rl.IsKeyDown(rl.KeySpace) && framesCounter%16 == 0) ||
@@ -250,21 +286,21 @@ func Update() {
 		isPlayerInsideBotBarrier := rl.CheckCollisionBoxes(gamePlayer.BoundingBox, bb3)
 
 		if isPlayerInsideBotBarrier && !isPlayerEnteringBase && !isPlayerInsideBase {
-			player.PlayerCol = rl.Blue
+			player.SetColor(rl.Blue)
 		} else if isPlayerEnteringBase && !isPlayerInsideBase {
 			if hasPlayerLeftDrillBase { // HACK: Placeholder change scene check logic
 				hasPlayerLeftDrillBase = false
 				finishScreen = 2 // HACK: Placeholder to shift scene
 				rl.PlaySound(common.FX.Coin)
 			}
-			player.PlayerCol = rl.Green
+			player.SetColor(rl.Green)
 		} else if isPlayerInsideBase {
-			player.PlayerCol = rl.Red
+			player.SetColor(rl.Red)
 		} else {
 			if !hasPlayerLeftDrillBase {
 				hasPlayerLeftDrillBase = true
 			}
-			player.PlayerCol = rl.RayWhite
+			player.SetColor(rl.RayWhite)
 		}
 	}
 
@@ -281,6 +317,7 @@ func Update() {
 		}
 	}
 
+	// Increment gameplay frames counter
 	framesCounter++
 }
 
@@ -295,7 +332,7 @@ func Draw() {
 
 	gameFloor.Draw()
 
-	if true { // ‥ Draw pseudo-infinite(ish) floor backdrop
+	if false { // ‥ Draw pseudo-infinite(ish) floor backdrop
 		rl.DrawModel(checkedModel, rl.NewVector3(0., -.05, 0.), 1., rl.RayWhite)
 	}
 

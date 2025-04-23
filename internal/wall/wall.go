@@ -2,6 +2,7 @@ package wall
 
 import (
 	"example/depths/internal/common"
+	"sync"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -14,6 +15,11 @@ var (
 func InitWall() {}
 
 func SetupWallModel() {
+	var mu sync.Mutex
+
+	mu.Lock()
+	defer mu.Unlock()
+
 	// wallModel = rl.LoadModel(filepath.Join("res", "model", "obj", "wall.obj"))
 	wallModel = common.Model.OBJ.Wall
 	wallModel = common.Model.OBJ.Stairs

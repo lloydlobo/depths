@@ -3,6 +3,7 @@ package block
 import (
 	"cmp"
 	"fmt"
+	"sync"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
@@ -76,6 +77,11 @@ func InitBlocks(dst *[]Block, positions []rl.Vector3) {
 }
 
 func SetupBlockModels() {
+	var mu sync.Mutex
+
+	mu.Lock()
+	defer mu.Unlock()
+
 	for i := range MaxBlockState {
 		switch i {
 		case DirtBlockState:

@@ -1,6 +1,8 @@
 package floor
 
 import (
+	"sync"
+
 	rl "github.com/gen2brain/raylib-go/raylib"
 
 	"example/depths/internal/common"
@@ -36,6 +38,11 @@ func InitFloor(floor *Floor) {
 }
 
 func SetupFloorModel() {
+	var mu sync.Mutex
+
+	mu.Lock()
+	defer mu.Unlock()
+
 	floorTileLargeModel = common.Model.OBJ.Floor // Floor,FloorDetail
 	rl.SetMaterialTexture(floorTileLargeModel.Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
 }

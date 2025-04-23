@@ -6,20 +6,13 @@ import (
 	"example/depths/internal/common"
 	"example/depths/internal/floor"
 	"fmt"
+	"image/color"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
-)
-
-type BoneType uint8
-
-const (
-	BoneSocketHat   BoneType = 0
-	BoneSocketHandR BoneType = 1
-	BoneSocketHandL BoneType = 2
-	MaxBoneSockets  BoneType = 3
 )
 
 type Player struct {
@@ -43,17 +36,32 @@ const (
 var (
 	action ActionType = Idle
 )
+
 var (
-	CharacterModel       rl.Model
-	CharacterAngle       int32
-	EquippedModels       [MaxBoneSockets]rl.Model
-	IsShowEquippedModels [MaxBoneSockets]bool
-	PlayerCol            = rl.RayWhite
+	playerColor = rl.RayWhite
+)
+
+func SetColor(col color.RGBA) {
+	playerColor = col // use mutex?
+}
+
+type BoneType uint8
+
+const (
+	BoneSocketHat   BoneType = 0
+	BoneSocketHandR BoneType = 1
+	BoneSocketHandL BoneType = 2
+	MaxBoneSockets  BoneType = 3
 )
 
 var (
-	playerModel rl.Model
+	characterModel       rl.Model
+	characterAngle       int32
+	equippedModels       [MaxBoneSockets]rl.Model
+	isShowEquippedModels [MaxBoneSockets]bool
+)
 
+var (
 	modelAnimations  []rl.ModelAnimation
 	animsCount       = uint(0)
 	animIndex        = uint(0)
@@ -66,6 +74,10 @@ var (
 	characterRotate rl.Quaternion
 )
 
+var (
+	playerModel rl.Model // UNUSED -> not compatible with kenney models
+)
+
 func NewPlayer(camera rl.Camera3D) Player {
 	player := Player{
 		Position:   camera.Target,
@@ -73,31 +85,34 @@ func NewPlayer(camera rl.Camera3D) Player {
 		Collisions: rl.NewQuaternion(0, 0, 0, 0),
 	}
 	player.BoundingBox = common.GetBoundingBoxFromPositionSizeV(camera.Target, player.Size)
-
 	return player
 }
 
+// FIXME: Remove this or bring the one from NewPlayer here
 func InitPlayer(player *Player, camera rl.Camera3D) {
 	*player = NewPlayer(camera)
-	// FIXME: Remove this or bring the one from NewPlayer here
 }
 
+// FIXME: This has File i/o logic.. Should use resources loaded common to load models apriori
 func SetupPlayerModel() {
+	var mu sync.Mutex
+
+	mu.Lock()
+	defer mu.Unlock()
+
 	playerModel = common.Model.OBJ.CharacterHuman
 	rl.SetMaterialTexture(playerModel.Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
-
-	// INIT
 
 	// Load gltf model
 	// See https://www.raylib.com/examples/models/loader.html?name=models_bone_socket
 	// See https://github.com/raysan5/raylib/tree/master/examples/models/resources/models/gltf
-	CharacterModel = rl.LoadModel(filepath.Join("res", "model", "gltf", "greenman.glb"))
-	EquippedModels = [MaxBoneSockets]rl.Model{
+	characterModel = rl.LoadModel(filepath.Join("res", "model", "gltf", "greenman.glb"))
+	equippedModels = [MaxBoneSockets]rl.Model{
 		rl.LoadModel(filepath.Join("res", "model", "gltf", "greenman_hat.glb")),    // Index for the hat model is the same as BONE_SOCKET_HAT
 		rl.LoadModel(filepath.Join("res", "model", "gltf", "greenman_sword.glb")),  // Index for the sword model is the same as BONE_SOCKET_HAND_R
 		rl.LoadModel(filepath.Join("res", "model", "gltf", "greenman_shield.glb")), // Index for the shield model is the same as BONE_SOCKET_HAND_L
 	}
-	IsShowEquippedModels = [MaxBoneSockets]bool{true, true, true}
+	isShowEquippedModels = [MaxBoneSockets]bool{false, true, true}
 
 	// Load gltf model animations
 	animIndex = 0
@@ -120,8 +135,8 @@ func SetupPlayerModel() {
 	}
 
 	// Search bones for sockets in -> [root,body_low,body_up,socket_hat,hand_L,hand_R,hip_L,leg_L,hip_R,leg_R,socket_hand_L,socket_hand_R]
-	for i := range CharacterModel.BoneCount {
-		var buf [32]int8 = CharacterModel.GetBones()[i].Name
+	for i := range characterModel.BoneCount {
+		var buf [32]int8 = characterModel.GetBones()[i].Name
 		var name string = B2S(buf[:])
 
 		// FIXME: String comparison not work with == operator
@@ -145,9 +160,24 @@ func SetupPlayerModel() {
 		}
 	}
 
-	if got, want := boneSocketsIndex[:], [3]int{3, 11, 10}; !slices.Equal(got[:], want[:]) { // boneSocketIndex => initial [-1,-1,-1] => want [3,11,10]
+	// boneSocketIndex => initial [-1,-1,-1] => want [3,11,10]
+	if got, want := boneSocketsIndex[:], [3]int{3, 11, 10}; !slices.Equal(got[:], want[:]) {
 		panic(fmt.Sprintln("NewPlayer: boneSocketIndex", "got", got, "want", want))
 	}
+}
+
+// FIXME: Camera gets stuck if player keeps moving into the box.
+// NOTE:  Maybe lerp or free camera if "distance to the box is less" or touching.
+func RevertPlayerAndCameraPositions(
+	dstPlayer *Player,
+	srcPlayer Player,
+	dstCamera *rl.Camera3D,
+	srcCamera rl.Camera3D,
+) {
+	dstPlayer.Position = srcPlayer.Position
+	dstPlayer.BoundingBox = common.GetBoundingBoxFromPositionSizeV(dstPlayer.Position, dstPlayer.Size)
+	dstCamera.Target = srcCamera.Target
+	dstCamera.Position = srcCamera.Position
 }
 
 func (p *Player) Update(camera rl.Camera3D, flr floor.Floor) {
@@ -209,28 +239,25 @@ func (p *Player) Update(camera rl.Camera3D, flr floor.Floor) {
 
 	// Toggle shown of equip
 	if rl.IsKeyPressed(rl.KeyOne) {
-		IsShowEquippedModels[BoneSocketHat] = !IsShowEquippedModels[BoneSocketHat]
+		isShowEquippedModels[BoneSocketHat] = !isShowEquippedModels[BoneSocketHat]
 	}
 	if rl.IsKeyPressed(rl.KeyTwo) {
-		IsShowEquippedModels[BoneSocketHandR] = !IsShowEquippedModels[BoneSocketHandR]
+		isShowEquippedModels[BoneSocketHandR] = !isShowEquippedModels[BoneSocketHandR]
 	}
 	if rl.IsKeyPressed(rl.KeyThree) {
-		IsShowEquippedModels[BoneSocketHandL] = !IsShowEquippedModels[BoneSocketHandL]
+		isShowEquippedModels[BoneSocketHandL] = !isShowEquippedModels[BoneSocketHandL]
 	}
 
 	// Update model animation
 	anim = modelAnimations[animIndex]
 	if anim.FrameCount > 0 {
 		animCurrentFrame = (animCurrentFrame + 1) % uint(anim.FrameCount)
-		rl.UpdateModelAnimation(CharacterModel, anim, int32(animCurrentFrame))
+		rl.UpdateModelAnimation(characterModel, anim, int32(animCurrentFrame))
 	}
 
 	// Project the player as the camera target
 	p.Position = camera.Target
-
-	p.BoundingBox = rl.NewBoundingBox(
-		rl.NewVector3(p.Position.X-p.Size.X/2, p.Position.Y-p.Size.Y/2, p.Position.Z-p.Size.Z/2),
-		rl.NewVector3(p.Position.X+p.Size.X/2, p.Position.Y+p.Size.Y/2, p.Position.Z+p.Size.Z/2))
+	p.BoundingBox = common.GetBoundingBoxFromPositionSizeV(p.Position, p.Size)
 
 	// Wall collisions
 	if p.BoundingBox.Min.X <= flr.BoundingBox.Min.X {
@@ -268,7 +295,7 @@ func (p Player) Draw() {
 		rl.DrawCapsule(
 			rl.Vector3Add(p.Position, rl.NewVector3(0, p.Size.Y/8, 0)),
 			rl.Vector3Add(p.Position, rl.NewVector3(0, -p.Size.Y/4, 0)),
-			p.Size.X/2, 8, 8, PlayerCol)
+			p.Size.X/2, 8, 8, playerColor)
 	} else {
 		// Draw character and equipments
 		rl.PushMatrix()
@@ -295,23 +322,23 @@ func (p Player) Draw() {
 		}
 
 		// Draw character
-		characterRotate = rl.QuaternionFromAxisAngle(rl.NewVector3(0.0, 1.0, 0.0), float32(CharacterAngle)*rl.Deg2rad)
-		CharacterModel.Transform = rl.MatrixMultiply(rl.QuaternionToMatrix(characterRotate), rl.MatrixTranslate(posX, posY, posZ))
-		rl.UpdateModelAnimation(CharacterModel, anim, int32(animCurrentFrame))
-		rl.DrawMesh(CharacterModel.GetMeshes()[0],
-			CharacterModel.GetMaterials()[1], CharacterModel.Transform)
+		characterRotate = rl.QuaternionFromAxisAngle(rl.NewVector3(0.0, 1.0, 0.0), float32(characterAngle)*rl.Deg2rad)
+		characterModel.Transform = rl.MatrixMultiply(rl.QuaternionToMatrix(characterRotate), rl.MatrixTranslate(posX, posY, posZ))
+		rl.UpdateModelAnimation(characterModel, anim, int32(animCurrentFrame))
+		rl.DrawMesh(characterModel.GetMeshes()[0],
+			characterModel.GetMaterials()[1], characterModel.Transform)
 
 		// Draw equipments (hat, sword, shield)
 		for i := range MaxBoneSockets {
-			if !IsShowEquippedModels[i] {
+			if !isShowEquippedModels[i] {
 				continue
 			}
-			if anim.FramePoses == nil || CharacterModel.BindPose == nil {
+			if anim.FramePoses == nil || characterModel.BindPose == nil {
 				continue
 			}
 
 			var transform rl.Transform = anim.GetFramePose(int(animCurrentFrame), boneSocketsIndex[i])
-			var inRotation rl.Quaternion = CharacterModel.GetBindPose()[boneSocketsIndex[i]].Rotation
+			var inRotation rl.Quaternion = characterModel.GetBindPose()[boneSocketsIndex[i]].Rotation
 			var outRotation rl.Quaternion = transform.Rotation
 
 			// Calculate socket rotation (angle between bone in initial pose and same bone in current animation frame)
@@ -320,10 +347,10 @@ func (p Player) Draw() {
 			// Translate socket to its position in the current animation
 			matrixTransform = rl.MatrixMultiply(matrixTransform, rl.MatrixTranslate(transform.Translation.X, transform.Translation.Y, transform.Translation.Z))
 			// Transform the socket using the transform of the character (angle and translate)
-			matrixTransform = rl.MatrixMultiply(matrixTransform, CharacterModel.Transform)
+			matrixTransform = rl.MatrixMultiply(matrixTransform, characterModel.Transform)
 
 			// Draw mesh at socket position with socket angle rotation
-			rl.DrawMesh(EquippedModels[i].GetMeshes()[0], EquippedModels[i].GetMaterials()[1], matrixTransform)
+			rl.DrawMesh(equippedModels[i].GetMeshes()[0], equippedModels[i].GetMaterials()[1], matrixTransform)
 		}
 
 		rl.PopMatrix()
@@ -360,22 +387,4 @@ func (p Player) Draw() {
 			common.DrawXYZOrbitV(p.Position, 1./common.Phi)
 		}
 	}
-}
-
-// FIXME: Camera gets stuck if player keeps moving into the box. Maybe lerp or
-// free camera if "distance to the box is less" or touching.
-func RevertPlayerAndCameraPositions(
-	srcPlayer Player, dstPlayer *Player,
-	srcCamera rl.Camera3D, dstCamera *rl.Camera3D,
-) {
-	dstPlayer.Position = srcPlayer.Position
-	dstPlayer.BoundingBox = rl.NewBoundingBox(
-		rl.NewVector3(dstPlayer.Position.X-dstPlayer.Size.X/2,
-			dstPlayer.Position.Y-dstPlayer.Size.Y/2,
-			dstPlayer.Position.Z-dstPlayer.Size.Z/2),
-		rl.NewVector3(dstPlayer.Position.X+dstPlayer.Size.X/2,
-			dstPlayer.Position.Y+dstPlayer.Size.Y/2,
-			dstPlayer.Position.Z+dstPlayer.Size.Z/2))
-	dstCamera.Target = srcCamera.Target
-	dstCamera.Position = srcCamera.Position
 }
