@@ -54,8 +54,10 @@ func (fl Floor) Draw() {
 			rl.DrawModel(floorTileLargeModel, position, 1.0, rl.White)
 		}
 	}
-	rl.DrawBoundingBox(fl.BoundingBox, rl.DarkGray)
 
-	common.DrawXYZOrbitV(rl.Vector3Zero(), 2.)
-	common.DrawWorldXYZAxis()
+	if false { // DEBUG
+		rl.DrawBoundingBox(fl.BoundingBox, rl.DarkGray)
+		common.DrawXYZOrbitV(rl.Vector3Zero(), 2.)
+		common.DrawWorldXYZAxis()
+	}
 }

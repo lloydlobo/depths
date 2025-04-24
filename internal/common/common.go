@@ -35,9 +35,12 @@ var (
 	}
 	Shader  struct{ PBR rl.Shader }
 	Texture struct{ CubicmapAtlas rl.Texture2D }
-	Model   struct {
+	// Rename to ModelDungeon
+	Model struct {
 		OBJ model.ModelsOBJ
 		GLB model.ModelsGLB
+	}
+	ModelPrototype struct {
 	}
 )
 

@@ -83,10 +83,8 @@ func Init() {
 
 		// Order is maybe important
 		player.InitPlayer(&gamePlayer, camera)
-		gameFloor = floor.NewFloor(
-			common.Vector3Zero,
-			rl.NewVector3(16*2, 0.001*2, 9*2)) // floor.InitFloor(&gameFloor)
-		wall.InitWall() // NOTE: Empty func for convention
+		gameFloor = floor.NewFloor(common.Vector3Zero, rl.NewVector3(16*2, 0.001*2, 9*2)) // 16:9 ratio // floor.InitFloor(&gameFloor)
+		wall.InitWall()                                                                   // NOTE: Empty func for convention
 
 		hasPlayerLeftDrillBase = false
 		gamePlayer.IsPlayerWallCollision = false
@@ -106,7 +104,7 @@ func Init() {
 
 	// Core resources
 	floor.SetupFloorModel()
-	wall.SetupWallModel()
+	wall.SetupWallModel("gameplay")
 	player.SetupPlayerModel() // FIXME: in this func, use package common for models
 	player.ToggleEquippedModels([player.MaxBoneSockets]bool{false, true, true})
 
@@ -215,10 +213,20 @@ func Update() {
 
 	// Press enter or tap to change to ending game screen
 	if rl.IsKeyDown(rl.KeyF10) || rl.IsGestureDetected(rl.GesturePinchOut) {
-		finishScreen = 1 // 1=>ending
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "rollover3.ogg")))
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "switch33.ogg")))
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", "confirmation_001.ogg")))
+
+		{ // Save screen state
+			//
+			// PERF: Find way to reduce size. => Size of "additional level state" is
+			//       117x times size of "core level state"
+			//
+			finishScreen = 1                      // 1=>ending
+			camera.Up = rl.NewVector3(0., 1., 0.) // Reset yaw/pitch/roll
+			saveCoreLevelState()                  // (player,camera,...) 705 bytes
+			saveAdditionalLevelState()            // (blocks,...)        82871 bytes
+		}
 	}
 
 	if rl.IsKeyDown(rl.KeyF) {
@@ -233,7 +241,13 @@ func Update() {
 	gamePlayer.Collisions = rl.Quaternion{}
 	gamePlayer.IsPlayerWallCollision = false
 
+	// Update the game camera for this screen
 	rl.UpdateCamera(&camera, rl.CameraThirdPerson)
+
+	// Reset camera yaw(y-axis)/roll(z-axis) (on key [W] or [E])
+	if got, want := camera.Up, (rl.Vector3{X: 0., Y: 1., Z: 0.}); !rl.Vector3Equals(got, want) {
+		camera.Up = want
+	}
 
 	gamePlayer.Update(camera, gameFloor)
 
@@ -383,12 +397,17 @@ func Update() {
 				// TODO
 				// TODO
 				// TODO
-				finishScreen = 2 // 1=>ending 2=>drillroom
-
 				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("footstep0%d.ogg", rl.GetRandomValue(0, 9))))) // 05
 				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "metalClick.ogg")))                                        // metalClick
 				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("creak%d.ogg", rl.GetRandomValue(1, 3)))))     // 3
 				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("doorOpen_%d.ogg", rl.GetRandomValue(1, 2))))) // 2
+
+				{ // Save screen state
+					finishScreen = 2                      // 1=>ending 2=>drillroom
+					camera.Up = rl.NewVector3(0., 1., 0.) // Reset yaw/pitch/roll
+					saveCoreLevelState()                  // (player,camera,...) 705 bytes
+					saveAdditionalLevelState()            // (blocks,...)        82871 bytes
+				}
 			}
 			player.SetColor(rl.Green)
 		} else if isPlayerInsideBase {
@@ -433,7 +452,7 @@ func Draw() {
 		rl.DrawModel(checkedModel, rl.NewVector3(0., -.05, 0.), 1., rl.RayWhite)
 	}
 
-	wall.DrawBatch(gameFloor.Position, gameFloor.Size, common.Vector3One)
+	wall.DrawBatch("gameplay", gameFloor.Position, gameFloor.Size, common.Vector3One)
 
 	for i := range blocks {
 		blocks[i].Draw()
@@ -544,14 +563,8 @@ func Unload() {
 }
 
 // Gameplay screen should finish?
+// NOTE: This is called each frame in main game loop
 func Finish() int {
-	//
-	// PERF: Find way to reduce size. => Size of "additional level state" is
-	//       117x times size of "core level state"
-	//
-	saveCoreLevelState()       // (player,camera,...) 705 bytes
-	saveAdditionalLevelState() // (blocks,...)        82871 bytes
-
 	return finishScreen
 }
 

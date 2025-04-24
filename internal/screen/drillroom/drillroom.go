@@ -10,6 +10,7 @@ import (
 	"example/depths/internal/common"
 	"example/depths/internal/floor"
 	"example/depths/internal/player"
+	"example/depths/internal/wall"
 )
 
 const (
@@ -29,6 +30,7 @@ var (
 	gamePlayer             player.Player
 	hasPlayerLeftDrillBase bool
 
+	// TODO: SEPARATE THIS FROM CORE DATA
 	hitCount int32
 	hitScore int32
 )
@@ -51,10 +53,11 @@ func Init() {
 	// Core resources
 	player.SetupPlayerModel()
 	floor.SetupFloorModel()
+	wall.SetupWallModel("drillroom")
 
 	// Core data
 	player.InitPlayer(&gamePlayer, camera)
-	gameFloor = floor.NewFloor(common.Vector3Zero, rl.NewVector3(4*3, 0.001*2, 3*3))
+	gameFloor = floor.NewFloor(common.Vector3Zero, rl.NewVector3(16, 0.001*2, 16)) // 1:1 ratio
 
 	// Unequip hat sword shield
 	player.ToggleEquippedModels([player.MaxBoneSockets]bool{false, false, false})
@@ -89,10 +92,21 @@ func Update() {
 	_ = oldCam
 	_ = oldPlayer
 
-	gamePlayer.Update(camera, gameFloor)
+	// Reset flags/variables
+	gamePlayer.Collisions = rl.Quaternion{}
+	gamePlayer.IsPlayerWallCollision = false
 
-	if true {
-		rl.UpdateCamera(&camera, rl.CameraThirdPerson)
+	// Update the game camera for this screen
+	rl.UpdateCamera(&camera, rl.CameraThirdPerson)
+
+	// Reset camera yaw(y-axis)/roll(z-axis) (on key [W] or [E])
+	if got, want := camera.Up, (rl.Vector3{X: 0., Y: 1., Z: 0.}); !rl.Vector3Equals(got, want) {
+		camera.Up = want
+	}
+
+	gamePlayer.Update(camera, gameFloor)
+	if gamePlayer.IsPlayerWallCollision {
+		player.RevertPlayerAndCameraPositions(&gamePlayer, oldPlayer, &camera, oldCam)
 	}
 }
 
@@ -106,11 +120,17 @@ func Draw() {
 
 	rl.ClearBackground(rl.RayWhite)
 
-	rl.DrawModel(common.Model.OBJ.Gate, common.Vector3Zero, 1., rl.White)
-	rl.DrawModel(common.Model.OBJ.Barrel, common.Vector3Zero, 1., rl.White)
-
 	gamePlayer.Draw()
 	gameFloor.Draw()
+	wall.DrawBatch("drillroom", gameFloor.Position, gameFloor.Size, cmp.Or(rl.NewVector3(3, 3, 3), common.Vector3One))
+
+	{ // TEMPORARY
+		rl.DrawModel(
+			common.Model.OBJ.Gate,
+			rl.NewVector3(gameFloor.BoundingBox.Min.X+1, gameFloor.Position.Y, gameFloor.BoundingBox.Min.Z+1),
+			1.,
+			rl.White)
+	}
 
 	rl.EndMode3D()
 
@@ -143,8 +163,7 @@ func Unload() {
 }
 
 // Drillroom screen should finish?
+// NOTE: This is called each frame in main game loop
 func Finish() int {
-	// saveCoreLevelState()       // (player,camera,...) 705 bytes
-	// saveAdditionalLevelState() // (blocks,...)        82871 bytes
 	return finishScreen
 }
