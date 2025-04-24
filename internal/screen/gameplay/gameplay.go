@@ -116,6 +116,8 @@ func Init() {
 			camera = data.Camera
 			gameFloor = data.GameFloor
 			gamePlayer = data.GamePlayer
+			hitScore = data.HitScore
+			hitCount = data.HitCount
 			if false {
 				hasPlayerLeftDrillBase = data.HasPlayerLeftDrillBase
 			} else {
