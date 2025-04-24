@@ -81,12 +81,20 @@ func Update() {
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", "confirmation_001.ogg")))
 	}
 	if rl.IsKeyDown(rl.KeyBackspace) || rl.IsGestureDetected(rl.GestureSwipeLeft) {
-		finishScreen = 2 // 2=>gameplay
-
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("footstep0%d.ogg", rl.GetRandomValue(0, 9)))))  // 05
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "metalClick.ogg")))                                         // metalClick
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("creak%d.ogg", rl.GetRandomValue(1, 3)))))      // 3
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("doorClose_%d.ogg", rl.GetRandomValue(1, 4))))) // 4
+		{                                                                                                                                             // Save screen state
+			finishScreen = 2                      // 1=>ending 2=>gameplay(openworldroom)
+			camera.Up = rl.NewVector3(0., 1., 0.) // Reset yaw/pitch/roll
+			// TODO: implement drillroom save/load functions (data and filenames)
+			// Not really necessary to save core data -> as its trivial to just use defaults (for a small place)
+			// A 2D gui controls could have easily replaced this 3D world.
+			// BUT, save scoring and game mechanincs based on money/experience/mining progress yada yada
+			// saveCoreLevelState()                  // (player,camera,...) 705 bytes
+			// saveAdditionalLevelState()            // (blocks,...)        82871 bytes
+		}
 	}
 
 	// Update playerl leaving common.DrillRoom => common.Opcommon.OpenWorldRoom
@@ -119,14 +127,15 @@ func Update() {
 	}
 }
 
+// TRIGGERS // MAYBE INIT IN INIT METHOD AS LOCAL VARIABLES
 func getGatesIntersectionBoundingBoxes() (bb1 rl.BoundingBox, bb2 rl.BoundingBox, bb3 rl.BoundingBox) {
 	origin := gameFloor.Position
 	size := gameFloor.Size
 	size.Y = max(2, gamePlayer.Size.Y)
 	wallThick := float32(2)
-	bb1 = common.GetBoundingBoxFromPositionSizeV(origin, rl.Vector3Subtract(size, rl.NewVector3(3.5, 0, 3.5)))        // player is inside	 (red->green)
-	bb2 = common.GetBoundingBoxFromPositionSizeV(origin, rl.Vector3Subtract(size, rl.NewVector3(1.5, 0, 1.5)))        // player is entering (green->blue)
-	bb3 = common.GetBoundingBoxFromPositionSizeV(origin, rl.Vector3Add(size, rl.NewVector3(wallThick, 0, wallThick))) // outer barrier      (blue->white)
+	bb1 = common.GetBoundingBoxFromPositionSizeV(origin, rl.Vector3Subtract(size, rl.NewVector3(3.25, 0, 3.25)))                                   // player is inside	 (red->green)
+	bb2 = common.GetBoundingBoxFromPositionSizeV(origin, rl.Vector3Subtract(size, rl.NewVector3(1+gamePlayer.Size.X/2, 0, 1+gamePlayer.Size.Z/2))) // player is entering (green->blue)
+	bb3 = common.GetBoundingBoxFromPositionSizeV(origin, rl.Vector3Add(size, rl.NewVector3(wallThick, 0, wallThick)))                              // outer barrier      (blue->white)
 	return bb1, bb2, bb3
 }
 func updateIntersectGates(bb1 rl.BoundingBox, bb2 rl.BoundingBox, bb3 rl.BoundingBox) {
@@ -139,14 +148,17 @@ func updateIntersectGates(bb1 rl.BoundingBox, bb2 rl.BoundingBox, bb3 rl.Boundin
 		player.SetColor(rl.Blue)
 		if !hasPlayerLeftDrillBase { // HACK: Placeholder change scene check logic
 			hasPlayerLeftDrillBase = true
-			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("footstep0%d.ogg", rl.GetRandomValue(0, 9))))) // 05
-			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "metalClick.ogg")))                                        // metalClick
-			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("creak%d.ogg", rl.GetRandomValue(1, 3)))))     // 3
-			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("doorOpen_%d.ogg", rl.GetRandomValue(1, 2))))) // 2
-			{                                                                                                                                            // Save screen state
-				finishScreen = 2                      // 1=>ending 2=>drillroom
+			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("footstep0%d.ogg", rl.GetRandomValue(0, 9)))))  // 05
+			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "metalClick.ogg")))                                         // metalClick
+			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("creak%d.ogg", rl.GetRandomValue(1, 3)))))      // 3
+			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("doorClose_%d.ogg", rl.GetRandomValue(1, 4))))) // 4
+			{                                                                                                                                             // Save screen state
+				finishScreen = 2                      // 1=>ending 2=>gameplay(openworldroom)
 				camera.Up = rl.NewVector3(0., 1., 0.) // Reset yaw/pitch/roll
 				// TODO: implement drillroom save/load functions (data and filenames)
+				// Not really necessary to save core data -> as its trivial to just use defaults (for a small place)
+				// A 2D gui controls could have easily replaced this 3D world.
+				// BUT, save scoring and game mechanincs based on money/experience/mining progress yada yada
 				// saveCoreLevelState()                  // (player,camera,...) 705 bytes
 				// saveAdditionalLevelState()            // (blocks,...)        82871 bytes
 			}
