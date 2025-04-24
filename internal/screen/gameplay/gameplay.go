@@ -191,7 +191,7 @@ func Init() {
 		}
 	}
 	// TEMPORARY
-	if true {
+	if false {
 		rl.PauseMusicStream(currentMusic)
 	}
 
@@ -407,10 +407,9 @@ func Update() {
 			player.RevertPlayerAndCameraPositions(&gamePlayer, oldPlayer, &camera, oldCam)
 
 			// Trigger once while mining
-			if (rl.IsKeyDown(rl.KeySpace) && framesCounter%16 == 0) ||
-				(rl.IsMouseButtonDown(rl.MouseLeftButton) && framesCounter%16 == 0) {
+			if (rl.IsKeyDown(rl.KeySpace) && framesCounter%16 == 0) || (rl.IsMouseButtonDown(rl.MouseLeftButton) && framesCounter%16 == 0) {
 				// Play player weapon sounds
-				{
+				if true {
 					v := rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "drawKnife3.ogg"))
 					rl.SetSoundPan(v, 0.5+float32(rl.GetRandomValue(-10, 10)/(2*10)))
 					rl.SetSoundVolume(v, 0.1)
@@ -424,14 +423,12 @@ func Update() {
 						soundName += "2"
 					}
 					v := rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", soundName+".ogg"))
-					alpha := 0.5 + float32(rl.GetRandomValue(-10, 10))/40.0
-					rl.SetSoundPan(v, alpha)
+					rl.SetSoundPan(v, 0.5+float32(rl.GetRandomValue(-10, 10))/40.0)
 					rl.SetSoundVolume(v, 0.5)
 					rl.PlaySound(v)
 				}
 				if true {
-					v := rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio",
-						fmt.Sprintf("cloth%d.ogg", min(block.MaxBlockState-1, max(1, state+1)))))
+					v := rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("cloth%d.ogg", min(block.MaxBlockState-1, max(1, state+1)))))
 					rl.SetSoundPan(v, 0.5+float32(rl.GetRandomValue(-10, 10)/(2*10)))
 					rl.SetSoundVolume(v, 0.0625)
 					rl.PlaySound(v)
@@ -443,14 +440,12 @@ func Update() {
 					rl.SetSoundVolume(s1, float32(rl.GetRandomValue(7, 10))/10.)
 					rl.SetSoundVolume(s2, float32(rl.GetRandomValue(4, 8))/10.)
 					rl.SetSoundVolume(s3, float32(rl.GetRandomValue(1, 4))/10.)
-
 					rl.PlaySound(s1)
 					rl.PlaySound(s2)
 					rl.PlaySound(s3)
 				}
 				if rl.GetRandomValue(0, 1) == 0 && state > block.DirtBlockState {
-					v := rl.LoadSound(filepath.Join("res", "fx", "kenney_impact-sounds", "Audio",
-						fmt.Sprintf("impactMining_00%d.ogg", min(block.MaxBlockState-1, state))))
+					v := rl.LoadSound(filepath.Join("res", "fx", "kenney_impact-sounds", "Audio", fmt.Sprintf("impactMining_00%d.ogg", min(block.MaxBlockState-1, state))))
 					rl.SetSoundPan(v, 0.5+float32(rl.GetRandomValue(-10, 10)/(2*10)))
 					rl.SetSoundVolume(v, 2.00)
 					rl.PlaySound(v)

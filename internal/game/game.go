@@ -57,7 +57,7 @@ func Run() {
 	rl.PauseMusicStream(common.Music.UIScreen001)
 
 	common.Music.OpenWorld000 = rl.LoadMusicStream(filepath.Join("res", "music", "ambient-music-329699.mp3"))
-	common.Music.OpenWorld001 = rl.LoadMusicStream(filepath.Join("res", "music", "serenity-329278.mp3"))
+	common.Music.OpenWorld001 = rl.LoadMusicStream(filepath.Join("res", "music", "just-relax-11157.mp3"))
 	common.Music.OpenWorld000.Looping = true
 	common.Music.OpenWorld001.Looping = true
 	rl.SetMusicVolume(common.Music.OpenWorld000, 1.0)
@@ -74,7 +74,7 @@ func Run() {
 	rl.PauseMusicStream(common.Music.DrillRoom000)
 	rl.PauseMusicStream(common.Music.DrillRoom001)
 
-	common.Music.Ambient000 = rl.LoadMusicStream(filepath.Join("res", "music", "ambient.ogg"))
+	common.Music.Ambient000 = rl.LoadMusicStream(filepath.Join("res", "music", "serenity-329278.mp3"))
 	common.Music.Ambient000.Looping = true
 
 	common.FX.Coin = rl.LoadSound("res/fx/coin.wav")
