@@ -119,10 +119,10 @@ func Init() {
 			gamePlayer = data.GamePlayer
 			hitScore = data.HitScore
 			hitCount = data.HitCount
-			if false {
-				hasPlayerLeftDrillBase = data.HasPlayerLeftDrillBase
+			if true {
+				hasPlayerLeftDrillBase = data.HasPlayerLeftDrillBase // If save game when far from drill and exit -> this will tell the reality
 			} else {
-				hasPlayerLeftDrillBase = false
+				hasPlayerLeftDrillBase = false // How do we know?
 			}
 			gamePlayer.IsPlayerWallCollision = false
 			saveCoreLevelState() // Save ASAP
@@ -342,14 +342,19 @@ func Update() {
 				}
 
 				// Update stats
-				hitCount++
 				const finalState = (block.MaxBlockState - 1)
+				hitCount++
 				if state == finalState-1 {
 					hitScore++
+
 					// FIXME: Record.. hitCount and hitScore to save game.. and load and update directly
 					if hitCount/hitScore != int32(finalState) {
 						msg := fmt.Sprintf("expect for %d hits, score to incrementby 1. (except if counter started from an already semi-mined block)", finalState)
-						slog.Warn(msg)
+						if isEnablePerfectionist := false; isEnablePerfectionist {
+							panic(msg)
+						} else {
+							slog.Warn(msg)
+						}
 					}
 				}
 				// Increment state on successful mining action
@@ -360,68 +365,53 @@ func Update() {
 
 	// Update player─block collision+breaking/mining
 	{
-		origin := common.Vector3Zero
-		origin = gameFloor.Position
+		origin := gameFloor.Position
 		bb1 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(3, 2, 3)) // player is inside
 		bb2 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(5, 2, 5)) // player is entering
 		bb3 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(7, 2, 7)) // bot barrier
-
 		isPlayerInsideBase := rl.CheckCollisionBoxes(gamePlayer.BoundingBox, bb1)
 		isPlayerEnteringBase := rl.CheckCollisionBoxes(gamePlayer.BoundingBox, bb2)
 		isPlayerInsideBotBarrier := rl.CheckCollisionBoxes(gamePlayer.BoundingBox, bb3)
 
+		canSwitchToDrillRoom := false
+
 		if isPlayerInsideBotBarrier && !isPlayerEnteringBase && !isPlayerInsideBase {
 			player.SetColor(rl.Blue)
 		} else if isPlayerEnteringBase && !isPlayerInsideBase {
-			if hasPlayerLeftDrillBase { // HACK: Placeholder change scene check logic
-				hasPlayerLeftDrillBase = false
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("footstep0%d.ogg", rl.GetRandomValue(0, 9))))) // 05
-				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "metalClick.ogg")))                                        // metalClick
-				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("creak%d.ogg", rl.GetRandomValue(1, 3)))))     // 3
-				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("doorOpen_%d.ogg", rl.GetRandomValue(1, 2))))) // 2
-
-				{ // Save screen state
-					finishScreen = 2                      // 1=>ending 2=>drillroom
-					camera.Up = rl.NewVector3(0., 1., 0.) // Reset yaw/pitch/roll
-					saveCoreLevelState()                  // (player,camera,...) 705 bytes
-					saveAdditionalLevelState()            // (blocks,...)        82871 bytes
-				}
-			}
 			player.SetColor(rl.Green)
+
+			if hasPlayerLeftDrillBase { // STEP [2] ─ Wait a frame before switching // Avoid glitches (also quick dodge to not-exit)
+				hasPlayerLeftDrillBase = false
+				canSwitchToDrillRoom = true // Actual work done here
+			}
 		} else if isPlayerInsideBase {
 			player.SetColor(rl.Red)
-		} else {
+		} else { // => is outside bounds check
+			player.SetColor(rl.RayWhite) // How to check non-binary logic.. more options.. unlike drill room
+
+			// - RESET FLAG as soon as player leaves bounds check
+			// - This is useful when player spawns near the drill room.
+			// - This avoids re-entering drill base Immediately.
 			if !hasPlayerLeftDrillBase {
-				hasPlayerLeftDrillBase = true
+				hasPlayerLeftDrillBase = true // STEP [1]
 			}
-			player.SetColor(rl.RayWhite)
+		}
+		if canSwitchToDrillRoom {
+			// Play entry sounds
+			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("footstep0%d.ogg", rl.GetRandomValue(0, 9))))) // 05
+			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "metalClick.ogg")))                                        // metalClick
+			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("creak%d.ogg", rl.GetRandomValue(1, 3)))))     // 3
+			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("doorOpen_%d.ogg", rl.GetRandomValue(1, 2))))) // 2
+
+			// Save screen state
+			finishScreen = 2                      // 1=>ending 2=>drillroom
+			camera.Up = rl.NewVector3(0., 1., 0.) // Reset yaw/pitch/roll
+			saveCoreLevelState()                  // (player,camera,...) 705 bytes
+			saveAdditionalLevelState()            // (blocks,...)        82871 bytes
 		}
 	}
 
-	// Move this in package player
+	// TODO: Move this in package player (if possible)
 	if rl.IsKeyDown(rl.KeyW) || rl.IsKeyDown(rl.KeyA) || rl.IsKeyDown(rl.KeyS) || rl.IsKeyDown(rl.KeyD) {
 		const fps = 60.0
 		const framesInterval = fps / 2.5

@@ -1,8 +1,10 @@
+// TODO: Package drillroom only makes sense if player has a limited cargo capacity
 package drillroom
 
 import (
 	"cmp"
 	"fmt"
+	"math"
 	"path/filepath"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -14,7 +16,7 @@ import (
 )
 
 const (
-	screenTitleText    = "DRILL ROOM"                                                                        // This should be temporary during prototype
+	screenTitleText    = "DRILL"                                                                             // This should be temporary during prototype
 	screenSubtitleText = "leave room: backspace swipe-left\nquit:          F10 pinch-out right-mouse-button" // "press enter or tap to jump to title screen"
 )
 
@@ -26,8 +28,8 @@ var (
 
 	levelID                int32
 	camera                 rl.Camera3D
-	gameFloor              floor.Floor
-	gamePlayer             player.Player
+	floorEntity            floor.Floor
+	playerEntity           player.Player // Player Entity or xPlayer
 	hasPlayerLeftDrillBase bool
 )
 
@@ -35,6 +37,18 @@ var (
 	// TODO: SEPARATE THIS FROM CORE DATA
 	hitCount int32
 	hitScore int32
+)
+
+var (
+	drillroomExitBoundingBox rl.BoundingBox
+)
+
+var (
+	triggerBoundingBoxes       []rl.BoundingBox
+	triggerSensorBoundingBoxes []rl.BoundingBox
+	triggerPositions           []rl.Vector3
+	isPlayerNearTriggerSensors []bool
+	triggerCount               int32
 )
 
 func Init() {
@@ -59,13 +73,77 @@ func Init() {
 	wall.SetupWallModel(common.DrillRoom)
 
 	// Core data
-	player.InitPlayer(&gamePlayer, camera)
-	gameFloor = floor.NewFloor(common.Vector3Zero, rl.NewVector3(10, 0.001*2, 10)) // 1:1 ratio
+	player.InitPlayer(&playerEntity, camera)
+	floorEntity = floor.NewFloor(common.Vector3Zero, rl.NewVector3(10, 0.001*2, 10)) // 1:1 ratio
+
+	// Layout copied from https://annekatran.itch.io/dig-and-delve
+	triggerSize := rl.NewVector3(.5, .5, .5)
+	triggerPosY := triggerSize.Y / 2.
+	triggerPositions = []rl.Vector3{
+		// Corners
+		rl.NewVector3(-2, triggerPosY, -2),
+		rl.NewVector3(+2, triggerPosY, -2),
+		rl.NewVector3(-2, triggerPosY, +2),
+		rl.NewVector3(+2, triggerPosY, +2),
+
+		// Sides
+		rl.NewVector3(-2, triggerPosY, +0),
+		rl.NewVector3(+2, triggerPosY, +0),
+		rl.NewVector3(+0, triggerPosY, -2),
+		rl.NewVector3(+0, triggerPosY, +2),
+	}
+	kx := (floorEntity.Size.X / (1. * math.Pi)) - 1.
+	kz := (floorEntity.Size.Z / (1. * math.Pi)) - 2.
+
+	// 45 degree tangent lines (use cos/sin??)
+	dx := float32(0.15 + triggerSize.X)
+	dz := float32(0.40 + triggerSize.Z)
+
+	triggerPositions = []rl.Vector3{
+		// Upper corners
+		rl.NewVector3(-kx, triggerPosY, -kz), // NW
+		rl.NewVector3(+kx, triggerPosY, -kz), // NE
+
+		// Upper arcs
+		rl.NewVector3(-kx+dx, triggerPosY, -kz-dz),       // NW -> NE
+		rl.NewVector3(-kx+dx+dx, triggerPosY, -kz-dz-dz), // NW -> NE -> NE
+		rl.NewVector3(+kx-dx, triggerPosY, -kz-dz),       // NE -> NW
+		rl.NewVector3(+kx-dx-dx, triggerPosY, -kz-dz-dz), // NE -> NW -> NW
+
+		// Lower corners
+		rl.NewVector3(-kx, triggerPosY, +kz), // SW
+		rl.NewVector3(+kx, triggerPosY, +kz), // SE
+
+		// Start drill trigger
+		rl.NewVector3(-kx+dx, triggerPosY, +kz+dz), // SW -> SE
+		// Change resource trigger
+		rl.NewVector3(+kx-dx, triggerPosY, +kz+dz), // SE -> SW
+
+	}
+
+	triggerCount = int32(len(triggerPositions))
+	fmt.Printf("triggerCount: %v\n", triggerCount)
+	for i := range triggerCount {
+		triggerBoundingBoxes = append(triggerBoundingBoxes, common.GetBoundingBoxFromPositionSizeV(triggerPositions[i], triggerSize))
+	}
+	for i := range triggerCount {
+		triggerSensorBoundingBoxes = append(triggerSensorBoundingBoxes, common.GetBoundingBoxFromPositionSizeV(triggerPositions[i], rl.Vector3Scale(triggerSize, 2)))
+	}
+	for range triggerCount {
+		isPlayerNearTriggerSensors = append(isPlayerNearTriggerSensors, false)
+	}
 
 	// Unequip hat sword shield
 	player.ToggleEquippedModels([player.MaxBoneSockets]bool{false, false, false})
 
-	rl.DisableCursor() // For camera thirdperson view
+	// Compute once
+	drillroomExitBoundingBox = common.GetBoundingBoxFromPositionSizeV(
+		floorEntity.Position,
+		rl.Vector3Subtract(floorEntity.Size, rl.NewVector3(1+playerEntity.Size.X/2, -playerEntity.Size.Y*2, 1+playerEntity.Size.Z/2)),
+	)
+
+	// For camera thirdperson view
+	rl.DisableCursor()
 }
 
 func Update() {
@@ -81,37 +159,29 @@ func Update() {
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", "confirmation_001.ogg")))
 	}
 	if rl.IsKeyDown(rl.KeyBackspace) || rl.IsGestureDetected(rl.GestureSwipeLeft) {
+		// Play exit sounds
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("footstep0%d.ogg", rl.GetRandomValue(0, 9)))))  // 05
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "metalClick.ogg")))                                         // metalClick
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("creak%d.ogg", rl.GetRandomValue(1, 3)))))      // 3
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("doorClose_%d.ogg", rl.GetRandomValue(1, 4))))) // 4
-		{                                                                                                                                             // Save screen state
-			finishScreen = 2                      // 1=>ending 2=>gameplay(openworldroom)
-			camera.Up = rl.NewVector3(0., 1., 0.) // Reset yaw/pitch/roll
-			// TODO: implement drillroom save/load functions (data and filenames)
-			// Not really necessary to save core data -> as its trivial to just use defaults (for a small place)
-			// A 2D gui controls could have easily replaced this 3D world.
-			// BUT, save scoring and game mechanincs based on money/experience/mining progress yada yada
-			// saveCoreLevelState()                  // (player,camera,...) 705 bytes
-			// saveAdditionalLevelState()            // (blocks,...)        82871 bytes
-		}
+
+		// Save screen state
+		finishScreen = 2                      // 1=>ending 2=>gameplay(openworldroom)
+		camera.Up = rl.NewVector3(0., 1., 0.) // Reset yaw/pitch/roll
+		// TODO: implement drillroom save/load functions (data and filenames)
+		// saveCoreLevelState()                  // (player,camera,...) 705 bytes
+		// saveAdditionalLevelState()            // (blocks,...)        82871 bytes
 	}
 
-	// Update playerl leaving common.DrillRoom => common.Opcommon.OpenWorldRoom
-	// (copied from gameplay.go => Update player─block collision+breaking/mining )
-
-	bb1, bb2, bb3 := getGatesIntersectionBoundingBoxes() // bot barrier		(raywhite)
-	updateIntersectGates(bb1, bb2, bb3)
+	// PERF: Just check if player is not colliding wit floor bounding box * scale of 0.9
 
 	// Save variables this frame
 	oldCam := camera
-	oldPlayer := gamePlayer
-	_ = oldCam
-	_ = oldPlayer
+	oldPlayer := playerEntity
 
 	// Reset flags/variables
-	gamePlayer.Collisions = rl.Quaternion{}
-	gamePlayer.IsPlayerWallCollision = false
+	playerEntity.Collisions = rl.Quaternion{}
+	playerEntity.IsPlayerWallCollision = false
 
 	// Update the game camera for this screen
 	rl.UpdateCamera(&camera, rl.CameraThirdPerson)
@@ -121,63 +191,49 @@ func Update() {
 		camera.Up = want
 	}
 
-	gamePlayer.Update(camera, gameFloor)
-	if gamePlayer.IsPlayerWallCollision {
-		player.RevertPlayerAndCameraPositions(&gamePlayer, oldPlayer, &camera, oldCam)
+	playerEntity.Update(camera, floorEntity)
+	if playerEntity.IsPlayerWallCollision {
+		player.RevertPlayerAndCameraPositions(&playerEntity, oldPlayer, &camera, oldCam)
 	}
-}
 
-// TRIGGERS // MAYBE INIT IN INIT METHOD AS LOCAL VARIABLES
-func getGatesIntersectionBoundingBoxes() (bb1 rl.BoundingBox, bb2 rl.BoundingBox, bb3 rl.BoundingBox) {
-	origin := gameFloor.Position
-	size := gameFloor.Size
-	size.Y = max(2, gamePlayer.Size.Y)
-	wallThick := float32(2)
-	bb1 = common.GetBoundingBoxFromPositionSizeV(origin, rl.Vector3Subtract(size, rl.NewVector3(3.25, 0, 3.25)))                                   // player is inside	 (red->green)
-	bb2 = common.GetBoundingBoxFromPositionSizeV(origin, rl.Vector3Subtract(size, rl.NewVector3(1+gamePlayer.Size.X/2, 0, 1+gamePlayer.Size.Z/2))) // player is entering (green->blue)
-	bb3 = common.GetBoundingBoxFromPositionSizeV(origin, rl.Vector3Add(size, rl.NewVector3(wallThick, 0, wallThick)))                              // outer barrier      (blue->white)
-	return bb1, bb2, bb3
-}
-func updateIntersectGates(bb1 rl.BoundingBox, bb2 rl.BoundingBox, bb3 rl.BoundingBox) {
-	isPlayerInsideBase := rl.CheckCollisionBoxes(gamePlayer.BoundingBox, bb1)
-	isPlayerEnteringBase := rl.CheckCollisionBoxes(gamePlayer.BoundingBox, bb2)
-	isPlayerInsideBotBarrier := rl.CheckCollisionBoxes(gamePlayer.BoundingBox, bb3)
-
-	// If blue exit
-	if isPlayerInsideBotBarrier && !isPlayerEnteringBase && !isPlayerInsideBase {
-		player.SetColor(rl.Blue)
-		if !hasPlayerLeftDrillBase { // HACK: Placeholder change scene check logic
+	// Update playerl leaving common.DrillRoom => common.Opcommon.OpenWorldRoom
+	if !rl.CheckCollisionBoxes(playerEntity.BoundingBox, drillroomExitBoundingBox) { // Is exiting
+		if !hasPlayerLeftDrillBase { // STEP [2] // Avoid glitches (also quick dodge to not-exit)
 			hasPlayerLeftDrillBase = true
+
+			// Play exit sounds
 			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("footstep0%d.ogg", rl.GetRandomValue(0, 9)))))  // 05
 			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "metalClick.ogg")))                                         // metalClick
 			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("creak%d.ogg", rl.GetRandomValue(1, 3)))))      // 3
 			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("doorClose_%d.ogg", rl.GetRandomValue(1, 4))))) // 4
-			{                                                                                                                                             // Save screen state
-				finishScreen = 2                      // 1=>ending 2=>gameplay(openworldroom)
-				camera.Up = rl.NewVector3(0., 1., 0.) // Reset yaw/pitch/roll
-				// TODO: implement drillroom save/load functions (data and filenames)
-				// Not really necessary to save core data -> as its trivial to just use defaults (for a small place)
-				// A 2D gui controls could have easily replaced this 3D world.
-				// BUT, save scoring and game mechanincs based on money/experience/mining progress yada yada
-				// saveCoreLevelState()                  // (player,camera,...) 705 bytes
-				// saveAdditionalLevelState()            // (blocks,...)        82871 bytes
-			}
+
+			// Save screen state
+			finishScreen = 2                      // 1=>ending 2=>gameplay(openworldroom)
+			camera.Up = rl.NewVector3(0., 1., 0.) // Reset yaw/pitch/roll
+			// TODO: implement drillroom save/load functions (data and filenames)
+			// saveCoreLevelState()                  // (player,camera,...) 705 bytes
+			// saveAdditionalLevelState()            // (blocks,...)        82871 bytes
 		}
-	} else if isPlayerEnteringBase && !isPlayerInsideBase {
-		player.SetColor(rl.Green)
-	} else if isPlayerInsideBase {
-		player.SetColor(rl.Red)
-	} else { // RESET FLAG just in case
-		if hasPlayerLeftDrillBase {
-			hasPlayerLeftDrillBase = false
+	} else { // Is still inside
+		if !hasPlayerLeftDrillBase { // RESET FLAG (just-in-case)
+			hasPlayerLeftDrillBase = false // STEP [1] (maybe)
 		}
-		player.SetColor(rl.RayWhite)
 	}
-}
-func drawIntersectionGates(bb1 rl.BoundingBox, bb2 rl.BoundingBox, bb3 rl.BoundingBox) { // ‥ DEBUG: Draw drill door gate entry logic before changing scene to drill base
-	rl.DrawBoundingBox(bb1, rl.Red)
-	rl.DrawBoundingBox(bb2, rl.Green)
-	rl.DrawBoundingBox(bb3, rl.Blue)
+
+	// Recheck binary logic
+	if hasPlayerLeftDrillBase {
+		player.SetColor(rl.Blue)
+	} else {
+		player.SetColor(rl.Green)
+	}
+
+	// Check player collisions with instruments
+	for i := range triggerCount {
+		isPlayerNearTriggerSensors[i] = rl.CheckCollisionBoxes(playerEntity.BoundingBox, triggerSensorBoundingBoxes[i])
+		if rl.CheckCollisionBoxes(playerEntity.BoundingBox, triggerBoundingBoxes[i]) {
+			player.RevertPlayerAndCameraPositions(&playerEntity, oldPlayer, &camera, oldCam)
+		}
+	}
 }
 
 func Draw() {
@@ -190,16 +246,17 @@ func Draw() {
 
 	rl.ClearBackground(rl.RayWhite)
 
-	gamePlayer.Draw()
-	gameFloor.Draw()
-	wall.DrawBatch(common.DrillRoom, gameFloor.Position, gameFloor.Size, cmp.Or(rl.NewVector3(5, 2, 5), common.Vector3One))
-
-	{ // TEMPORARY
-		rl.DrawModel(
-			common.Model.OBJ.Gate,
-			rl.NewVector3(gameFloor.BoundingBox.Min.X+1, gameFloor.Position.Y, gameFloor.BoundingBox.Min.Z+1),
-			1., rl.White)
-		drawIntersectionGates(getGatesIntersectionBoundingBoxes())
+	playerEntity.Draw()
+	floorEntity.Draw()
+	rl.DrawBoundingBox(drillroomExitBoundingBox, rl.Green)
+	wall.DrawBatch(common.DrillRoom, floorEntity.Position, floorEntity.Size, cmp.Or(rl.NewVector3(5, 2, 5), common.Vector3One))
+	for i := range triggerCount {
+		rl.DrawBoundingBox(triggerBoundingBoxes[i], rl.SkyBlue)
+		if isPlayerNearTriggerSensors[i] {
+			rl.DrawBoundingBox(triggerSensorBoundingBoxes[i], rl.Purple)
+		} else {
+			rl.DrawBoundingBox(triggerSensorBoundingBoxes[i], rl.Pink)
+		}
 	}
 
 	rl.EndMode3D()
@@ -210,10 +267,18 @@ func Draw() {
 	}
 
 	fontSize := float32(common.Font.Primary.BaseSize) * 3.0
+
 	pos := rl.NewVector2(
-		float32(screenW)/2.-float32(rl.MeasureText(screenTitleText, int32(fontSize)))/2.,
-		float32(screenH)/12.)
-	rl.DrawTextEx(common.Font.Primary, screenTitleText, pos, fontSize, 4, rl.Fade(rl.Black, .5))
+		float32(screenW)/2.-float32(rl.MeasureText(screenTitleText, int32(fontSize*common.Phi)))/2.,
+		float32(screenH)/16.,
+	)
+	rl.DrawTextEx(common.Font.Primary, screenTitleText, pos, (fontSize * common.Phi), 4, rl.Fade(rl.Black, .4))
+
+	pos = rl.NewVector2(
+		float32(screenW)/2.-float32(rl.MeasureText("ROOM", int32(fontSize)))/2.,
+		float32(screenH)/16.+(fontSize*common.Phi),
+	)
+	rl.DrawTextEx(common.Font.Primary, "ROOM", pos, fontSize, common.Phi, rl.Fade(rl.LightGray, .7))
 
 	subtextSize := rl.MeasureTextEx(common.Font.Primary, screenSubtitleText, fontSize/2, 1)
 	posX := int32(screenW)/2 - int32(subtextSize.X/2)
