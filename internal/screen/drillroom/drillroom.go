@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	screenTitleText    = "DRILL ROOM"                         // This should be temporary during prototype
-	screenSubtitleText = "enter: quit\nbackspace: leave room" // "press enter or tap to jump to title screen"
+	screenTitleText    = "DRILL ROOM"                                            // This should be temporary during prototype
+	screenSubtitleText = "backspace/double-tap: leave room\nF10/pinch-out: quit" // "press enter or tap to jump to title screen"
 )
 
 var (
@@ -43,18 +43,16 @@ func Init() {
 func Update() {
 	rl.UpdateMusicStream(common.Music.DrillRoom000)
 
-	// Press enter or tap to change to ENDING screen
-	if rl.IsKeyDown(rl.KeyEnter) || rl.IsGestureDetected(rl.GestureDoubletap) {
+	// Change to ENDING/GAMEPLAY screen
+	if rl.IsKeyDown(rl.KeyF10) || rl.IsGestureDetected(rl.GesturePinchOut) {
 		finishScreen = 1 // 1=>ending
+
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "rollover3.ogg")))
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "switch33.ogg")))
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", "confirmation_001.ogg")))
 	}
 	if rl.IsKeyDown(rl.KeyBackspace) || rl.IsGestureDetected(rl.GestureDoubletap) {
 		finishScreen = 2 // 2=>gameplay
-		// rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "rollover3.ogg")))
-		// rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "switch33.ogg")))
-		// rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", "confirmation_001.ogg")))
 
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("footstep0%d.ogg", rl.GetRandomValue(0, 9)))))  // 05
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "metalClick.ogg")))                                         // metalClick
@@ -69,7 +67,7 @@ func Update() {
 
 func Draw() {
 	// TODO: Draw ending screen here!
-	rl.DrawRectangle(0, 0, int32(rl.GetScreenWidth()), int32(rl.GetScreenHeight()), rl.Fade(rl.Black, 0.98))
+	rl.DrawRectangle(0, 0, int32(rl.GetScreenWidth()), int32(rl.GetScreenHeight()), rl.Fade(rl.Black, 0.80))
 	fontThatIsInGameDotGo := rl.GetFontDefault()
 
 	fontSize := float32(fontThatIsInGameDotGo.BaseSize) * 3.0
