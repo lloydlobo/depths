@@ -191,7 +191,7 @@ func (p *Player) Update(camera rl.Camera3D, flr floor.Floor) {
 	}
 
 	// Overide movement actions
-	if rl.IsKeyDown(rl.KeySpace) {
+	if rl.IsKeyDown(rl.KeySpace) || rl.IsMouseButtonDown(rl.MouseLeftButton) {
 		action = Mine
 	}
 

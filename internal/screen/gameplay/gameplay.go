@@ -190,6 +190,10 @@ func Init() {
 			rl.PlayMusicStream(currentMusic) // Finally play the same music
 		}
 	}
+	// TEMPORARY
+	if true {
+		rl.PauseMusicStream(currentMusic)
+	}
 
 	rl.DisableCursor() // for ThirdPersonPerspective
 }
@@ -332,7 +336,6 @@ func HandleUserInput() {
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "rollover3.ogg")))
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "switch33.ogg")))
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", "confirmation_001.ogg")))
-
 	}
 }
 
@@ -406,17 +409,52 @@ func Update() {
 			// Trigger once while mining
 			if (rl.IsKeyDown(rl.KeySpace) && framesCounter%16 == 0) ||
 				(rl.IsMouseButtonDown(rl.MouseLeftButton) && framesCounter%16 == 0) {
-				// Play mining sound with variations (s1:kick + s2:snare + s3:hollow-thock)
+				// Play player weapon sounds
+				{
+					v := rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "drawKnife3.ogg"))
+					rl.SetSoundPan(v, 0.5+float32(rl.GetRandomValue(-10, 10)/(2*10)))
+					rl.SetSoundVolume(v, 0.1)
+					rl.PlaySound(v)
+				}
+				// Play mining impacts with variations (s1:kick + s2:snare + s3:hollow-thock)
 				state := blocks[i].State
-				s1 := common.FXS.ImpactsSoftMedium[rl.GetRandomValue(int32(state), int32(len(common.FXS.ImpactsSoftMedium)-1))]
-				s2 := common.FXS.ImpactsGenericLight[rl.GetRandomValue(int32(state), int32(len(common.FXS.ImpactsGenericLight)-1))]
-				s3 := common.FXS.ImpactsSoftHeavy[rl.GetRandomValue(int32(state), int32(len(common.FXS.ImpactsSoftHeavy)-1))]
-				rl.SetSoundVolume(s1, float32(rl.GetRandomValue(7, 10))/10.)
-				rl.SetSoundVolume(s2, float32(rl.GetRandomValue(4, 8))/10.)
-				rl.SetSoundVolume(s3, float32(rl.GetRandomValue(1, 4))/10.)
-				rl.PlaySound(s1)
-				rl.PlaySound(s2)
-				rl.PlaySound(s3)
+				if state == block.DirtBlockState { // First state
+					soundName := "handleSmallLeather"
+					if rl.GetRandomValue(0, 1) == 0 {
+						soundName += "2"
+					}
+					v := rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", soundName+".ogg"))
+					alpha := 0.5 + float32(rl.GetRandomValue(-10, 10))/40.0
+					rl.SetSoundPan(v, alpha)
+					rl.SetSoundVolume(v, 0.5)
+					rl.PlaySound(v)
+				}
+				if true {
+					v := rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio",
+						fmt.Sprintf("cloth%d.ogg", min(block.MaxBlockState-1, max(1, state+1)))))
+					rl.SetSoundPan(v, 0.5+float32(rl.GetRandomValue(-10, 10)/(2*10)))
+					rl.SetSoundVolume(v, 0.0625)
+					rl.PlaySound(v)
+				}
+				if framesCounter%int32(state+1) == 0 { // Higher states are small items.. So no need for bass
+					s1 := common.FXS.ImpactsSoftMedium[rl.GetRandomValue(int32(state), int32(len(common.FXS.ImpactsSoftMedium)-1))]
+					s2 := common.FXS.ImpactsGenericLight[rl.GetRandomValue(int32(state), int32(len(common.FXS.ImpactsGenericLight)-1))]
+					s3 := common.FXS.ImpactsSoftHeavy[rl.GetRandomValue(int32(state), int32(len(common.FXS.ImpactsSoftHeavy)-1))]
+					rl.SetSoundVolume(s1, float32(rl.GetRandomValue(7, 10))/10.)
+					rl.SetSoundVolume(s2, float32(rl.GetRandomValue(4, 8))/10.)
+					rl.SetSoundVolume(s3, float32(rl.GetRandomValue(1, 4))/10.)
+
+					rl.PlaySound(s1)
+					rl.PlaySound(s2)
+					rl.PlaySound(s3)
+				}
+				if rl.GetRandomValue(0, 1) == 0 && state > block.DirtBlockState {
+					v := rl.LoadSound(filepath.Join("res", "fx", "kenney_impact-sounds", "Audio",
+						fmt.Sprintf("impactMining_00%d.ogg", min(block.MaxBlockState-1, state))))
+					rl.SetSoundPan(v, 0.5+float32(rl.GetRandomValue(-10, 10)/(2*10)))
+					rl.SetSoundVolume(v, 2.00)
+					rl.PlaySound(v)
+				}
 
 				// Increment state
 				blocks[i].NextState()
@@ -459,8 +497,8 @@ func Update() {
 
 	// Move this in package player
 	if rl.IsKeyDown(rl.KeyW) || rl.IsKeyDown(rl.KeyA) || rl.IsKeyDown(rl.KeyS) || rl.IsKeyDown(rl.KeyD) {
-		const fps = 60
-		const framesInterval = fps / 3.0
+		const fps = 60.0
+		const framesInterval = fps / 2.5
 		if framesCounter%int32(framesInterval) == 0 {
 			if !rl.Vector3Equals(oldPlayer.Position, gamePlayer.Position) &&
 				rl.Vector3Distance(oldCam.Position, gamePlayer.Position) > 1.0 &&
