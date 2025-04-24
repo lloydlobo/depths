@@ -1,6 +1,7 @@
 package drillroom
 
 import (
+	"cmp"
 	"fmt"
 	"path/filepath"
 
@@ -12,7 +13,7 @@ import (
 )
 
 const (
-	screenTitleText    = "DRILL ROOM"                                                                          // This should be temporary during prototype
+	screenTitleText    = "DRILL ROOM"                                                                        // This should be temporary during prototype
 	screenSubtitleText = "leave room: backspace swipe-left\nquit:          F10 pinch-out right-mouse-button" // "press enter or tap to jump to title screen"
 )
 
@@ -35,13 +36,27 @@ var (
 func Init() {
 	framesCounter = 0
 	finishScreen = 0
+	camera = rl.Camera3D{
+		Position:   rl.NewVector3(0., 10., 10.),
+		Target:     rl.NewVector3(0., .5, 0.),
+		Up:         rl.NewVector3(0., 1., 0.),
+		Fovy:       15. * float32(cmp.Or(4., 3., 2.)),
+		Projection: rl.CameraPerspective,
+	} // See also https://github.com/raylib-extras/extras-c/blob/main/cameras/rlTPCamera/rlTPCamera.h
+
 	if !rl.IsMusicStreamPlaying(common.Music.DrillRoom000) {
 		rl.PlayMusicStream(common.Music.DrillRoom000)
 	}
+
+	player.InitPlayer(&gamePlayer, camera)
+
+	rl.DisableCursor() // For camera thirdperson view
 }
 
 func Update() {
 	rl.UpdateMusicStream(common.Music.DrillRoom000)
+
+	gamePlayer.Update(camera, gameFloor)
 
 	// Change to ENDING/GAMEPLAY screen
 	if rl.IsKeyDown(rl.KeyF10) || rl.IsGestureDetected(rl.GesturePinchOut) || rl.IsMouseButtonDown(rl.MouseButtonRight) {
@@ -60,29 +75,49 @@ func Update() {
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("doorClose_%d.ogg", rl.GetRandomValue(1, 4))))) // 4
 	}
 
-	if false {
+	if true {
 		rl.UpdateCamera(&camera, rl.CameraThirdPerson)
 	}
 }
 
 func Draw() {
 	// TODO: Draw ending screen here!
-	rl.DrawRectangle(0, 0, int32(rl.GetScreenWidth()), int32(rl.GetScreenHeight()), rl.Fade(rl.Black, 0.80))
+	screenW := int32(rl.GetScreenWidth())
+	screenH := int32(rl.GetScreenHeight())
+
+	// 3D World
+	rl.BeginMode3D(camera)
+
+	rl.ClearBackground(rl.RayWhite)
+
+	rl.DrawModel(common.Model.OBJ.Gate, common.Vector3Zero, 1., rl.White)
+	rl.DrawModel(common.Model.OBJ.Barrel, common.Vector3Zero, 1., rl.White)
+
+	gamePlayer.Draw()
+	gameFloor.Draw()
+
+	rl.EndMode3D()
+
+	// 2D World
+	if false {
+		rl.DrawRectangle(0, 0, screenW, screenH, rl.Fade(rl.Black, .8))
+	}
 
 	fontSize := float32(common.Font.Primary.BaseSize) * 3.0
 	pos := rl.NewVector2(
-		float32(rl.GetScreenWidth())/2-float32(rl.MeasureText(screenTitleText, int32(fontSize)))/2,
-		float32(rl.GetScreenHeight())/2.25)
-	rl.DrawTextEx(common.Font.Primary, screenTitleText, pos, fontSize, 4, rl.White)
+		float32(screenW)/2.-float32(rl.MeasureText(screenTitleText, int32(fontSize)))/2.,
+		float32(screenH)/12.)
+	rl.DrawTextEx(common.Font.Primary, screenTitleText, pos, fontSize, 4, rl.Fade(rl.Black, .5))
 
-	posX := int32(rl.GetScreenWidth())/2 - rl.MeasureText(screenSubtitleText, 20)/2
-	posY := int32(rl.GetScreenHeight()) / 2
-	rl.DrawText(screenSubtitleText, posX, posY, 20, rl.White)
+	subtextSize := rl.MeasureTextEx(common.Font.Primary, screenSubtitleText, fontSize/2, 1)
+	posX := int32(screenW)/2 - int32(subtextSize.X/2)
+	posY := int32(screenH) - int32(subtextSize.Y*common.Phi)
+	rl.DrawText(screenSubtitleText, posX, posY, int32(fontSize/2), rl.Gray)
 }
 
 func Unload() {
 	// TODO: Unload gameplay screen variables here!
-	if rl.IsCursorHidden() {
+	if isTransToGameScreen := finishScreen == 2; !isTransToGameScreen && rl.IsCursorHidden() {
 		rl.EnableCursor() // without 3d ThirdPersonPerspective
 	}
 	// Commented out as it hinders switching to drill room or
