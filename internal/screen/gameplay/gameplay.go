@@ -174,13 +174,17 @@ func Init() {
 			}
 		}
 	} else {
-		isLoop := true
-		for isLoop {
+		counter, maxCounter := 0, 100
+	NextMusic:
+		for {
 			tempMusic = musicChoices[rl.GetRandomValue(0, int32(len(musicChoices)-1))]
 			if tempMusic != currentMusic {
-				isLoop = false
-				break // Just in case
+				break NextMusic
 			}
+			if counter >= maxCounter {
+				break NextMusic
+			}
+			counter++
 		}
 		if rl.GetMusicTimePlayed(currentMusic) >= 0.5*rl.GetMusicTimeLength(currentMusic) { // Played 50% already
 			rl.PlayMusicStream(tempMusic)
