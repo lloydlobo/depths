@@ -10,24 +10,51 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 
 	"example/depths/internal/archive/light"
-	audiopro "example/depths/internal/audio/processor"
 	"example/depths/internal/common"
 	"example/depths/internal/model"
-	endingSC "example/depths/internal/screen/ending"
-	gameplaySC "example/depths/internal/screen/gameplay"
-	logoSC "example/depths/internal/screen/logo"
-	optionsSC "example/depths/internal/screen/options"
-	titleSC "example/depths/internal/screen/title"
+	"example/depths/internal/screen/drillroom"
+	"example/depths/internal/screen/ending"
+	"example/depths/internal/screen/gameplay"
+	"example/depths/internal/screen/logo"
+	"example/depths/internal/screen/options"
+	"example/depths/internal/screen/title"
 )
 
-// XM, standing for "extended module", is an audio file type introduced by
-// Triton's FastTracker 2.[2] XM introduced multisampling-capable[3]
-// instruments with volume and panning envelopes,[4] sample looping[5] and
-// basic pattern compression. It also expanded the available effect commands
-// and channels, added 16-bit sample support, and offered an alternative
-// frequency table for portamentos.
+type GameScreen int
 
+const (
+	unknownGameScreen   GameScreen = iota - 1 // -1
+	logoGameScreen                            // 0
+	titleGameScreen                           // 1
+	optionsGameScreen                         // 2
+	gameplayGameScreen                        // 3
+	drillroomGameScreen                       // 4
+	endingGameScreen                          // 5
+)
+
+// =====================================================================================
+// Shared Variables Definition (global)
+
+// NOTE: Those variables are shared between modules through C equivalent of screens.h
+var (
+	currentScreen GameScreen
+)
+
+// =====================================================================================
+// Local Variables Definition (local to this module)
+
+// Required variables to manage screen transitions (fade-in, fade-out)
+var (
+	transAlpha      float32    = float32(0.0)
+	onTransition    bool       = false
+	transFadeout    bool       = false
+	transFromScreen int        = -1
+	transToScreen   GameScreen = unknownGameScreen
+)
+
+// =====================================================================================
 // Main entry point
+
 func Run() {
 	// Initialize
 
@@ -35,13 +62,6 @@ func Run() {
 	rl.InitWindow(int32(rl.GetScreenWidth()), int32(rl.GetScreenHeight()), "tiny game ─ depths")
 
 	rl.InitAudioDevice()
-
-	// Disabled: distorts when no audio is playing
-	if false {
-		rl.AttachAudioMixedProcessor(audiopro.ProcessAudio)
-		defer rl.DetachAudioMixedProcessor(audiopro.ProcessAudio)
-		audiopro.InitAudioProcessor()
-	}
 
 	// Load common assets once
 	common.Font.Primary = rl.GetFontDefault()
@@ -172,7 +192,7 @@ func Run() {
 	}
 
 	currentScreen = logoGameScreen
-	logoSC.Init()
+	logo.Init()
 
 	if _, ok := os.LookupEnv("PLATFORM_WEB"); ok {
 		// emscripten_set_main_loop(UpdateDrawFrame, 60, 1)
@@ -191,19 +211,19 @@ func Run() {
 	// Unload current screen data before closing
 	switch currentScreen {
 	case logoGameScreen:
-		logoSC.Unload()
+		logo.Unload()
 	case titleGameScreen:
-		titleSC.Unload()
+		title.Unload()
 	case optionsGameScreen:
-		optionsSC.Unload()
+		options.Unload()
 	case gameplayGameScreen:
-		gameplaySC.Unload()
+		gameplay.Unload()
+	case drillroomGameScreen:
+		drillroom.Unload()
 	case endingGameScreen:
-		endingSC.Unload()
-	case unknownGameScreen:
-		break
+		ending.Unload()
 	default:
-		panic(fmt.Sprintf("unexpected main.GameScreen: %#v", currentScreen))
+		panic(fmt.Sprintf("unexpected game.GameScreen: %#v", currentScreen))
 	}
 
 	// Unload global data loaded
@@ -226,17 +246,17 @@ func ChangeToScreen(screen GameScreen) {
 	// Unload current screen
 	switch currentScreen {
 	case logoGameScreen:
-		logoSC.Unload()
+		logo.Unload()
 	case titleGameScreen:
-		titleSC.Unload()
+		title.Unload()
 	case optionsGameScreen:
-		optionsSC.Unload()
+		options.Unload()
 	case gameplayGameScreen:
-		gameplaySC.Unload()
+		gameplay.Unload()
+	case drillroomGameScreen:
+		drillroom.Unload()
 	case endingGameScreen:
-		endingSC.Unload()
-	case unknownGameScreen:
-		break
+		ending.Unload()
 	default:
 		panic(fmt.Sprintf("unexpected main.GameScreen: %#v", currentScreen))
 	}
@@ -244,17 +264,17 @@ func ChangeToScreen(screen GameScreen) {
 	// Init next screen
 	switch screen {
 	case logoGameScreen:
-		logoSC.Init()
+		logo.Init()
 	case titleGameScreen:
-		titleSC.Init()
+		title.Init()
 	case optionsGameScreen:
-		optionsSC.Init()
+		options.Init()
 	case gameplayGameScreen:
-		gameplaySC.Init()
+		gameplay.Init()
+	case drillroomGameScreen:
+		drillroom.Init()
 	case endingGameScreen:
-		endingSC.Init()
-	case unknownGameScreen:
-		break
+		ending.Init()
 	default:
 		panic(fmt.Sprintf("unexpected main.GameScreen: %#v", currentScreen))
 	}
@@ -280,37 +300,37 @@ func UpdateTransition() {
 			transAlpha = 1.0
 
 			// Unload current screen
-			switch GameScreen(transFromScreen) {
+			switch v := GameScreen(transFromScreen); v {
 			case logoGameScreen:
-				logoSC.Unload()
+				logo.Unload()
 			case titleGameScreen:
-				titleSC.Unload()
+				title.Unload()
 			case optionsGameScreen:
-				optionsSC.Unload()
+				options.Unload()
 			case gameplayGameScreen:
-				gameplaySC.Unload()
+				gameplay.Unload()
+			case drillroomGameScreen:
+				drillroom.Unload()
 			case endingGameScreen:
-				endingSC.Unload()
-			case unknownGameScreen:
-				break
+				ending.Unload()
 			default:
-				panic(fmt.Sprintf("unexpected main.GameScreen: %#v", currentScreen))
+				panic(fmt.Sprintf("unexpected main.GameScreen: %#v", v))
 			}
 
 			// Load next screen
 			switch transToScreen {
 			case logoGameScreen:
-				logoSC.Init()
+				logo.Init()
 			case titleGameScreen:
-				titleSC.Init()
+				title.Init()
 			case optionsGameScreen:
-				optionsSC.Init()
+				options.Init()
 			case gameplayGameScreen:
-				gameplaySC.Init()
+				gameplay.Init()
+			case drillroomGameScreen:
+				drillroom.Init()
 			case endingGameScreen:
-				endingSC.Init()
-			case unknownGameScreen:
-				break
+				ending.Init()
 			default:
 				panic(fmt.Sprintf("unexpected main.GameScreen: %#v", currentScreen))
 			}
@@ -343,62 +363,50 @@ func UpdateDrawFrame() {
 	// =============================================================================
 	// Update
 
-	if false {
-		rl.UpdateMusicStream(common.Music.OpenWorld001)
-
-		// Modify processing variables
-		if rl.IsKeyPressed(rl.KeyLeft) {
-			audiopro.AudioExponent -= 0.05
-		}
-		if rl.IsKeyPressed(rl.KeyRight) {
-			audiopro.AudioExponent += 0.05
-		}
-		if rl.IsKeyPressed(rl.KeyDown) {
-			audiopro.AudioExponent -= 0.25
-		}
-		if rl.IsKeyPressed(rl.KeyUp) {
-			audiopro.AudioExponent += 0.25
-		}
-	}
-
 	if !onTransition {
 		switch currentScreen {
 		case logoGameScreen:
-			logoSC.Update()
+			logo.Update()
 
-			if logoSC.Finish() == 1 {
+			if logo.Finish() == 1 {
 				TransitionToScreen(titleGameScreen)
 			}
 		case titleGameScreen:
-			titleSC.Update()
+			title.Update()
 
-			if titleSC.Finish() == 1 {
+			if title.Finish() == 1 {
 				TransitionToScreen(optionsGameScreen)
-			} else if titleSC.Finish() == 2 {
+			} else if title.Finish() == 2 {
 				TransitionToScreen(gameplayGameScreen)
 			}
 		case optionsGameScreen:
-			optionsSC.Unload()
+			options.Unload()
 
-			if optionsSC.Finish() == 1 {
+			if options.Finish() == 1 {
 				TransitionToScreen(titleGameScreen)
 			}
 		case gameplayGameScreen:
-			gameplaySC.Update()
+			gameplay.Update()
 
-			if gameplaySC.Finish() == 1 {
+			if gameplay.Finish() == 1 {
 				TransitionToScreen(endingGameScreen)
-			} else if gameplaySC.Finish() == 2 {
-				TransitionToScreen(titleGameScreen)
+			} else if gameplay.Finish() == 2 {
+				TransitionToScreen(drillroomGameScreen)
+			}
+		case drillroomGameScreen:
+			drillroom.Update()
+
+			if drillroom.Finish() == 1 {
+				TransitionToScreen(endingGameScreen)
+			} else if drillroom.Finish() == 2 {
+				TransitionToScreen(gameplayGameScreen) // Go back
 			}
 		case endingGameScreen:
-			endingSC.Update()
+			ending.Update()
 
-			if endingSC.Finish() == 1 {
+			if ending.Finish() == 1 {
 				TransitionToScreen(titleGameScreen)
 			}
-		case unknownGameScreen:
-			break
 		default:
 			panic(fmt.Sprintf("unexpected main.GameScreen: %#v", currentScreen))
 		}
@@ -416,17 +424,17 @@ func UpdateDrawFrame() {
 
 	switch currentScreen {
 	case logoGameScreen:
-		logoSC.Draw()
+		logo.Draw()
 	case titleGameScreen:
-		titleSC.Draw()
+		title.Draw()
 	case optionsGameScreen:
-		optionsSC.Draw()
+		options.Draw()
 	case gameplayGameScreen:
-		gameplaySC.Draw()
+		gameplay.Draw()
+	case drillroomGameScreen:
+		drillroom.Draw()
 	case endingGameScreen:
-		endingSC.Draw()
-	case unknownGameScreen:
-		break
+		ending.Draw()
 	default:
 		panic(fmt.Sprintf("unexpected main.GameScreen: %#v", currentScreen))
 	}
@@ -441,34 +449,3 @@ func UpdateDrawFrame() {
 	rl.EndDrawing()
 	// -----------------------------------------------------------------------------
 }
-
-type GameScreen int
-
-const (
-	unknownGameScreen  GameScreen = iota - 1 // -1
-	logoGameScreen                           // 0
-	titleGameScreen                          // 1
-	optionsGameScreen                        // 2
-	gameplayGameScreen                       // 3
-	endingGameScreen                         // 4
-)
-
-// =====================================================================================
-// Shared Variables Definition (global)
-
-// NOTE: Those variables are shared between modules through C equivalent of screens.h
-var (
-	currentScreen GameScreen
-)
-
-// =====================================================================================
-// Local Variables Definition (local to this module)
-
-// Required variables to manage screen transitions (fade-in, fade-out)
-var (
-	transAlpha      float32    = float32(0.0)
-	onTransition    bool       = false
-	transFadeout    bool       = false
-	transFromScreen int        = -1
-	transToScreen   GameScreen = unknownGameScreen
-)

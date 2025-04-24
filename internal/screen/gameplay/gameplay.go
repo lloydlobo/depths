@@ -26,12 +26,11 @@ import (
 var (
 	// Core data
 
-	levelID int32
-
 	finishScreen  int
 	framesCounter int32
 
 	camera                 rl.Camera3D
+	levelID                int32
 	gameFloor              floor.Floor
 	gamePlayer             player.Player
 	hasPlayerLeftDrillBase bool
@@ -237,6 +236,7 @@ func Update() {
 	rl.UpdateCamera(&camera, rl.CameraThirdPerson)
 
 	gamePlayer.Update(camera, gameFloor)
+
 	{ // ‥  Update player rotation.. based on camera forward projection
 		startPos := gamePlayer.Position
 		endPos := rl.Vector3Add(gamePlayer.Position, rl.GetCameraForward(&camera))
@@ -367,11 +367,35 @@ func Update() {
 		} else if isPlayerEnteringBase && !isPlayerInsideBase {
 			if hasPlayerLeftDrillBase { // HACK: Placeholder change scene check logic
 				hasPlayerLeftDrillBase = false
-				finishScreen = 2 // HACK: Placeholder to shift scene
-				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "footstep05.ogg")))
-				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "metalClick.ogg")))
-				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "creak3.ogg")))
-				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "doorOpen_2.ogg")))
+				// TODO
+				// TODO
+				// TODO
+				// TODO
+				// TODO
+				// TODO
+				// TODO
+				// TODO
+				// TODO
+				// TODO
+				// TODO
+				// TODO
+				// TODO
+				// TODO
+				// TODO
+				// TODO
+				// TODO
+				// TODO
+				// TODO
+				// TODO
+				// TODO
+				// TODO
+				// TODO
+				finishScreen = 2 // 1=>ending 2=>drillroom
+
+				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("footstep0%d.ogg", rl.GetRandomValue(0, 9))))) // 05
+				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "metalClick.ogg")))                                        // metalClick
+				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("creak%d.ogg", rl.GetRandomValue(1, 3)))))     // 3
+				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("doorOpen_%d.ogg", rl.GetRandomValue(1, 2))))) // 2
 			}
 			player.SetColor(rl.Green)
 		} else if isPlayerInsideBase {
