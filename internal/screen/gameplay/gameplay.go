@@ -19,7 +19,6 @@ import (
 	"example/depths/internal/floor"
 	"example/depths/internal/player"
 	"example/depths/internal/storage"
-	"example/depths/internal/util/mathutil"
 	"example/depths/internal/wall"
 )
 
@@ -58,7 +57,6 @@ var (
 func Init() {
 	framesCounter = 0
 	finishScreen = 0
-
 	camera = rl.Camera3D{
 		Position:   rl.NewVector3(0., 10., 10.),
 		Target:     rl.NewVector3(0., .5, 0.),
@@ -206,24 +204,20 @@ func Init() {
 	rl.DisableCursor() // for ThirdPersonPerspective
 }
 
-func HandleUserInput() {
-	if rl.IsKeyDown(rl.KeyF) {
-		log.Println("[F] Picked up item")
-	}
+func Update() {
+	rl.UpdateMusicStream(currentMusic)
 
 	// Press enter or tap to change to ending game screen
-	if rl.IsKeyDown(rl.KeyF10) { /* || rl.IsGestureDetected(rl.GestureDrag) */
-		finishScreen = 1
+	if rl.IsKeyDown(rl.KeyF10) || rl.IsGestureDetected(rl.GesturePinchOut) {
+		finishScreen = 1 // 1=>ending
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "rollover3.ogg")))
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "switch33.ogg")))
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", "confirmation_001.ogg")))
 	}
-}
 
-func Update() {
-	rl.UpdateMusicStream(currentMusic)
-
-	HandleUserInput()
+	if rl.IsKeyDown(rl.KeyF) {
+		log.Println("[F] Picked up item")
+	}
 
 	// Save variables this frame
 	oldCam := camera
@@ -425,7 +419,7 @@ func Draw() {
 	// 3D World
 	rl.BeginMode3D(camera)
 
-	rl.ClearBackground(rl.Black)
+	rl.ClearBackground(rl.RayWhite)
 
 	gameFloor.Draw()
 
