@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	screenTitleText    = "DRILL ROOM"                                            // This should be temporary during prototype
-	screenSubtitleText = "backspace/double-tap: leave room\nF10/pinch-out: quit" // "press enter or tap to jump to title screen"
+	screenTitleText    = "DRILL ROOM"                                                                          // This should be temporary during prototype
+	screenSubtitleText = "leave room: backspace swipe-left\nquit:          F10 pinch-out right-mouse-button" // "press enter or tap to jump to title screen"
 )
 
 var (
@@ -44,14 +44,14 @@ func Update() {
 	rl.UpdateMusicStream(common.Music.DrillRoom000)
 
 	// Change to ENDING/GAMEPLAY screen
-	if rl.IsKeyDown(rl.KeyF10) || rl.IsGestureDetected(rl.GesturePinchOut) {
+	if rl.IsKeyDown(rl.KeyF10) || rl.IsGestureDetected(rl.GesturePinchOut) || rl.IsMouseButtonDown(rl.MouseButtonRight) {
 		finishScreen = 1 // 1=>ending
 
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "rollover3.ogg")))
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "switch33.ogg")))
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", "confirmation_001.ogg")))
 	}
-	if rl.IsKeyDown(rl.KeyBackspace) || rl.IsGestureDetected(rl.GestureDoubletap) {
+	if rl.IsKeyDown(rl.KeyBackspace) || rl.IsGestureDetected(rl.GestureSwipeLeft) {
 		finishScreen = 2 // 2=>gameplay
 
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("footstep0%d.ogg", rl.GetRandomValue(0, 9)))))  // 05
@@ -68,14 +68,12 @@ func Update() {
 func Draw() {
 	// TODO: Draw ending screen here!
 	rl.DrawRectangle(0, 0, int32(rl.GetScreenWidth()), int32(rl.GetScreenHeight()), rl.Fade(rl.Black, 0.80))
-	fontThatIsInGameDotGo := rl.GetFontDefault()
 
-	fontSize := float32(fontThatIsInGameDotGo.BaseSize) * 3.0
+	fontSize := float32(common.Font.Primary.BaseSize) * 3.0
 	pos := rl.NewVector2(
 		float32(rl.GetScreenWidth())/2-float32(rl.MeasureText(screenTitleText, int32(fontSize)))/2,
-		float32(rl.GetScreenHeight())/2.25,
-	)
-	rl.DrawTextEx(fontThatIsInGameDotGo, screenTitleText, pos, fontSize, 4, rl.White)
+		float32(rl.GetScreenHeight())/2.25)
+	rl.DrawTextEx(common.Font.Primary, screenTitleText, pos, fontSize, 4, rl.White)
 
 	posX := int32(rl.GetScreenWidth())/2 - rl.MeasureText(screenSubtitleText, 20)/2
 	posY := int32(rl.GetScreenHeight()) / 2
