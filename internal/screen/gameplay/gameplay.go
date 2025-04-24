@@ -36,6 +36,9 @@ var (
 	gamePlayer             player.Player
 	hasPlayerLeftDrillBase bool
 
+	hitCount int32
+	hitScore int32
+
 	// Additional data
 
 	blocks []block.Block
@@ -58,14 +61,17 @@ func Init() {
 	finishScreen = 0
 
 	camera = rl.Camera3D{
-		Position:   rl.NewVector3(0., 8., 8.),
+		Position:   rl.NewVector3(0., 10., 10.),
 		Target:     rl.NewVector3(0., .5, 0.),
 		Up:         rl.NewVector3(0., 1., 0.),
-		Fovy:       15. * float32(cmp.Or(3., 4., 2.)),
+		Fovy:       15. * float32(cmp.Or(4., 3., 2.)),
 		Projection: rl.CameraPerspective,
 	} // See also https://github.com/raylib-extras/extras-c/blob/main/cameras/rlTPCamera/rlTPCamera.h
 
 	// INIT WOULD REQUIRE A LEVEL ID? OR CREATE MULTIPLE gameplay000.go files
+	// InitWorld loads resources each time it is called.
+	// Prefers loading data from saved game files if any, else generates new data.
+	// If new game flag is turned on, generates new game.
 	loadNewCoreData := func() {
 		var mu sync.Mutex
 
@@ -156,10 +162,7 @@ func Init() {
 		checkedModel.Materials.Maps.Texture = checkedTexture
 	}
 
-	musicChoices := []rl.Music{
-		common.Music.OpenWorld000,
-		common.Music.OpenWorld001,
-	}
+	musicChoices := []rl.Music{common.Music.OpenWorld000, common.Music.OpenWorld001}
 	tempMusic := musicChoices[rl.GetRandomValue(0, int32(len(musicChoices)-1))]
 	if tempMusic != currentMusic {
 		if rl.GetMusicTimePlayed(currentMusic) > 0 { // Already playing
@@ -175,14 +178,14 @@ func Init() {
 		}
 	} else {
 		counter, maxCounter := 0, 100
-	NextMusic:
+	GetRandomMusic:
 		for {
 			tempMusic = musicChoices[rl.GetRandomValue(0, int32(len(musicChoices)-1))]
 			if tempMusic != currentMusic {
-				break NextMusic
+				break GetRandomMusic
 			}
 			if counter >= maxCounter {
-				break NextMusic
+				break GetRandomMusic
 			}
 			counter++
 		}
@@ -200,133 +203,6 @@ func Init() {
 	}
 
 	rl.DisableCursor() // for ThirdPersonPerspective
-}
-
-// InitWorld loads resources each time it is called.
-// Prefers loading data from saved game files if any, else generates new data.
-// If new game flag is turned on, generates new game.
-func InitWorld() {
-	const isNewGame = false
-
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-
-	{
-		checkedImg := rl.GenImageChecked(100, 100, 1, 1, rl.ColorBrightness(rl.Black, .24), rl.ColorBrightness(rl.Black, .20))
-		checkedTexture = rl.LoadTextureFromImage(checkedImg)
-		rl.UnloadImage(checkedImg)
-
-		checkedModel = rl.LoadModelFromMesh(rl.GenMeshPlane(100, 100, 10, 10))
-		checkedModel.Materials.Maps.Texture = checkedTexture
-	}
-
-	// Core resources
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		mu.Lock()
-		defer mu.Unlock()
-
-		floor.SetupFloorModel()
-		wall.SetupWallModel()
-	}()
-
-	player.SetupPlayerModel() // FIXME: This has File i/o logic.. Should use resources loaded common to load models apriori
-
-	// Core data
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		mu.Lock()
-		defer mu.Unlock()
-		loadNewData := func() {
-			var mu sync.Mutex
-
-			mu.Lock()
-			defer mu.Unlock()
-
-			finishScreen = 0  //data.FinishScreen
-			framesCounter = 0 // data.FramesCounter
-			player.InitPlayer(&gamePlayer, camera)
-			floor.InitFloor(&gameFloor)
-			wall.InitWall()
-			hasPlayerLeftDrillBase = false
-			gamePlayer.IsPlayerWallCollision = false
-		}
-		if isNewGame {
-			loadNewData()
-		} else {
-			data, err := loadCoreGameData()
-			if err != nil {
-				slog.Warn(err.Error()) // WARN: improve error handling
-				loadNewData()
-			} else { // Resume from saved state
-				finishScreen = 0  // data.FinishScreen
-				framesCounter = 0 // data.FramesCounter
-				camera = data.Camera
-				gameFloor = data.GameFloor
-				gamePlayer = data.GamePlayer
-				if false { // Should recalculate if player positiion is inside drill.. else default to false
-					hasPlayerLeftDrillBase = data.HasPlayerLeftDrillBase
-				} else {
-					hasPlayerLeftDrillBase = false
-				}
-				gamePlayer.IsPlayerWallCollision = false
-				saveCoreLevelState()
-			}
-		}
-	}()
-
-	// Additional resources
-	if true { // FIXES: Unloaded huge blocks saved file
-		block.SetupBlockModels()
-	} else {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			mu.Lock()
-			defer mu.Unlock()
-
-			block.SetupBlockModels()
-		}()
-	}
-
-	loadNewAdditionalData := func() {
-		var mu sync.Mutex
-		mu.Lock()
-		defer mu.Unlock()
-		if len(blocks) >= 0 {
-			blocks = []block.Block{} // Clear all blocks
-		}
-		block.InitBlocks(&blocks, block.GenerateRandomBlockPositions(gameFloor))
-	}
-
-	// Additional data
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		mu.Lock()
-		defer mu.Unlock()
-
-		if isNewGame {
-			loadNewAdditionalData()
-		} else {
-			additionalGameData, err := loadAdditionalGameData()
-			fmt.Printf("additionalGameData: %v\n", additionalGameData)
-			if err != nil {
-				slog.Warn(err.Error()) // WARN: improve error handling
-				loadNewAdditionalData()
-			} else { // Resume from saved state
-				blocks = make([]block.Block, len(additionalGameData.Blocks)) // PERF: Make this a static array and use a counter
-				copiedBlockCount := copy(blocks, additionalGameData.Blocks)
-				log.Println(fmt.Sprintf("blocks copied: %v", copiedBlockCount))
-				saveAdditionalLevelState()
-			}
-		}
-	}()
-
-	// Wait blocks until the WaitGroup counter is zero
-	wg.Wait()
 }
 
 func HandleUserInput() {
@@ -359,8 +235,7 @@ func Update() {
 	rl.UpdateCamera(&camera, rl.CameraThirdPerson)
 
 	gamePlayer.Update(camera, gameFloor)
-	// Update player rotation.. based on camera forward projection
-	{
+	{ // ‥  Update player rotation.. based on camera forward projection
 		startPos := gamePlayer.Position
 		endPos := rl.Vector3Add(gamePlayer.Position, rl.GetCameraForward(&camera))
 		degree := mathutil.Angle2D(startPos.X, startPos.Z, endPos.X, endPos.Z)
@@ -408,10 +283,12 @@ func Update() {
 			//			HACK
 			//		HACK
 			// HACK
+
 			player.RevertPlayerAndCameraPositions(&gamePlayer, oldPlayer, &camera, oldCam)
 
 			// Trigger once while mining
-			if (rl.IsKeyDown(rl.KeySpace) && framesCounter%16 == 0) || (rl.IsMouseButtonDown(rl.MouseLeftButton) && framesCounter%16 == 0) {
+			if (rl.IsKeyDown(rl.KeySpace) && framesCounter%16 == 0) ||
+				(rl.IsMouseButtonDown(rl.MouseLeftButton) && framesCounter%16 == 0) {
 				// Play player weapon sounds
 				if true {
 					v := rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "drawKnife3.ogg"))
@@ -455,7 +332,18 @@ func Update() {
 					rl.PlaySound(v)
 				}
 
-				// Increment state
+				// Update stats
+				hitCount++
+				const finalState = (block.MaxBlockState - 1)
+				if state == finalState-1 {
+					hitScore++
+					// FIXME: Record.. hitCount and hitScore to save game.. and load and update directly
+					if hitCount/hitScore != int32(finalState) {
+						msg := fmt.Sprintf("expect for %d hits, score to incrementby 1. (except if counter started from an already semi-mined block)", finalState)
+						slog.Warn(msg)
+					}
+				}
+				// Increment state on successful mining action
 				blocks[i].NextState()
 			}
 		}
@@ -619,13 +507,11 @@ func Draw() {
 	text := "[F] PICK UP"
 	rl.DrawFPS(10, 10)
 	rl.DrawText(text, screenW/2-rl.MeasureText(text, 20)/2, screenH-20*2, 20, rl.White)
-	rl.DrawTextEx(common.Font.Primary,
-		fmt.Sprintf("%.6f", rl.GetFrameTime()),
-		rl.NewVector2(10, 10+20*1),
-		fontSize*2./3., 1, rl.Lime)
-	rl.DrawText(fmt.Sprintf("camera forward:%.2f\ncamera right:%.2f\n",
-		rl.GetCameraForward(&camera), rl.GetCameraRight(&camera)), screenW-200,
-		screenH-40, 10, rl.Green)
+	rl.DrawTextEx(common.Font.Primary, fmt.Sprintf("%.6f", rl.GetFrameTime()), rl.NewVector2(10, 10+20*1), fontSize*2./3., 1, rl.Lime)
+	{
+		text := fmt.Sprintf("hitScore: %.3d\nhitCount: %.3d\n", hitScore, hitCount)
+		rl.DrawText(text, (screenW-10)-rl.MeasureText(text, 10), screenH-40, 10, rl.Green)
+	}
 }
 
 func Unload() {
@@ -665,37 +551,38 @@ func Finish() int {
 //													TEMPORARY
 //														TEMPORARY
 
-// Migration/Reference/Example
-// Refactors huge blocks data state from main game data state
-var GameAdditionalLevelDataVersions = map[string]map[string]any{
-	"0.0.0-blocks": {
-		"version": "0.0.0-blocks",
-		"levelID": levelID,
-		"data": map[string]any{
-			"blockArray": []block.Block{},
-		},
-	},
-	"0.0.1": {},
-	"0.0.2": {},
-}
-
-// Migration/Reference/Example
-var GameCoreLevelDataVersions = map[string]map[string]any{
-	"0.0.0": {
-		"version": "0.0.0",
-		"levelID": levelID,
-		"data": map[string]any{
-			"camera":                 rl.Camera3D{},
-			"finishScreen":           int(0),
-			"framesCounter":          int32(0),
-			"gameFloor":              floor.Floor{},
-			"gamePlayer":             player.Player{},
-			"hasPlayerLeftDrillBase": false,
-		},
-	},
-	"0.0.1": {},
-	"0.0.2": {},
-}
+// // Migration/Reference/Example
+// // Refactors huge blocks data state from main game data state
+// var GameAdditionalLevelDataVersions = map[string]map[string]any{
+// 	"0.0.0-blocks": {
+// 		"version": "0.0.0-blocks",
+// 		"levelID": levelID,
+// 		"data": map[string]any{
+// 			"blockArray": []block.Block{},
+// 		},
+// 	},
+// 	"0.0.1": {},
+// 	"0.0.2": {},
+// }
+//
+// // Migration/Reference/Example
+// var GameCoreLevelDataVersions = map[string]map[string]any{
+// 	"0.0.0": {
+// 		"version": "0.0.0",
+// 		"levelID": levelID,
+// 		"data": map[string]any{
+// 			"camera":                 rl.Camera3D{},
+// 			"finishScreen":           int(0),
+// 			"framesCounter":          int32(0),
+// 			"gameFloor":              floor.Floor{},
+// 			"gamePlayer":             player.Player{},
+// 			"hasPlayerLeftDrillBase": false,
+// 		},
+// 	},
+// 	"0.0.1": {},
+// 	"0.0.2": {},
+// }
+//
 
 type GameCoreData struct {
 	Camera                 rl.Camera3D   `json:"camera"`
@@ -704,11 +591,17 @@ type GameCoreData struct {
 	GameFloor              floor.Floor   `json:"gameFloor"`
 	GamePlayer             player.Player `json:"gamePlayer"`
 	HasPlayerLeftDrillBase bool          `json:"hasPlayerLeftDrillBase"`
+	HitScore               int32         `json:"hitScore"`
+	HitCount               int32         `json:"hitCount"`
 }
 
 type GameAdditionalData struct {
 	Blocks []block.Block `json:"blocks"`
 }
+
+const (
+	additionalGameDataVersionSuffix = "additional"
+)
 
 func saveCoreLevelState() {
 	input := GameCoreData{
@@ -718,6 +611,8 @@ func saveCoreLevelState() {
 		GameFloor:              gameFloor,
 		GamePlayer:             gamePlayer,
 		HasPlayerLeftDrillBase: hasPlayerLeftDrillBase,
+		HitScore:               hitScore,
+		HitCount:               hitCount,
 	}
 	var b []byte
 	bb := bytes.NewBuffer(b)
@@ -749,11 +644,11 @@ func saveAdditionalLevelState() {
 		}
 	}
 	data := storage.GameStorageLevelJSON{
-		Version: "0.0.0-blocks",
+		Version: "0.0.0-" + additionalGameDataVersionSuffix,
 		LevelID: levelID,
 		Data:    bb.Bytes(),
 	}
-	storage.SaveStorageLevelEx(data, "blocks")
+	storage.SaveStorageLevelEx(data, additionalGameDataVersionSuffix)
 }
 
 func loadCoreGameData() (*GameCoreData, error) {
@@ -775,17 +670,13 @@ func loadCoreGameData() (*GameCoreData, error) {
 	if err := dec.Decode(&dest); err != nil {
 		return nil, fmt.Errorf("decode level: %w", err)
 	}
-
-	// return dest,nil
-	// Upto here.. same as storage.LoadStorageLevel
+	// return dest,nil // => Upto here.. same as storage.LoadStorageLevel
 
 	switch version := dest.Version; version {
 	case "0.0.0":
 		var v *GameCoreData
-		if err := json.Unmarshal(dest.Data, &v); err != nil {
-			return nil, err
-		}
-		return v, nil
+		err := json.Unmarshal(dest.Data, &v)
+		return v, err
 	default:
 		return nil, fmt.Errorf("invalid game core data version %q", version)
 	}
@@ -798,7 +689,8 @@ func loadAdditionalGameData() (*GameAdditionalData, error) {
 	}
 
 	saveDir := filepath.Join(cwd, "storage")
-	name := filepath.Join(saveDir, "level_"+strconv.Itoa(int(levelID))+"_blocks"+".json")
+	filename := "level_" + strconv.Itoa(int(levelID)) + "_" + additionalGameDataVersionSuffix + ".json"
+	name := filepath.Join(saveDir, filename)
 
 	f, err := os.OpenFile(name, os.O_RDONLY, 0644)
 	if err != nil {
@@ -810,12 +702,10 @@ func loadAdditionalGameData() (*GameAdditionalData, error) {
 	if err := dec.Decode(&dest); err != nil {
 		return nil, fmt.Errorf("decode level: %w", err)
 	}
-
-	// return dest,nil
-	// Upto here.. same as storage.LoadStorageLevel
+	// return dest,nil // => Upto here.. same as storage.LoadStorageLevel
 
 	switch version := dest.Version; version {
-	case "0.0.0-blocks":
+	case "0.0.0" + "-" + additionalGameDataVersionSuffix:
 		var v *GameAdditionalData
 		if err := json.Unmarshal(dest.Data, &v); err != nil {
 			return nil, err
