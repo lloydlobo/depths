@@ -23,8 +23,8 @@ var (
 	finishScreen  int
 	framesCounter int32
 
-	camera                 rl.Camera3D
 	levelID                int32
+	camera                 rl.Camera3D
 	gameFloor              floor.Floor
 	gamePlayer             player.Player
 	hasPlayerLeftDrillBase bool
@@ -48,7 +48,16 @@ func Init() {
 		rl.PlayMusicStream(common.Music.DrillRoom000)
 	}
 
+	// Core resources
+	player.SetupPlayerModel()
+	floor.SetupFloorModel()
+
+	// Core data
 	player.InitPlayer(&gamePlayer, camera)
+	gameFloor = floor.NewFloor(common.Vector3Zero, rl.NewVector3(4*3, 0.001*2, 3*3))
+
+	// Unequip hat sword shield
+	player.ToggleEquippedModels([player.MaxBoneSockets]bool{false, false, false})
 
 	rl.DisableCursor() // For camera thirdperson view
 }
@@ -56,10 +65,9 @@ func Init() {
 func Update() {
 	rl.UpdateMusicStream(common.Music.DrillRoom000)
 
-	gamePlayer.Update(camera, gameFloor)
-
 	// Change to ENDING/GAMEPLAY screen
-	if rl.IsKeyDown(rl.KeyF10) || rl.IsGestureDetected(rl.GesturePinchOut) || rl.IsMouseButtonDown(rl.MouseButtonRight) {
+	if rl.IsKeyDown(rl.KeyF10) || rl.IsGestureDetected(rl.GesturePinchOut) ||
+		rl.IsMouseButtonDown(rl.MouseButtonRight) {
 		finishScreen = 1 // 1=>ending
 
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "rollover3.ogg")))
@@ -74,6 +82,14 @@ func Update() {
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("creak%d.ogg", rl.GetRandomValue(1, 3)))))      // 3
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("doorClose_%d.ogg", rl.GetRandomValue(1, 4))))) // 4
 	}
+
+	// Save variables this frame
+	oldCam := camera
+	oldPlayer := gamePlayer
+	_ = oldCam
+	_ = oldPlayer
+
+	gamePlayer.Update(camera, gameFloor)
 
 	if true {
 		rl.UpdateCamera(&camera, rl.CameraThirdPerson)

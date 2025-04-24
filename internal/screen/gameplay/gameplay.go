@@ -28,8 +28,8 @@ var (
 	finishScreen  int
 	framesCounter int32
 
-	camera                 rl.Camera3D
 	levelID                int32
+	camera                 rl.Camera3D
 	gameFloor              floor.Floor
 	gamePlayer             player.Player
 	hasPlayerLeftDrillBase bool
@@ -66,8 +66,11 @@ func Init() {
 	} // See also https://github.com/raylib-extras/extras-c/blob/main/cameras/rlTPCamera/rlTPCamera.h
 
 	// INIT WOULD REQUIRE A LEVEL ID? OR CREATE MULTIPLE gameplay000.go files
+	//
 	// InitWorld loads resources each time it is called.
+	//
 	// Prefers loading data from saved game files if any, else generates new data.
+	//
 	// If new game flag is turned on, generates new game.
 	loadNewCoreData := func() {
 		var mu sync.Mutex
@@ -80,7 +83,9 @@ func Init() {
 
 		// Order is maybe important
 		player.InitPlayer(&gamePlayer, camera)
-		floor.InitFloor(&gameFloor)
+		gameFloor = floor.NewFloor(
+			common.Vector3Zero,
+			rl.NewVector3(16*2, 0.001*2, 9*2)) // floor.InitFloor(&gameFloor)
 		wall.InitWall() // NOTE: Empty func for convention
 
 		hasPlayerLeftDrillBase = false
@@ -103,6 +108,7 @@ func Init() {
 	floor.SetupFloorModel()
 	wall.SetupWallModel()
 	player.SetupPlayerModel() // FIXME: in this func, use package common for models
+	player.ToggleEquippedModels([player.MaxBoneSockets]bool{false, true, true})
 
 	// Core data
 	if !isNewGame {
@@ -434,10 +440,10 @@ func Draw() {
 	}
 
 	gamePlayer.Draw()
-	{ // ‥ Draw player to camera forward projected direction
-		const maxRays = float32(8.)
+	{ // ‥ Draw player to camera forward projected direction ray & area blob/blurb
+		const maxRays = float32(8. * 2)
 		const rayGapFactor = 16 * maxRays
-		rayCol := rl.Fade(rl.LightGray, .3)
+		rayCol := rl.Fade(rl.Yellow, .3)
 		startPos := gamePlayer.Position // NOTE: startPos.Y and endPos.Y may fluctuate
 		endPos := rl.Vector3Add(
 			gamePlayer.Position,

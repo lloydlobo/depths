@@ -113,7 +113,7 @@ func SetupPlayerModel() {
 		rl.LoadModel(filepath.Join("res", "model", "gltf", "greenman_sword.glb")),  // Index for the sword model is the same as BONE_SOCKET_HAND_R
 		rl.LoadModel(filepath.Join("res", "model", "gltf", "greenman_shield.glb")), // Index for the shield model is the same as BONE_SOCKET_HAND_L
 	}
-	isShowEquippedModels = [MaxBoneSockets]bool{false, true, true}
+	isShowEquippedModels = [MaxBoneSockets]bool{true, true, true}
 
 	// Load gltf model animations
 	animIndex = 0
@@ -165,20 +165,6 @@ func SetupPlayerModel() {
 	if got, want := boneSocketsIndex[:], [3]int{3, 11, 10}; !slices.Equal(got[:], want[:]) {
 		panic(fmt.Sprintln("NewPlayer: boneSocketIndex", "got", got, "want", want))
 	}
-}
-
-// FIXME: Camera gets stuck if player keeps moving into the box.
-// NOTE:  Maybe lerp or free camera if "distance to the box is less" or touching.
-func RevertPlayerAndCameraPositions(
-	dstPlayer *Player,
-	srcPlayer Player,
-	dstCamera *rl.Camera3D,
-	srcCamera rl.Camera3D,
-) {
-	dstPlayer.Position = srcPlayer.Position
-	dstPlayer.BoundingBox = common.GetBoundingBoxFromPositionSizeV(dstPlayer.Position, dstPlayer.Size)
-	dstCamera.Target = srcCamera.Target
-	dstCamera.Position = srcCamera.Position
 }
 
 func (p *Player) Update(camera rl.Camera3D, flr floor.Floor) {
@@ -260,6 +246,12 @@ func (p *Player) Update(camera rl.Camera3D, flr floor.Floor) {
 	p.Position = camera.Target
 	p.BoundingBox = common.GetBoundingBoxFromPositionSizeV(p.Position, p.Size)
 
+	// Update rotation based on camera forward projection
+	startPos := p.Position
+	endPos := rl.Vector3Add(p.Position, rl.GetCameraForward(&camera))
+	degree := mathutil.Angle2D(startPos.X, startPos.Z, endPos.X, endPos.Z)
+	p.Rotation = -90 + int32(degree) // HACK: -90 flips default character model
+
 	// Wall collisions
 	if p.BoundingBox.Min.X <= flr.BoundingBox.Min.X {
 		p.IsPlayerWallCollision = true
@@ -286,11 +278,6 @@ func (p *Player) Update(camera rl.Camera3D, flr floor.Floor) {
 		p.Collisions.W = -1 // Allow walking freely
 	}
 
-	// ‥  Update player rotation.. based on camera forward projection
-	startPos := p.Position
-	endPos := rl.Vector3Add(p.Position, rl.GetCameraForward(&camera))
-	degree := mathutil.Angle2D(startPos.X, startPos.Z, endPos.X, endPos.Z)
-	p.Rotation = -90 + int32(degree)
 }
 
 func (p Player) Draw() {
@@ -394,4 +381,29 @@ func (p Player) Draw() {
 			common.DrawXYZOrbitV(p.Position, 1./common.Phi)
 		}
 	}
+}
+
+func ToggleEquippedModels(values [MaxBoneSockets]bool) {
+	var mu sync.Mutex
+	
+	mu.Lock()
+	defer mu.Unlock()
+
+	for i := range values {
+		isShowEquippedModels[i] = values[i]
+	}
+}
+
+// FIXME: Camera gets stuck if player keeps moving into the box.
+// NOTE:  Maybe lerp or free camera if "distance to the box is less" or touching.
+func RevertPlayerAndCameraPositions(
+	dstPlayer *Player,
+	srcPlayer Player,
+	dstCamera *rl.Camera3D,
+	srcCamera rl.Camera3D,
+) {
+	dstPlayer.Position = srcPlayer.Position
+	dstPlayer.BoundingBox = common.GetBoundingBoxFromPositionSizeV(dstPlayer.Position, dstPlayer.Size)
+	dstCamera.Target = srcCamera.Target
+	dstCamera.Position = srcCamera.Position
 }

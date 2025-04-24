@@ -28,14 +28,14 @@ func NewFloor(pos, size rl.Vector3) Floor {
 
 // InitFloor creates a new floor, loads a mesh, assigns material parameters and texture to a model.
 // NOTE: A basic plane shape can be generated instead of being loaded from a model file
-func InitFloor(floor *Floor) {
-	pos := rl.NewVector3(0., 0., 0.)
-	const scale = 2.0
-	size := rl.Vector3Multiply(rl.NewVector3(16., 0.001, 9.), rl.NewVector3(scale, 1., scale))
-
-	// Set global var in internal/game.go for bounds, vertex information
-	*floor = NewFloor(pos, size)
-}
+// func InitFloor(floor *Floor) {
+// 	pos := rl.NewVector3(0., 0., 0.)
+// 	const scale = 2.0
+// 	size := rl.Vector3Multiply(rl.NewVector3(16., 0.001, 9.), rl.NewVector3(scale, 1., scale))
+//
+// 	// Set global var in internal/game.go for bounds, vertex information
+// 	*floor = NewFloor(pos, size)
+// }
 
 func SetupFloorModel() {
 	var mu sync.Mutex
