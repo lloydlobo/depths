@@ -1,4 +1,4 @@
-package gameplay
+package cubicmap
 
 import (
 	"example/depths/internal/common"
