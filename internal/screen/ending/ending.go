@@ -1,23 +1,40 @@
 package ending
 
 import (
+	"path/filepath"
+
 	rl "github.com/gen2brain/raylib-go/raylib"
 
 	"example/depths/internal/common"
 )
 
+const (
+	screenTitleText    = "GAMEOVER" // This should be temporary during prototype
+	screenSubtitleText = "continue" // "press enter or tap to jump to title screen"
+)
+
+var (
+	framesCounter int32 = 0
+	finishScreen  int   = 0
+)
+
 func Init() {
 	framesCounter = 0
 	finishScreen = 0
+	if !rl.IsMusicStreamPlaying(common.Music.UIScreen000) {
+		rl.PlayMusicStream(common.Music.UIScreen000)
+	}
 }
 
 func Update() {
-	// TODO: Update ending screen variables here!
+	rl.UpdateMusicStream(common.Music.UIScreen000)
 
 	// Press enter or tap to change to ENDING screen
 	if rl.IsKeyDown(rl.KeyEnter) || rl.IsGestureDetected(rl.GestureDoubletap) {
 		finishScreen = 1
-		rl.PlaySound(common.FX.Coin)
+		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "rollover3.ogg")))
+		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "switch33.ogg")))
+		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", "confirmation_001.ogg")))
 	}
 }
 
@@ -46,13 +63,3 @@ func Unload() {
 func Finish() int {
 	return finishScreen
 }
-
-const (
-	screenTitleText    = "GAMEOVER" // This should be temporary during prototype
-	screenSubtitleText = "continue" // "press enter or tap to jump to title screen"
-)
-
-var (
-	framesCounter int32 = 0
-	finishScreen  int   = 0
-)
