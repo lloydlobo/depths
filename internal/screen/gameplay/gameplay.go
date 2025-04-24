@@ -237,13 +237,6 @@ func Update() {
 
 	gamePlayer.Update(camera, gameFloor)
 
-	{ // ‥  Update player rotation.. based on camera forward projection
-		startPos := gamePlayer.Position
-		endPos := rl.Vector3Add(gamePlayer.Position, rl.GetCameraForward(&camera))
-		degree := mathutil.Angle2D(startPos.X, startPos.Z, endPos.X, endPos.Z)
-		gamePlayer.Rotation = -90 + int32(degree)
-	}
-
 	if gamePlayer.IsPlayerWallCollision {
 		player.RevertPlayerAndCameraPositions(&gamePlayer, oldPlayer, &camera, oldCam)
 	}

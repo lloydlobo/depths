@@ -5,6 +5,7 @@ import (
 	"cmp"
 	"example/depths/internal/common"
 	"example/depths/internal/floor"
+	"example/depths/internal/util/mathutil"
 	"fmt"
 	"image/color"
 	"path/filepath"
@@ -284,6 +285,12 @@ func (p *Player) Update(camera rl.Camera3D, flr floor.Floor) {
 	if p.BoundingBox.Max.Y >= flr.BoundingBox.Min.Y { // On floor
 		p.Collisions.W = -1 // Allow walking freely
 	}
+
+	// ‥  Update player rotation.. based on camera forward projection
+	startPos := p.Position
+	endPos := rl.Vector3Add(p.Position, rl.GetCameraForward(&camera))
+	degree := mathutil.Angle2D(startPos.X, startPos.Z, endPos.X, endPos.Z)
+	p.Rotation = -90 + int32(degree)
 }
 
 func (p Player) Draw() {
