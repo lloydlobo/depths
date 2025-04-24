@@ -2,6 +2,7 @@ package wall
 
 import (
 	"example/depths/internal/common"
+	"fmt"
 	"path/filepath"
 	"sync"
 
@@ -15,19 +16,19 @@ var (
 
 func InitWall() {}
 
-func SetupWallModel(screen string) {
+func SetupWallModel(room common.RoomType) {
 	var mu sync.Mutex
 
 	mu.Lock()
 	defer mu.Unlock()
 
-	switch screen {
-	case "gameplay":
+	switch room {
+	case common.OpenWorldRoom:
 		wallModel = common.Model.OBJ.WallOpening
 		rl.SetMaterialTexture(wallModel.Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
 		wallCornerModel = common.Model.OBJ.Wall
 		rl.SetMaterialTexture(wallCornerModel.Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
-	case "drillroom":
+	case common.DrillRoom:
 		// PERF: Load once in common
 		dir := filepath.Join("res", "kenney_prototype-kit", "Models")
 		texture := rl.LoadTexture(filepath.Join(dir, "OBJ format", "Textures", "colormap.png"))
@@ -36,12 +37,12 @@ func SetupWallModel(screen string) {
 		wallCornerModel = wallModel // not necessary as walls fill corner space.. still init it
 		rl.SetMaterialTexture(wallCornerModel.Materials, rl.MapDiffuse, texture)
 	default:
-		panic("unknown screen string enum passed to wall.SetupWallModel")
+		panic(fmt.Sprintf("unexpected common.RoomType: %#v", room))
 	}
 }
 
 // Use walls to avoid infinite-map generation
-func DrawBatch(screen string, pos, size, scale rl.Vector3) {
+func DrawBatch(room common.RoomType, pos, size, scale rl.Vector3) {
 	var (
 		tint         = rl.White
 		rotationAxis = common.YAxis
@@ -54,8 +55,8 @@ func DrawBatch(screen string, pos, size, scale rl.Vector3) {
 	)
 
 	// Draw walls along each X & Z axis
-	switch screen {
-	case "gameplay":
+	switch room {
+	case common.OpenWorldRoom:
 		wallLen = float32(1.)
 		wallthick = float32(1. / 2.)
 		wallboty = size.Y
@@ -71,7 +72,7 @@ func DrawBatch(screen string, pos, size, scale rl.Vector3) {
 			rl.DrawModelEx(wallModel, pos1, rotationAxis, -90, scale, tint)
 			rl.DrawModelEx(wallModel, pos2, rotationAxis, 90, scale, tint)
 		}
-	case "drillroom":
+	case common.DrillRoom:
 		// NOTE: Should just use floor.BoundingBox
 		// NOTE: wallBox := rl.GetModelBoundingBox(wallModel) // For precision
 		wallLen = float32(1.) * (scale.Z / 4.)
@@ -96,12 +97,12 @@ func DrawBatch(screen string, pos, size, scale rl.Vector3) {
 			rl.DrawModelEx(wallModel, pos2, rotationAxis, 180, scale, tint)
 		}
 	default:
-		panic("unknown screen string enum passed to wall.DrawBatch")
+		panic(fmt.Sprintf("unexpected common.RoomType: %#v", room))
 	}
 
 	// Draw 4 wall corners
-	switch screen {
-	case "gameplay":
+	switch room {
+	case common.OpenWorldRoom:
 		bottomLeft := rl.NewVector3(pos.X-size.X/2-wallthick, pos.Y+wallboty, pos.Z+size.Z/2+wallthick)
 		bottomRight := rl.NewVector3(pos.X+size.X/2+wallthick, pos.Y+wallboty, pos.Z+size.Z/2+wallthick)
 		topRight := rl.NewVector3(pos.X+size.X/2+wallthick, pos.Y+wallboty, pos.Z-size.Z/2-wallthick)
@@ -110,9 +111,9 @@ func DrawBatch(screen string, pos, size, scale rl.Vector3) {
 		rl.DrawModelEx(wallCornerModel, topLeft, rotationAxis, 90, scale, tint)
 		rl.DrawModelEx(wallCornerModel, bottomLeft, rotationAxis, 180, scale, tint)
 		rl.DrawModelEx(wallCornerModel, bottomRight, rotationAxis, 270, scale, tint)
-	case "drillroom":
-		// walls fill corner
+	case common.DrillRoom:
+		break // walls fill corner
 	default:
-		panic("unknown screen string enum passed to wall.DrawBatch")
+		panic(fmt.Sprintf("unexpected common.RoomType: %#v", room))
 	}
 }

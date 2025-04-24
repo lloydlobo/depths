@@ -29,7 +29,9 @@ var (
 	gameFloor              floor.Floor
 	gamePlayer             player.Player
 	hasPlayerLeftDrillBase bool
+)
 
+var (
 	// TODO: SEPARATE THIS FROM CORE DATA
 	hitCount int32
 	hitScore int32
@@ -45,6 +47,7 @@ func Init() {
 		Fovy:       15. * float32(cmp.Or(4., 3., 2.)),
 		Projection: rl.CameraPerspective,
 	} // See also https://github.com/raylib-extras/extras-c/blob/main/cameras/rlTPCamera/rlTPCamera.h
+	hasPlayerLeftDrillBase = false
 
 	if !rl.IsMusicStreamPlaying(common.Music.DrillRoom000) {
 		rl.PlayMusicStream(common.Music.DrillRoom000)
@@ -53,11 +56,11 @@ func Init() {
 	// Core resources
 	player.SetupPlayerModel()
 	floor.SetupFloorModel()
-	wall.SetupWallModel("drillroom")
+	wall.SetupWallModel(common.DrillRoom)
 
 	// Core data
 	player.InitPlayer(&gamePlayer, camera)
-	gameFloor = floor.NewFloor(common.Vector3Zero, rl.NewVector3(16, 0.001*2, 16)) // 1:1 ratio
+	gameFloor = floor.NewFloor(common.Vector3Zero, rl.NewVector3(10, 0.001*2, 10)) // 1:1 ratio
 
 	// Unequip hat sword shield
 	player.ToggleEquippedModels([player.MaxBoneSockets]bool{false, false, false})
@@ -86,6 +89,12 @@ func Update() {
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("doorClose_%d.ogg", rl.GetRandomValue(1, 4))))) // 4
 	}
 
+	// Update playerl leaving common.DrillRoom => common.Opcommon.OpenWorldRoom
+	// (copied from gameplay.go => Update player─block collision+breaking/mining )
+
+	bb1, bb2, bb3 := getGatesIntersectionBoundingBoxes() // bot barrier		(raywhite)
+	updateIntersectGates(bb1, bb2, bb3)
+
 	// Save variables this frame
 	oldCam := camera
 	oldPlayer := gamePlayer
@@ -110,6 +119,55 @@ func Update() {
 	}
 }
 
+func getGatesIntersectionBoundingBoxes() (bb1 rl.BoundingBox, bb2 rl.BoundingBox, bb3 rl.BoundingBox) {
+	origin := gameFloor.Position
+	size := gameFloor.Size
+	size.Y = max(2, gamePlayer.Size.Y)
+	wallThick := float32(2)
+	bb1 = common.GetBoundingBoxFromPositionSizeV(origin, rl.Vector3Subtract(size, rl.NewVector3(3.5, 0, 3.5)))        // player is inside	 (red->green)
+	bb2 = common.GetBoundingBoxFromPositionSizeV(origin, rl.Vector3Subtract(size, rl.NewVector3(1.5, 0, 1.5)))        // player is entering (green->blue)
+	bb3 = common.GetBoundingBoxFromPositionSizeV(origin, rl.Vector3Add(size, rl.NewVector3(wallThick, 0, wallThick))) // outer barrier      (blue->white)
+	return bb1, bb2, bb3
+}
+func updateIntersectGates(bb1 rl.BoundingBox, bb2 rl.BoundingBox, bb3 rl.BoundingBox) {
+	isPlayerInsideBase := rl.CheckCollisionBoxes(gamePlayer.BoundingBox, bb1)
+	isPlayerEnteringBase := rl.CheckCollisionBoxes(gamePlayer.BoundingBox, bb2)
+	isPlayerInsideBotBarrier := rl.CheckCollisionBoxes(gamePlayer.BoundingBox, bb3)
+
+	// If blue exit
+	if isPlayerInsideBotBarrier && !isPlayerEnteringBase && !isPlayerInsideBase {
+		player.SetColor(rl.Blue)
+		if !hasPlayerLeftDrillBase { // HACK: Placeholder change scene check logic
+			hasPlayerLeftDrillBase = true
+			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("footstep0%d.ogg", rl.GetRandomValue(0, 9))))) // 05
+			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "metalClick.ogg")))                                        // metalClick
+			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("creak%d.ogg", rl.GetRandomValue(1, 3)))))     // 3
+			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("doorOpen_%d.ogg", rl.GetRandomValue(1, 2))))) // 2
+			{                                                                                                                                            // Save screen state
+				finishScreen = 2                      // 1=>ending 2=>drillroom
+				camera.Up = rl.NewVector3(0., 1., 0.) // Reset yaw/pitch/roll
+				// TODO: implement drillroom save/load functions (data and filenames)
+				// saveCoreLevelState()                  // (player,camera,...) 705 bytes
+				// saveAdditionalLevelState()            // (blocks,...)        82871 bytes
+			}
+		}
+	} else if isPlayerEnteringBase && !isPlayerInsideBase {
+		player.SetColor(rl.Green)
+	} else if isPlayerInsideBase {
+		player.SetColor(rl.Red)
+	} else { // RESET FLAG just in case
+		if hasPlayerLeftDrillBase {
+			hasPlayerLeftDrillBase = false
+		}
+		player.SetColor(rl.RayWhite)
+	}
+}
+func drawIntersectionGates(bb1 rl.BoundingBox, bb2 rl.BoundingBox, bb3 rl.BoundingBox) { // ‥ DEBUG: Draw drill door gate entry logic before changing scene to drill base
+	rl.DrawBoundingBox(bb1, rl.Red)
+	rl.DrawBoundingBox(bb2, rl.Green)
+	rl.DrawBoundingBox(bb3, rl.Blue)
+}
+
 func Draw() {
 	// TODO: Draw ending screen here!
 	screenW := int32(rl.GetScreenWidth())
@@ -122,14 +180,14 @@ func Draw() {
 
 	gamePlayer.Draw()
 	gameFloor.Draw()
-	wall.DrawBatch("drillroom", gameFloor.Position, gameFloor.Size, cmp.Or(rl.NewVector3(3, 3, 3), common.Vector3One))
+	wall.DrawBatch(common.DrillRoom, gameFloor.Position, gameFloor.Size, cmp.Or(rl.NewVector3(5, 2, 5), common.Vector3One))
 
 	{ // TEMPORARY
 		rl.DrawModel(
 			common.Model.OBJ.Gate,
 			rl.NewVector3(gameFloor.BoundingBox.Min.X+1, gameFloor.Position.Y, gameFloor.BoundingBox.Min.Z+1),
-			1.,
-			rl.White)
+			1., rl.White)
+		drawIntersectionGates(getGatesIntersectionBoundingBoxes())
 	}
 
 	rl.EndMode3D()

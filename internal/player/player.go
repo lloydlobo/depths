@@ -75,10 +75,6 @@ var (
 	characterRotate rl.Quaternion
 )
 
-var (
-	playerModel rl.Model // UNUSED -> not compatible with kenney models
-)
-
 func NewPlayer(camera rl.Camera3D) Player {
 	player := Player{
 		Position:   camera.Target,
@@ -100,9 +96,6 @@ func SetupPlayerModel() {
 
 	mu.Lock()
 	defer mu.Unlock()
-
-	playerModel = common.Model.OBJ.CharacterHuman
-	rl.SetMaterialTexture(playerModel.Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
 
 	// Load gltf model
 	// See https://www.raylib.com/examples/models/loader.html?name=models_bone_socket
@@ -281,19 +274,9 @@ func (p *Player) Update(camera rl.Camera3D, flr floor.Floor) {
 }
 
 func (p Player) Draw() {
-	if false {
-		rl.DrawModelEx(playerModel,
-			rl.NewVector3(p.Position.X, p.Position.Y-p.Size.Y/2, p.Position.Z),
-			rl.NewVector3(0, 1, 0), 0.0,
-			rl.NewVector3(1., common.InvPhi, 1.), rl.White)
-		rl.DrawCapsule(
-			rl.Vector3Add(p.Position, rl.NewVector3(0, p.Size.Y/8, 0)),
-			rl.Vector3Add(p.Position, rl.NewVector3(0, -p.Size.Y/4, 0)),
-			p.Size.X/2, 8, 8, playerColor)
-	} else {
-		// Draw character and equipments
-		rl.PushMatrix()
-
+	// Draw character and equipments
+	rl.PushMatrix()
+	{
 		const scaleToReduceBy = 3.
 		const cameraTargetPlayerCenterYOffset = .5
 
@@ -346,13 +329,15 @@ func (p Player) Draw() {
 			// Draw mesh at socket position with socket angle rotation
 			rl.DrawMesh(equippedModels[i].GetMeshes()[0], equippedModels[i].GetMaterials()[1], matrixTransform)
 		}
-
-		rl.PopMatrix()
 	}
+	rl.PopMatrix()
 
 	// Debug
 	if true {
 		size := rl.Vector3Scale(p.Size, .5)
+
+		// Debug player color near player's feet
+		rl.DrawCubeV(rl.Vector3Subtract(p.Position, rl.NewVector3(0., p.Size.Y, 0.)), p.Size, rl.Fade(playerColor, .3))
 
 		if p.Collisions.X != 0 {
 			pos := p.Position
@@ -385,7 +370,7 @@ func (p Player) Draw() {
 
 func ToggleEquippedModels(values [MaxBoneSockets]bool) {
 	var mu sync.Mutex
-	
+
 	mu.Lock()
 	defer mu.Unlock()
 

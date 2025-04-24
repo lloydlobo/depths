@@ -104,7 +104,7 @@ func Init() {
 
 	// Core resources
 	floor.SetupFloorModel()
-	wall.SetupWallModel("gameplay")
+	wall.SetupWallModel(common.OpenWorldRoom)
 	player.SetupPlayerModel() // FIXME: in this func, use package common for models
 	player.ToggleEquippedModels([player.MaxBoneSockets]bool{false, true, true})
 
@@ -361,6 +361,7 @@ func Update() {
 	// Update player─block collision+breaking/mining
 	{
 		origin := common.Vector3Zero
+		origin = gameFloor.Position
 		bb1 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(3, 2, 3)) // player is inside
 		bb2 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(5, 2, 5)) // player is entering
 		bb3 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(7, 2, 7)) // bot barrier
@@ -452,7 +453,7 @@ func Draw() {
 		rl.DrawModel(checkedModel, rl.NewVector3(0., -.05, 0.), 1., rl.RayWhite)
 	}
 
-	wall.DrawBatch("gameplay", gameFloor.Position, gameFloor.Size, common.Vector3One)
+	wall.DrawBatch(common.OpenWorldRoom, gameFloor.Position, gameFloor.Size, common.Vector3One)
 
 	for i := range blocks {
 		blocks[i].Draw()
@@ -506,8 +507,9 @@ func Draw() {
 			rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
 		}
 
-		if false { // ‥ DEBUG: Draw drill door gate entry logic before changing scene to drill base
+		if true { // ‥ DEBUG: Draw drill door gate entry logic before changing scene to drill base
 			origin := common.Vector3Zero
+			origin = gameFloor.Position
 			bb1 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(3, 2, 3)) // player is inside
 			bb2 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(5, 2, 5)) // player is entering
 			bb3 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(7, 2, 7)) // bot barrier

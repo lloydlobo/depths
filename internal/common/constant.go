@@ -33,3 +33,11 @@ var (
 	YAxis = rl.NewVector3(0, 1, 0)
 	ZAxis = rl.NewVector3(0, 0, 1)
 )
+
+// RoomType enumerates different type of rooms based on screen/scenes to switch use cases.
+type RoomType uint8
+
+const (
+	OpenWorldRoom RoomType = iota
+	DrillRoom
+)
