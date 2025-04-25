@@ -452,12 +452,13 @@ func Draw() {
 	// 3D World
 	rl.BeginMode3D(camera)
 
-	rl.ClearBackground(rl.RayWhite)
+	rl.ClearBackground(rl.Black)
 
-	xFloor.Draw()
-	if true { // ‥ Draw pseudo-infinite(ish) floor backdrop
+	if false { // ‥ Draw pseudo-infinite(ish) floor backdrop
 		rl.DrawModel(checkedModel, rl.NewVector3(0., -.05, 0.), 1., rl.RayWhite)
 	}
+
+	xFloor.Draw()
 
 	wall.DrawBatch(common.OpenWorldRoom, xFloor.Position, xFloor.Size, common.Vector3One)
 
