@@ -55,7 +55,7 @@ func (fl Floor) Draw() {
 		}
 	}
 
-	if true { // DEBUG
+	if false { // DEBUG
 		rl.DrawBoundingBox(fl.BoundingBox, rl.DarkGray)
 		common.DrawXYZOrbitV(rl.Vector3Zero(), 2.)
 		common.DrawWorldXYZAxis()

@@ -249,9 +249,19 @@ func Update() {
 	for i := range triggerCount {
 		isPlayerNearTriggerSensors[i] = rl.CheckCollisionBoxes(playerEntity.BoundingBox, triggerSensorBoundingBoxes[i])
 		if rl.CheckCollisionBoxes(playerEntity.BoundingBox, triggerBoundingBoxes[i]) {
+			playerEntity.Collisions.X = 1
+			playerEntity.Collisions.Z = 1
 			player.RevertPlayerAndCameraPositions(&playerEntity, oldPlayer, &camera, oldCam)
 		}
-		triggerScreenPositions[i] = rl.GetWorldToScreen(rl.NewVector3(triggerPositions[i].X, triggerPositions[i].Y+.5, triggerPositions[i].Z), camera)
+	}
+	// Update screen position after accumulating all player entity collisions with trigger
+	for i := range triggerCount {
+		pos := triggerPositions
+		cam := camera
+		if playerEntity.Collisions.X != 0 || playerEntity.Collisions.Z != 0 {
+			cam = oldCam // Avoid glitching text position on player's X/Z movement
+		}
+		triggerScreenPositions[i] = rl.GetWorldToScreen(rl.NewVector3(pos[i].X, pos[i].Y+.5, pos[i].Z), cam)
 	}
 }
 
@@ -267,7 +277,9 @@ func Draw() {
 
 	playerEntity.Draw()
 	floorEntity.Draw()
-	rl.DrawBoundingBox(drillroomExitBoundingBox, rl.Green)
+	if false {
+		rl.DrawBoundingBox(drillroomExitBoundingBox, rl.Green)
+	}
 	wall.DrawBatch(common.DrillRoom, floorEntity.Position, floorEntity.Size, cmp.Or(rl.NewVector3(5, 2, 5), common.Vector3One))
 
 	for i := range triggerCount {
@@ -293,7 +305,7 @@ func Draw() {
 		*/
 
 		rl.DrawModelEx(triggerModels[i], triggerPositions[i], common.YAxis, 0., scale, rl.White)
-		if true {
+		if false {
 			rl.DrawBoundingBox(triggerBoundingBoxes[i], rl.Fade(rl.SkyBlue, 0.1))
 			rl.DrawBoundingBox(triggerSensorBoundingBoxes[i], rl.Fade(col, 0.1))
 		}
@@ -310,11 +322,11 @@ func Draw() {
 	// See https://github.com/lloydlobo/ludumdare57/blob/af417920450846aae00746c0acbdaec03750cd68/main.go#L729C1-L739C5
 	for i := range triggerCount {
 		text := fmt.Sprintf("%d", i)
-		const fontSize = 20
-		stringSize := rl.MeasureTextEx(common.Font.Primary, text, fontSize, 1)
-		x := int32(triggerScreenPositions[i].X - stringSize.X)
-		y := int32(triggerScreenPositions[i].Y - stringSize.Y)
-		rl.DrawText(text, x, y, fontSize, rl.Gold)
+		const fontSize = 16
+		stringSize := rl.MeasureTextEx(common.Font.Primary, text, fontSize, 2)
+		x := triggerScreenPositions[i].X - stringSize.X
+		y := triggerScreenPositions[i].Y - stringSize.Y
+		rl.DrawTextEx(common.Font.Primary, text, rl.NewVector2(x, y), fontSize, 2, rl.White)
 	}
 
 	fontSize := float32(common.Font.Primary.BaseSize) * 3.0

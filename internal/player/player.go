@@ -38,6 +38,15 @@ var (
 	action ActionType = Idle
 )
 
+func Action() ActionType {
+	var mu sync.Mutex
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	return action
+}
+
 var (
 	playerColor = rl.RayWhite
 )
