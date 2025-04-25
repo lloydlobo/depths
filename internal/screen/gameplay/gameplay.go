@@ -33,16 +33,20 @@ var (
 
 	levelID                int32
 	camera                 rl.Camera3D
-	gameFloor              floor.Floor
-	gamePlayer             player.Player
+	xFloor                 floor.Floor
+	xPlayer                player.Player
 	hasPlayerLeftDrillBase bool
-
-	hitCount int32
-	hitScore int32
 
 	// Additional data
 
 	blocks []block.Block
+)
+
+var (
+	// Game stats
+
+	hitCount int32
+	hitScore int32
 )
 
 var (
@@ -91,12 +95,12 @@ func Init() {
 		framesCounter = 0
 
 		// Order is maybe important
-		player.InitPlayer(&gamePlayer, camera)
-		gameFloor = floor.NewFloor(common.Vector3Zero, rl.NewVector3(16*2, 0.001*2, 9*2)) // 16:9 ratio // floor.InitFloor(&gameFloor)
-		wall.InitWall()                                                                   // NOTE: Empty func for convention
+		player.InitPlayer(&xPlayer, camera)
+		xFloor = floor.NewFloor(common.Vector3Zero, rl.NewVector3(16*2, 0.001*2, 9*2)) // 16:9 ratio // floor.InitFloor(&gameFloor)
+		wall.InitWall()                                                                // NOTE: Empty func for convention
 
 		hasPlayerLeftDrillBase = false
-		gamePlayer.IsPlayerWallCollision = false
+		xPlayer.IsPlayerWallCollision = false
 	}
 
 	loadNewAdditionalData := func() {
@@ -106,7 +110,7 @@ func Init() {
 		defer mu.Unlock()
 
 		blocks = []block.Block{} // Clear
-		block.InitBlocks(&blocks, block.GenerateRandomBlockPositions(gameFloor))
+		block.InitBlocks(&blocks, block.GenerateRandomBlockPositions(xFloor))
 	}
 
 	const isNewGame = false
@@ -124,8 +128,8 @@ func Init() {
 			finishScreen = 0
 			framesCounter = 0
 			camera = data.Camera
-			gameFloor = data.GameFloor
-			gamePlayer = data.GamePlayer
+			xFloor = data.GameFloor
+			xPlayer = data.GamePlayer
 			hitScore = data.HitScore
 			hitCount = data.HitCount
 			if true {
@@ -133,7 +137,7 @@ func Init() {
 			} else {
 				hasPlayerLeftDrillBase = false // How do we know?
 			}
-			gamePlayer.IsPlayerWallCollision = false
+			xPlayer.IsPlayerWallCollision = false
 			saveCoreLevelState() // Save ASAP
 		} else { // ERR
 			slog.Warn(err.Error())
@@ -244,11 +248,11 @@ func Update() {
 
 	// Save variables this frame
 	oldCam := camera
-	oldPlayer := gamePlayer
+	oldPlayer := xPlayer
 
 	// Reset flags/variables
-	gamePlayer.Collisions = rl.Quaternion{}
-	gamePlayer.IsPlayerWallCollision = false
+	xPlayer.Collisions = rl.Quaternion{}
+	xPlayer.IsPlayerWallCollision = false
 
 	// Update the game camera for this screen
 	rl.UpdateCamera(&camera, rl.CameraThirdPerson)
@@ -258,10 +262,10 @@ func Update() {
 		camera.Up = want
 	}
 
-	gamePlayer.Update(camera, gameFloor)
+	xPlayer.Update(camera, xFloor)
 
-	if gamePlayer.IsPlayerWallCollision {
-		player.RevertPlayerAndCameraPositions(&gamePlayer, oldPlayer, &camera, oldCam)
+	if xPlayer.IsPlayerWallCollision {
+		player.RevertPlayerAndCameraPositions(&xPlayer, oldPlayer, &camera, oldCam)
 	}
 
 	for i := range blocks {
@@ -271,38 +275,38 @@ func Update() {
 		}
 		if rl.CheckCollisionBoxes(
 			common.GetBoundingBoxFromPositionSizeV(blocks[i].Pos, blocks[i].Size),
-			gamePlayer.BoundingBox,
+			xPlayer.BoundingBox,
 		) {
 			// FIND OUT WHERE PLAYER TOUCHED THE BOX
 			// HACK
 			//		HACK
 			//			HACK
-			gamePlayer.Collisions.Z = 1
-			dx := oldPlayer.Position.X - gamePlayer.Position.X
+			xPlayer.Collisions.Z = 1
+			dx := oldPlayer.Position.X - xPlayer.Position.X
 			if dx < 0.0 { // new <- old
-				gamePlayer.Collisions.X = 1
+				xPlayer.Collisions.X = 1
 			} else if dx > 0.0 { // new -> old
-				gamePlayer.Collisions.X = -1
+				xPlayer.Collisions.X = -1
 			} else {
-				if gamePlayer.Collisions.X != 0 { // Placeholder (do not overwrite previous)
-					gamePlayer.Collisions.X = 0
+				if xPlayer.Collisions.X != 0 { // Placeholder (do not overwrite previous)
+					xPlayer.Collisions.X = 0
 				}
 			}
-			dz := oldPlayer.Position.Z - gamePlayer.Position.Z
+			dz := oldPlayer.Position.Z - xPlayer.Position.Z
 			if dz < 0.0 { // new <- old
-				gamePlayer.Collisions.Z = 1
+				xPlayer.Collisions.Z = 1
 			} else if dz > 0.0 { // new -> old
-				gamePlayer.Collisions.Z = -1
+				xPlayer.Collisions.Z = -1
 			} else {
-				if gamePlayer.Collisions.Z != 0 { // Placeholder (do not overwrite previous)
-					gamePlayer.Collisions.Z = 0
+				if xPlayer.Collisions.Z != 0 { // Placeholder (do not overwrite previous)
+					xPlayer.Collisions.Z = 0
 				}
 			}
 			//			HACK
 			//		HACK
 			// HACK
 
-			player.RevertPlayerAndCameraPositions(&gamePlayer, oldPlayer, &camera, oldCam)
+			player.RevertPlayerAndCameraPositions(&xPlayer, oldPlayer, &camera, oldCam)
 
 			// Trigger once while mining
 			if (rl.IsKeyDown(rl.KeySpace) && framesCounter%16 == 0) ||
@@ -351,10 +355,14 @@ func Update() {
 				}
 
 				// Update stats
-				const finalState = (block.MaxBlockState - 1)
 				hitCount++
-				if state == finalState-1 {
+
+				const finalState = (block.MaxBlockState - 1)
+				canIncrementScore := state == finalState-1
+
+				if canIncrementScore {
 					hitScore++
+					xPlayer.CargoCapacity = min(xPlayer.MaxCargoCapacity, xPlayer.CargoCapacity+1)
 
 					// FIXME: Record.. hitCount and hitScore to save game.. and load and update directly
 					if hitCount/hitScore != int32(finalState) {
@@ -374,13 +382,13 @@ func Update() {
 
 	// Update player─block collision+breaking/mining
 	{
-		origin := gameFloor.Position
+		origin := xFloor.Position
 		bb1 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(3, 2, 3)) // player is inside
 		bb2 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(5, 2, 5)) // player is entering
 		bb3 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(7, 2, 7)) // bot barrier
-		isPlayerInsideBase := rl.CheckCollisionBoxes(gamePlayer.BoundingBox, bb1)
-		isPlayerEnteringBase := rl.CheckCollisionBoxes(gamePlayer.BoundingBox, bb2)
-		isPlayerInsideBotBarrier := rl.CheckCollisionBoxes(gamePlayer.BoundingBox, bb3)
+		isPlayerInsideBase := rl.CheckCollisionBoxes(xPlayer.BoundingBox, bb1)
+		isPlayerEnteringBase := rl.CheckCollisionBoxes(xPlayer.BoundingBox, bb2)
+		isPlayerInsideBotBarrier := rl.CheckCollisionBoxes(xPlayer.BoundingBox, bb3)
 
 		canSwitchToDrillRoom := false
 
@@ -425,9 +433,9 @@ func Update() {
 		const fps = 60.0
 		const framesInterval = fps / 2.5
 		if framesCounter%int32(framesInterval) == 0 {
-			if !rl.Vector3Equals(oldPlayer.Position, gamePlayer.Position) &&
-				rl.Vector3Distance(oldCam.Position, gamePlayer.Position) > 1.0 &&
-				(gamePlayer.Collisions.X == 0 && gamePlayer.Collisions.Z == 0) {
+			if !rl.Vector3Equals(oldPlayer.Position, xPlayer.Position) &&
+				rl.Vector3Distance(oldCam.Position, xPlayer.Position) > 1.0 &&
+				(xPlayer.Collisions.X == 0 && xPlayer.Collisions.Z == 0) {
 				rl.PlaySound(common.FXS.FootStepsConcrete[int(framesCounter)%len(common.FXS.FootStepsConcrete)])
 			}
 		}
@@ -446,12 +454,12 @@ func Draw() {
 
 	rl.ClearBackground(rl.RayWhite)
 
-	gameFloor.Draw()
+	xFloor.Draw()
 	if true { // ‥ Draw pseudo-infinite(ish) floor backdrop
 		rl.DrawModel(checkedModel, rl.NewVector3(0., -.05, 0.), 1., rl.RayWhite)
 	}
 
-	wall.DrawBatch(common.OpenWorldRoom, gameFloor.Position, gameFloor.Size, common.Vector3One)
+	wall.DrawBatch(common.OpenWorldRoom, xFloor.Position, xFloor.Size, common.Vector3One)
 
 	{
 		type BlockResourceType uint8
@@ -503,14 +511,14 @@ func Draw() {
 		rl.EndBlendMode()
 	}
 
-	gamePlayer.Draw()
+	xPlayer.Draw()
 	if false { // ‥ Draw player to camera forward projected direction ray & area blob/blurb
 		const maxRays = float32(8. * 2)
 		const rayGapFactor = 16 * maxRays
 		rayCol := rl.Fade(rl.Yellow, .3)
-		startPos := gamePlayer.Position // NOTE: startPos.Y and endPos.Y may fluctuate
+		startPos := xPlayer.Position // NOTE: startPos.Y and endPos.Y may fluctuate
 		endPos := rl.Vector3Add(
-			gamePlayer.Position,
+			xPlayer.Position,
 			rl.Vector3Multiply(
 				rl.GetCameraForward(&camera),
 				rl.NewVector3(9., .125/2., 9.),
@@ -553,7 +561,7 @@ func Draw() {
 
 		if false { // ‥ DEBUG: Draw drill door gate entry logic before changing scene to drill base
 			origin := common.Vector3Zero
-			origin = gameFloor.Position
+			origin = xFloor.Position
 			bb1 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(3, 2, 3)) // player is inside
 			bb2 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(5, 2, 5)) // player is entering
 			bb3 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(7, 2, 7)) // bot barrier
@@ -564,8 +572,8 @@ func Draw() {
 	}
 
 	if false { // ‥ Draw banners at floor corners
-		floorBBMin := gameFloor.BoundingBox.Min
-		floorBBMax := gameFloor.BoundingBox.Max
+		floorBBMin := xFloor.BoundingBox.Min
+		floorBBMax := xFloor.BoundingBox.Max
 		rl.DrawModelEx(common.ModelDungeonKit.OBJ.Banner, rl.NewVector3(floorBBMin.X+1, 0, floorBBMin.Z+1), common.YAxis, 45, common.Vector3One, rl.White)  // leftback
 		rl.DrawModelEx(common.ModelDungeonKit.OBJ.Banner, rl.NewVector3(floorBBMax.X-1, 0, floorBBMin.Z+1), common.YAxis, -45, common.Vector3One, rl.White) // rightback
 		rl.DrawModelEx(common.ModelDungeonKit.OBJ.Banner, rl.NewVector3(floorBBMax.X, 0, floorBBMax.Z), common.YAxis, 45, common.Vector3One, rl.White)      // rightfront
@@ -610,13 +618,42 @@ func Draw() {
 
 	fontSize := float32(common.Font.Primary.BaseSize) * 3.0
 	text := "[F] PICK UP"
-	rl.DrawFPS(10, 10)
 	rl.DrawText(text, screenW/2-rl.MeasureText(text, 20)/2, screenH-20*2, 20, rl.White)
-	rl.DrawTextEx(common.Font.Primary, fmt.Sprintf("%.6f", rl.GetFrameTime()), rl.NewVector2(10, 10+20*1), fontSize*2./3., 1, rl.Lime)
+
+	// Player
 	{
-		text := fmt.Sprintf("hitScore: %.3d\nhitCount: %.3d\n", hitScore, hitCount)
-		rl.DrawText(text, (screenW-10)-rl.MeasureText(text, 10), screenH-40, 10, rl.Green)
+		rl.DrawTextEx(common.Font.Primary, fmt.Sprintf("%.0f", 100*xPlayer.Health), rl.NewVector2(10, 10+20*1), fontSize*2./3., 1, rl.Red)
+		const radius = 20
+		const marginLeft = 8
+		cargoRatio := (float32(xPlayer.CargoCapacity) / float32(xPlayer.MaxCargoCapacity))
+		circlePos := rl.NewVector2(10+radius, 10+20*3+radius)
+		if cargoRatio >= 1. {
+			rl.DrawCircleGradient(int32(circlePos.X), int32(circlePos.Y), radius+3, rl.White, rl.Fade(rl.White, .1))
+		}
+		circleCutoutRec := rl.NewRectangle(10+radius/2., 10+20*3+radius/2., radius, radius)
+		rl.DrawRectangleRoundedLinesEx(circleCutoutRec, 1., 16, 0.5+radius/2., rl.DarkGray)
+		rl.DrawCircleSector(circlePos, radius, -90, -90+360*cargoRatio, 16, rl.Gold)
+		rl.DrawCircleV(circlePos, radius/2, rl.Fade(rl.Gold, cargoRatio))
+		// Glass Half-Empty
+		rl.DrawCircleV(circlePos, radius*max(.5, (1-cargoRatio)), rl.Fade(rl.Gold, 1.-cargoRatio))
+		rl.DrawCircleV(circlePos, radius*max(.5, (1-cargoRatio)), rl.DarkGray)
+		// Glass Half-Full
+		if cargoRatio >= 0.5 {
+			rl.DrawCircleV(circlePos, radius*cargoRatio, rl.Fade(rl.Gold, 1.0))
+		}
+		rl.DrawTextEx(common.Font.Primary, fmt.Sprintf("%d", xPlayer.CargoCapacity), rl.NewVector2(10+radius*2+marginLeft, 10+radius/2+20*3-1), fontSize*2./3., 1, rl.Gold)
+		rl.DrawTextEx(common.Font.Primary, fmt.Sprintf("/%d", xPlayer.MaxCargoCapacity), rl.NewVector2(10+radius*2+marginLeft, 10+radius/2+20*4-1), fontSize*2./4., 1, rl.Gray)
 	}
+
+	// Perf
+	rl.DrawFPS(10, screenH-35)
+	rl.DrawTextEx(common.Font.Primary, fmt.Sprintf("%.6f", rl.GetFrameTime()), rl.NewVector2(10, float32(screenH)-35-20*1), fontSize*2./3., 1, rl.Lime)
+	rl.DrawTextEx(common.Font.Primary, fmt.Sprintf("%.3d", framesCounter), rl.NewVector2(10, float32(screenH)-35-20*2), fontSize*2./3., 1, rl.Lime)
+
+	// Debug Score
+	text = fmt.Sprintf("hitScore: %.3d\nhitCount: %.3d\n", hitScore, hitCount)
+	rl.DrawText(text, (screenW-10)-rl.MeasureText(text, 10), screenH-40, 10, rl.Green)
+
 }
 
 func Unload() {
@@ -707,8 +744,8 @@ func saveCoreLevelState() {
 		Camera:                 camera,
 		FinishScreen:           finishScreen,
 		FramesCounter:          framesCounter,
-		GameFloor:              gameFloor,
-		GamePlayer:             gamePlayer,
+		GameFloor:              xFloor,
+		GamePlayer:             xPlayer,
 		HasPlayerLeftDrillBase: hasPlayerLeftDrillBase,
 		HitScore:               hitScore,
 		HitCount:               hitCount,

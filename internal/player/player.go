@@ -18,12 +18,37 @@ import (
 )
 
 type Player struct {
-	Position              rl.Vector3
-	Size                  rl.Vector3
-	Rotation              int32
-	BoundingBox           rl.BoundingBox
+	Position    rl.Vector3
+	Size        rl.Vector3
+	Rotation    int32
+	BoundingBox rl.BoundingBox
+
 	Collisions            rl.Quaternion
 	IsPlayerWallCollision bool
+
+	Health           float32 // [0..1]
+	CargoCapacity    int32   // [0..80]
+	MaxCargoCapacity int32   // upgrade lvl01=>80
+}
+
+func NewPlayer(camera rl.Camera3D) Player {
+	player := Player{
+		Position:   camera.Target,
+		Size:       cmp.Or(rl.NewVector3(.5, 1.-.5, .5), rl.NewVector3(1, 2, 1)),
+		Collisions: rl.NewQuaternion(0, 0, 0, 0),
+	}
+	player.BoundingBox = common.GetBoundingBoxFromPositionSizeV(camera.Target, player.Size)
+
+	player.Health = 1.
+	player.CargoCapacity = 0
+	player.MaxCargoCapacity = 80
+
+	return player
+}
+
+// FIXME: Remove this or bring the one from NewPlayer here
+func InitPlayer(player *Player, camera rl.Camera3D) {
+	*player = NewPlayer(camera)
 }
 
 type ActionType int32
@@ -84,21 +109,6 @@ var (
 	anim            rl.ModelAnimation
 	characterRotate rl.Quaternion
 )
-
-func NewPlayer(camera rl.Camera3D) Player {
-	player := Player{
-		Position:   camera.Target,
-		Size:       cmp.Or(rl.NewVector3(.5, 1.-.5, .5), rl.NewVector3(1, 2, 1)),
-		Collisions: rl.NewQuaternion(0, 0, 0, 0),
-	}
-	player.BoundingBox = common.GetBoundingBoxFromPositionSizeV(camera.Target, player.Size)
-	return player
-}
-
-// FIXME: Remove this or bring the one from NewPlayer here
-func InitPlayer(player *Player, camera rl.Camera3D) {
-	*player = NewPlayer(camera)
-}
 
 // FIXME: This has File i/o logic.. Should use resources loaded common to load models apriori
 func SetupPlayerModel() {

@@ -36,7 +36,8 @@ var (
 )
 
 var (
-	// TODO: SEPARATE THIS FROM CORE DATA
+	// WARN: DONT NEED IT HERE
+	//       JUST READ DATA FROM FILE
 	hitCount int32
 	hitScore int32
 )
