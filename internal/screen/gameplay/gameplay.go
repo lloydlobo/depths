@@ -21,6 +21,7 @@ import (
 	"example/depths/internal/floor"
 	"example/depths/internal/player"
 	"example/depths/internal/storage"
+	"example/depths/internal/util/mathutil"
 	"example/depths/internal/wall"
 )
 
@@ -446,7 +447,7 @@ func Draw() {
 	rl.ClearBackground(rl.RayWhite)
 
 	gameFloor.Draw()
-	if false { // ‥ Draw pseudo-infinite(ish) floor backdrop
+	if true { // ‥ Draw pseudo-infinite(ish) floor backdrop
 		rl.DrawModel(checkedModel, rl.NewVector3(0., -.05, 0.), 1., rl.RayWhite)
 	}
 
@@ -574,6 +575,39 @@ func Draw() {
 	rl.EndMode3D()
 
 	// 2D World
+
+	// Draw depth meter
+	{
+		const (
+			totalLevels = 8
+			gapX        = 10
+		)
+		var (
+			isShowText bool
+		)
+		if rl.IsKeyDown(rl.KeyApostrophe) {
+			isShowText = true
+		}
+		gapY := int32(mathutil.CeilF(float32(screenH) / float32(totalLevels))) // parts
+		rl.DrawLine(screenW-gapX, gapY/2, screenW-gapX, screenH-gapY/2, rl.Gray)
+		for i := range int32(totalLevels) {
+			x := screenW - gapX
+			y := gapY/2 + i*gapY
+			rl.DrawLine(x, y, x-gapX/2, y, rl.Gray)
+			radius := float32(4)
+			if (i + 1) == levelID {
+				col := rl.Gray
+				if isShowText {
+					col = rl.Red
+				}
+				rl.DrawCircle(x-int32(radius*2.5), y, radius, col)
+			}
+			if isShowText {
+				rl.DrawText(fmt.Sprintf("%.2d", i+1), x-gapX*2-int32(radius*2), y-5, 10, rl.LightGray)
+			}
+		}
+	}
+
 	fontSize := float32(common.Font.Primary.BaseSize) * 3.0
 	text := "[F] PICK UP"
 	rl.DrawFPS(10, 10)

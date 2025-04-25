@@ -3,9 +3,6 @@ package player
 import (
 	"bytes"
 	"cmp"
-	"example/depths/internal/common"
-	"example/depths/internal/floor"
-	"example/depths/internal/util/mathutil"
 	"fmt"
 	"image/color"
 	"path/filepath"
@@ -14,6 +11,10 @@ import (
 	"sync"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
+
+	"example/depths/internal/common"
+	"example/depths/internal/floor"
+	"example/depths/internal/util/mathutil"
 )
 
 type Player struct {
