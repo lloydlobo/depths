@@ -163,8 +163,20 @@ func Init() {
 		isTriggerActive[i] = true
 
 		dir := filepath.Join("res", "kenney_prototype-kit", "Models", "OBJ format")
-		model := rl.LoadModel(filepath.Join(dir, "weapon-shield.obj"))
 		texture := rl.LoadTexture(filepath.Join(dir, "Textures", "colormap.png"))
+		var model rl.Model
+		switch TriggerType(i) {
+		case TriggerStartDrill:
+			model = rl.LoadModel(filepath.Join(dir, "button-floor-round.obj"))
+		case TriggerChangeResource:
+			model = rl.LoadModel(filepath.Join(dir, "lever-double.obj"))
+		default:
+			// model = rl.LoadModel(filepath.Join(dir, "column-rounded-low.obj"))
+			// model = rl.LoadModel(filepath.Join(dir, "column-triangle-low.obj"))
+			// model = rl.LoadModel(filepath.Join(dir, "column-low-low.obj"))
+			model = rl.LoadModel(filepath.Join(dir, "weapon-shield.obj"))
+			triggerModels[i] = model
+		}
 		rl.SetMaterialTexture(model.Materials, rl.MapDiffuse, texture)
 		triggerModels[i] = model
 	}
@@ -249,11 +261,6 @@ func Update() {
 
 	// Check player collisions with instruments
 	for i := range MaxTriggerCount {
-		isPlayerNearTriggerSensors[i] = rl.CheckCollisionBoxes(
-			xPlayer.BoundingBox,
-			triggerSensorBoundingBoxes[i],
-		)
-
 		if rl.CheckCollisionBoxes(
 			xPlayer.BoundingBox,
 			triggerBoundingBoxes[i],
@@ -262,6 +269,15 @@ func Update() {
 			xPlayer.Collisions.Z = 1
 			player.RevertPlayerAndCameraPositions(&xPlayer, oldPlayer, &camera, oldCam)
 		}
+
+		// Disable everything apart from "Start drill" trigger for now
+		if __IS_TEMPORARY__ := true; __IS_TEMPORARY__ {
+			if !isTriggerActive[i] {
+				continue
+			}
+		}
+
+		isPlayerNearTriggerSensors[i] = rl.CheckCollisionBoxes(xPlayer.BoundingBox, triggerSensorBoundingBoxes[i])
 	}
 
 	// Should just use maps or enumerations.. this seems kinda hacky
@@ -411,8 +427,10 @@ func Draw() {
 	for i := range MaxTriggerCount {
 		// Circular model shape --expand-> to 1x1x1 bounding box
 		const k = 1. + common.OneMinusInvPhi
+
 		var scale rl.Vector3
 		var col color.RGBA
+
 		if isPlayerNearTriggerSensors[i] {
 			scale = rl.Vector3{X: k * 1.25, Y: k * 1.25, Z: k * 1.25}
 			col = rl.Purple
@@ -420,11 +438,13 @@ func Draw() {
 			scale = rl.Vector3{X: k, Y: k, Z: k}
 			col = rl.Pink
 		}
-		rl.DrawModelEx(triggerModels[i], triggerPositions[i], common.YAxis, 0., scale, rl.White)
 		if false {
 			rl.DrawBoundingBox(triggerBoundingBoxes[i], rl.Fade(rl.SkyBlue, 0.1))
 			rl.DrawBoundingBox(triggerSensorBoundingBoxes[i], rl.Fade(col, 0.1))
 		}
+
+		rl.DrawModelEx(triggerModels[i], triggerPositions[i], common.YAxis, 0., scale, rl.White)
+
 	}
 
 	rl.EndMode3D()
@@ -439,16 +459,20 @@ func Draw() {
 	alpha := min(1., float32(framesCounter)/60.)
 	col := rl.Fade(rl.White, alpha)
 
-	// See https://www.raylib.com/examples/core/loader.html?name=core_world_screen
-	for i := range MaxTriggerCount {
-		text := fmt.Sprintf("%d", i)
-		const fontSize = 16
-		stringSize := rl.MeasureTextEx(common.Font.Primary, text, fontSize, 2)
-		x := triggerScreenPositions[i].X - stringSize.X
-		y := triggerScreenPositions[i].Y - stringSize.Y
-		// Gradually fade in text wait for a second to reset World to Screen Coordinates
-		rl.DrawTextEx(common.Font.Primary, text, rl.NewVector2(x, y), fontSize, 2, col)
+	if false {
+		// Draw trigger index
+		// See https://www.raylib.com/examples/core/loader.html?name=core_world_screen
+		for i := range MaxTriggerCount {
+			text := fmt.Sprintf("%d", i)
+			const fontSize = 16
+			stringSize := rl.MeasureTextEx(common.Font.Primary, text, fontSize, 2)
+			x := triggerScreenPositions[i].X - stringSize.X
+			y := triggerScreenPositions[i].Y - stringSize.Y
+			// Gradually fade in text wait for a second to reset World to Screen Coordinates
+			rl.DrawTextEx(common.Font.Primary, text, rl.NewVector2(x, y), fontSize, 2, col)
+		}
 	}
+
 	instructionPosY := float32(screenH) - 40
 	for i := range MaxTriggerCount {
 		textCol := rl.Fade(rl.Black, .6)

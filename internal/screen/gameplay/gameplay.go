@@ -647,7 +647,7 @@ func Draw() {
 			rl.DrawLine(x, y, x-gapX/2, y, rl.Gray)
 			radius := float32(4)
 			if (i + 1) == levelID {
-				col := rl.Gray
+				col := rl.Orange
 				if isShowText {
 					col = rl.Red
 				}
