@@ -342,7 +342,7 @@ func (p Player) Draw() {
 	rl.PopMatrix()
 
 	// Debug
-	if true {
+	if false {
 		size := rl.Vector3Scale(p.Size, .5)
 
 		// Debug player color near player's feet

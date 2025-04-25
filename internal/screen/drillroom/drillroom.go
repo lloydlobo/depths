@@ -298,16 +298,6 @@ func Draw() {
 			scale = rl.Vector3{X: k, Y: k, Z: k}
 			col = rl.Pink
 		}
-		/*
-		   See https://github.com/lloydlobo/ludumdare57/blob/af417920450846aae00746c0acbdaec03750cd68/main.go#L396C1-L401C1
-		   // Calculate cube screen space position (with a little offset to be in top)
-		   // FIXME: This shows up in first person view, when back is to the cube
-
-		   	if isDrawInfoAtWorldToScreenPositions {
-		   		cubeScreenPosition = rl.GetWorldToScreen(rl.NewVector3(cubePosition.X, cubePosition.Y+2.5, cubePosition.Z), camera)
-		   	}
-		*/
-
 		rl.DrawModelEx(triggerModels[i], triggerPositions[i], common.YAxis, 0., scale, rl.White)
 		if false {
 			rl.DrawBoundingBox(triggerBoundingBoxes[i], rl.Fade(rl.SkyBlue, 0.1))

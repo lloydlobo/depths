@@ -503,7 +503,7 @@ func Draw() {
 	}
 
 	gamePlayer.Draw()
-	{ // ‥ Draw player to camera forward projected direction ray & area blob/blurb
+	if false { // ‥ Draw player to camera forward projected direction ray & area blob/blurb
 		const maxRays = float32(8. * 2)
 		const rayGapFactor = 16 * maxRays
 		rayCol := rl.Fade(rl.Yellow, .3)
@@ -524,7 +524,7 @@ func Draw() {
 		rl.DrawCapsule(startPos, endPos, 2, 7, 7, rl.Fade(rl.Gray, .125/2)) // Draw forward movement lookahead area
 	}
 
-	{ // ‥ Draw drill
+	{ // ‥ Draw drillroom entry
 		const maxIndex = 2
 		wallScale := rl.NewVector3(1., 1., 1.)
 		for i := float32(-maxIndex + 1); i < maxIndex; i++ {
@@ -550,20 +550,19 @@ func Draw() {
 			rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
 		}
 
-		if true { // ‥ DEBUG: Draw drill door gate entry logic before changing scene to drill base
+		if false { // ‥ DEBUG: Draw drill door gate entry logic before changing scene to drill base
 			origin := common.Vector3Zero
 			origin = gameFloor.Position
 			bb1 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(3, 2, 3)) // player is inside
 			bb2 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(5, 2, 5)) // player is entering
 			bb3 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(7, 2, 7)) // bot barrier
-
 			rl.DrawBoundingBox(bb1, rl.Red)
 			rl.DrawBoundingBox(bb2, rl.Green)
 			rl.DrawBoundingBox(bb3, rl.Blue)
 		}
 	}
 
-	if true { // ‥ Draw banners at floor corners
+	if false { // ‥ Draw banners at floor corners
 		floorBBMin := gameFloor.BoundingBox.Min
 		floorBBMax := gameFloor.BoundingBox.Max
 		rl.DrawModelEx(common.ModelDungeonKit.OBJ.Banner, rl.NewVector3(floorBBMin.X+1, 0, floorBBMin.Z+1), common.YAxis, 45, common.Vector3One, rl.White)  // leftback
