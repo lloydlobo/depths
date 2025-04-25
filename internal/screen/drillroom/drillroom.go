@@ -48,6 +48,7 @@ var (
 	triggerBoundingBoxes       []rl.BoundingBox
 	triggerSensorBoundingBoxes []rl.BoundingBox
 	triggerPositions           []rl.Vector3
+	triggerScreenPositions     []rl.Vector2
 	isPlayerNearTriggerSensors []bool
 	triggerCount               int32
 
@@ -121,15 +122,23 @@ func Init() {
 		rl.NewVector3(-kx+dx, triggerPosY, +kz+dz), // SW -> SE
 		// Change resource trigger
 		rl.NewVector3(+kx-dx, triggerPosY, +kz+dz), // SE -> SW
-
 	}
 
 	triggerCount = int32(len(triggerPositions))
+
 	for i := range triggerCount {
-		triggerBoundingBoxes = append(triggerBoundingBoxes, common.GetBoundingBoxFromPositionSizeV(triggerPositions[i], triggerSize))
+		const offsetY = .5
+		pos := triggerPositions[i]
+		triggerScreenPositions = append(triggerScreenPositions,
+			rl.GetWorldToScreen(rl.NewVector3(pos.X, pos.Y+offsetY, pos.Z), camera))
 	}
 	for i := range triggerCount {
-		triggerSensorBoundingBoxes = append(triggerSensorBoundingBoxes, common.GetBoundingBoxFromPositionSizeV(triggerPositions[i], rl.Vector3Scale(triggerSize, 2)))
+		triggerBoundingBoxes = append(triggerBoundingBoxes,
+			common.GetBoundingBoxFromPositionSizeV(triggerPositions[i], triggerSize))
+	}
+	for i := range triggerCount {
+		triggerSensorBoundingBoxes = append(triggerSensorBoundingBoxes,
+			common.GetBoundingBoxFromPositionSizeV(triggerPositions[i], rl.Vector3Scale(triggerSize, 2)))
 	}
 	for range triggerCount {
 		isPlayerNearTriggerSensors = append(isPlayerNearTriggerSensors, false)
@@ -242,6 +251,7 @@ func Update() {
 		if rl.CheckCollisionBoxes(playerEntity.BoundingBox, triggerBoundingBoxes[i]) {
 			player.RevertPlayerAndCameraPositions(&playerEntity, oldPlayer, &camera, oldCam)
 		}
+		triggerScreenPositions[i] = rl.GetWorldToScreen(rl.NewVector3(triggerPositions[i].X, triggerPositions[i].Y+.5, triggerPositions[i].Z), camera)
 	}
 }
 
@@ -262,10 +272,9 @@ func Draw() {
 
 	for i := range triggerCount {
 		// Circular model shape --expand-> to 1x1x1 bounding box
-		const k = 1. + common.OneMinusInvPhi // math.Pi / 2.
+		const k = 1. + common.OneMinusInvPhi
 		var scale rl.Vector3
 		var col color.RGBA
-
 		if isPlayerNearTriggerSensors[i] {
 			scale = rl.Vector3{X: k * 1.25, Y: k * 1.25, Z: k * 1.25}
 			col = rl.Purple
@@ -273,8 +282,17 @@ func Draw() {
 			scale = rl.Vector3{X: k, Y: k, Z: k}
 			col = rl.Pink
 		}
-		rl.DrawModelEx(triggerModels[i], triggerPositions[i], common.YAxis, 0., scale, rl.White)
+		/*
+		   See https://github.com/lloydlobo/ludumdare57/blob/af417920450846aae00746c0acbdaec03750cd68/main.go#L396C1-L401C1
+		   // Calculate cube screen space position (with a little offset to be in top)
+		   // FIXME: This shows up in first person view, when back is to the cube
 
+		   	if isDrawInfoAtWorldToScreenPositions {
+		   		cubeScreenPosition = rl.GetWorldToScreen(rl.NewVector3(cubePosition.X, cubePosition.Y+2.5, cubePosition.Z), camera)
+		   	}
+		*/
+
+		rl.DrawModelEx(triggerModels[i], triggerPositions[i], common.YAxis, 0., scale, rl.White)
 		if true {
 			rl.DrawBoundingBox(triggerBoundingBoxes[i], rl.Fade(rl.SkyBlue, 0.1))
 			rl.DrawBoundingBox(triggerSensorBoundingBoxes[i], rl.Fade(col, 0.1))
@@ -284,8 +302,19 @@ func Draw() {
 	rl.EndMode3D()
 
 	// 2D World
-	if false {
-		rl.DrawRectangle(0, 0, screenW, screenH, rl.Fade(rl.Black, .8))
+
+	if true { // TEMPORARY
+		rl.DrawRectangle(0, 0, screenW, screenH, rl.Fade(rl.Black, .2))
+	}
+
+	// See https://github.com/lloydlobo/ludumdare57/blob/af417920450846aae00746c0acbdaec03750cd68/main.go#L729C1-L739C5
+	for i := range triggerCount {
+		text := fmt.Sprintf("%d", i)
+		const fontSize = 20
+		stringSize := rl.MeasureTextEx(common.Font.Primary, text, fontSize, 1)
+		x := int32(triggerScreenPositions[i].X - stringSize.X)
+		y := int32(triggerScreenPositions[i].Y - stringSize.Y)
+		rl.DrawText(text, x, y, fontSize, rl.Gold)
 	}
 
 	fontSize := float32(common.Font.Primary.BaseSize) * 3.0
