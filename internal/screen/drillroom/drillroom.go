@@ -113,16 +113,17 @@ func Init() {
 		Position rl.Vector3
 		Label    string
 	}{
-		0: {Position: rl.NewVector3(-kx, triggerPosY, -kz), Label: "DIG FASTER"},              // NW				|-- Upper corners --|
-		1: {Position: rl.NewVector3(+kx, triggerPosY, -kz), Label: "CARRY MORE"},              // NE
-		2: {Position: rl.NewVector3(-kx+dx, triggerPosY, -kz-dz), Label: "DIG HARDER"},        // NW -> NE		|--Upper arcs--|
-		3: {Position: rl.NewVector3(-kx+dx+dx, triggerPosY, -kz-dz-dz), Label: "DIG BIGGER"},  // NW -> NE -> NE
+		// Clockwise  starting from 9 o'clock
+		0: {Position: rl.NewVector3(-kx, triggerPosY, -kz), Label: "DIG FASTER"},              // NW
+		1: {Position: rl.NewVector3(-kx+dx, triggerPosY, -kz-dz), Label: "DIG HARDER"},        // NW -> NE
+		2: {Position: rl.NewVector3(-kx+dx+dx, triggerPosY, -kz-dz-dz), Label: "DIG BIGGER"},  // NW -> NE -> NE
+		3: {Position: rl.NewVector3(+kx-dx-dx, triggerPosY, -kz-dz-dz), Label: "MOVE FASTER"}, // NE -> NW -> NW
 		4: {Position: rl.NewVector3(+kx-dx, triggerPosY, -kz-dz), Label: "GET TOUGHER"},       // NE -> NW
-		5: {Position: rl.NewVector3(+kx-dx-dx, triggerPosY, -kz-dz-dz), Label: "MOVE FASTER"}, // NE -> NW -> NW
-		6: {Position: rl.NewVector3(-kx, triggerPosY, +kz), Label: "REFUEL DRILL"},            // SW				|-- Lower corners --|
-		7: {Position: rl.NewVector3(+kx, triggerPosY, +kz), Label: "MAKE RESOURCE"},           // SE
-		8: {Position: rl.NewVector3(-kx+dx, triggerPosY, +kz+dz), Label: "START DRILL"},       // SW -> SE		|-- Lower arcs --|
-		9: {Position: rl.NewVector3(+kx-dx, triggerPosY, +kz+dz), Label: "CHANGE RESOURCE"},   // SE -> SW
+		5: {Position: rl.NewVector3(+kx, triggerPosY, +kz), Label: "MAKE RESOURCE"},           // SE
+		6: {Position: rl.NewVector3(+kx-dx, triggerPosY, +kz+dz), Label: "CHANGE RESOURCE"},   // SE -> SW
+		7: {Position: rl.NewVector3(+kx, triggerPosY, -kz), Label: "CARRY MORE"},              // NE
+		8: {Position: rl.NewVector3(-kx+dx, triggerPosY, +kz+dz), Label: "START DRILL"},       // SW -> SE
+		9: {Position: rl.NewVector3(-kx, triggerPosY, +kz), Label: "REFUEL DRILL"},            // SW
 	} {
 		triggerPositions[i] = v.Position
 
