@@ -447,7 +447,9 @@ func UpdateDrawFrame() {
 		DrawTransition()
 	}
 
-	rl.DrawFPS(10, 10)
+	if false {
+		rl.DrawFPS(10, 10)
+	}
 
 	rl.EndDrawing()
 	// -----------------------------------------------------------------------------

@@ -28,10 +28,9 @@ var (
 	finishScreen  int
 	framesCounter int32
 
-	levelID                int32
 	camera                 rl.Camera3D
-	floorEntity            floor.Floor
-	playerEntity           player.Player // Player Entity or xPlayer
+	xFloor                 floor.Floor
+	xPlayer                player.Player // Player Entity or xPlayer
 	hasPlayerLeftDrillBase bool
 )
 
@@ -83,8 +82,8 @@ func Init() {
 	wall.SetupWallModel(common.DrillRoom)
 
 	// Core data
-	player.InitPlayer(&playerEntity, camera)
-	floorEntity = floor.NewFloor(common.Vector3Zero, rl.NewVector3(10, 0.001*2, 10)) // 1:1 ratio
+	player.InitPlayer(&xPlayer, camera)
+	xFloor = floor.NewFloor(common.Vector3Zero, rl.NewVector3(10, 0.001*2, 10)) // 1:1 ratio
 
 	// Layout copied from https://annekatran.itch.io/dig-and-delve
 	triggerSize := rl.NewVector3(.5, .5, .5)
@@ -102,8 +101,8 @@ func Init() {
 	// 	rl.NewVector3(+0, triggerPosY, -2),
 	// 	rl.NewVector3(+0, triggerPosY, +2),
 	// }
-	kx := (floorEntity.Size.X / (1. * math.Pi)) - 1.
-	kz := (floorEntity.Size.Z / (1. * math.Pi)) - 2.
+	kx := (xFloor.Size.X / (1. * math.Pi)) - 1.
+	kz := (xFloor.Size.Z / (1. * math.Pi)) - 2.
 
 	// 45 degree tangent lines (use cos/sin??)
 	dx := float32(0.15 + triggerSize.X)
@@ -155,8 +154,8 @@ func Init() {
 
 	// Compute once
 	drillroomExitBoundingBox = common.GetBoundingBoxFromPositionSizeV(
-		floorEntity.Position,
-		rl.Vector3Subtract(floorEntity.Size, rl.NewVector3(1+playerEntity.Size.X/2, -playerEntity.Size.Y*2, 1+playerEntity.Size.Z/2)),
+		xFloor.Position,
+		rl.Vector3Subtract(xFloor.Size, rl.NewVector3(1+xPlayer.Size.X/2, -xPlayer.Size.Y*2, 1+xPlayer.Size.Z/2)),
 	)
 
 	// For camera thirdperson view
@@ -170,11 +169,11 @@ func Update() {
 
 	// Save variables this frame
 	oldCam := camera
-	oldPlayer := playerEntity
+	oldPlayer := xPlayer
 
 	// Reset flags/variables
-	playerEntity.Collisions = rl.Quaternion{}
-	playerEntity.IsPlayerWallCollision = false
+	xPlayer.Collisions = rl.Quaternion{}
+	xPlayer.IsPlayerWallCollision = false
 
 	// Update the game camera for this screen
 	rl.UpdateCamera(&camera, rl.CameraThirdPerson)
@@ -184,13 +183,13 @@ func Update() {
 		camera.Up = want
 	}
 
-	playerEntity.Update(camera, floorEntity)
-	if playerEntity.IsPlayerWallCollision {
-		player.RevertPlayerAndCameraPositions(&playerEntity, oldPlayer, &camera, oldCam)
+	xPlayer.Update(camera, xFloor)
+	if xPlayer.IsPlayerWallCollision {
+		player.RevertPlayerAndCameraPositions(&xPlayer, oldPlayer, &camera, oldCam)
 	}
 
 	// Update playerl leaving common.DrillRoom => common.Opcommon.OpenWorldRoom
-	if !rl.CheckCollisionBoxes(playerEntity.BoundingBox, drillroomExitBoundingBox) { // Is exiting
+	if !rl.CheckCollisionBoxes(xPlayer.BoundingBox, drillroomExitBoundingBox) { // Is exiting
 		if !hasPlayerLeftDrillBase { // STEP [2] // Avoid glitches (also quick dodge to not-exit)
 			hasPlayerLeftDrillBase = true
 
@@ -223,17 +222,17 @@ func Update() {
 	// Check player collisions with instruments
 	for i := range MaxTriggerCount {
 		isPlayerNearTriggerSensors[i] = rl.CheckCollisionBoxes(
-			playerEntity.BoundingBox,
+			xPlayer.BoundingBox,
 			triggerSensorBoundingBoxes[i],
 		)
 
 		if rl.CheckCollisionBoxes(
-			playerEntity.BoundingBox,
+			xPlayer.BoundingBox,
 			triggerBoundingBoxes[i],
 		) {
-			playerEntity.Collisions.X = 1
-			playerEntity.Collisions.Z = 1
-			player.RevertPlayerAndCameraPositions(&playerEntity, oldPlayer, &camera, oldCam)
+			xPlayer.Collisions.X = 1
+			xPlayer.Collisions.Z = 1
+			player.RevertPlayerAndCameraPositions(&xPlayer, oldPlayer, &camera, oldCam)
 		}
 	}
 
@@ -241,32 +240,70 @@ func Update() {
 	const TriggerBeginDrillingID = 8
 	if isPlayerNearTriggerSensors[TriggerBeginDrillingID] {
 		if rl.IsKeyPressed(rl.KeyF) {
-			// TODO: SAVE STATE HERE AND PLAY TRANSITION SOUNDS
-			// - Extend transition time (so drilling seems to take a few more seconds)
-			// - Affect global value of levelID -> via file IO -> savegame/slot/1.json
-
-			// Play exit sounds
-			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("footstep0%d.ogg", rl.GetRandomValue(0, 9)))))
-			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "metalClick.ogg")))
-			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_sci-fi-sounds", "Audio", "forceField_000.ogg")))
-			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_sci-fi-sounds", "Audio", "lowFrequency_explosion_001.ogg")))
-			if true {
-				sound := rl.LoadSound(filepath.Join("res", "fx", "kenney_sci-fi-sounds", "Audio", "engineCircular_000.ogg"))
-				rl.SetSoundVolume(sound, .1)
-				rl.PlaySound(sound)
-				rl.StopSound(sound)
+			var canDrill bool
+			// TEMPORARY
+			if __IS_TEMPORARY__ := false; __IS_TEMPORARY__ {
+				// Force success
+				if isSuccess := true; isSuccess {
+					canDrill = hitCount == 0
+				} else {
+					canDrill = hitCount == 80
+				}
 			}
-			{
-				sound := rl.LoadSound(filepath.Join("res", "fx", "kenney_sci-fi-sounds", "Audio", "explosionCrunch_002.ogg"))
-				rl.SetSoundPitch(sound, .5)
-				rl.SetSoundVolume(sound, .4)
-				rl.PlaySound(sound)
+			if !canDrill {
+				// rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("footstep0%d.ogg", rl.GetRandomValue(0, 9)))))
+				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "metalClick.ogg")))
+
+				// Play unsuccessful attempt sound
+				if rl.GetRandomValue(0, 1) == 0 {
+					rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", "click_001.ogg"))) // Switch did not move
+				} else {
+					rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", "click_004.ogg"))) // Switch did not move
+				}
+				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", fmt.Sprintf("error_00%d.ogg", rl.GetRandomValue(5, 6))))) // Switch did not move
+
+			} else {
+				// TODO: SAVE STATE HERE AND PLAY TRANSITION SOUNDS
+				// - Extend transition time (so drilling seems to take a few more seconds)
+				// - Affect global value of levelID -> via file IO -> savegame/slot/1.json
+				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "metalClick.ogg")))
+
+				// Play successful attempt sound
+				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", fmt.Sprintf("click_00%d.ogg", rl.GetRandomValue(2, 3))))) // Switch moved
+				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", fmt.Sprintf("confirmation_00%d.ogg", rl.GetRandomValue(0, 4)))))
+
+				// Play drill room sound
+				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_sci-fi-sounds", "Audio", "lowFrequency_explosion_001.ogg")))
+				if true {
+					sound := rl.LoadSound(filepath.Join("res", "fx", "kenney_sci-fi-sounds", "Audio", "engineCircular_000.ogg"))
+					rl.SetSoundVolume(sound, .3)
+					rl.PlaySound(sound)
+					rl.StopSound(sound)
+				}
+				if true {
+					sound := rl.LoadSound(filepath.Join("res", "fx", "kenney_sci-fi-sounds", "Audio", "explosionCrunch_002.ogg"))
+					rl.SetSoundVolume(sound, .3)
+					rl.PlaySound(sound)
+				}
+				if true {
+					sound := rl.LoadSound(filepath.Join("res", "fx", "kenney_sci-fi-sounds", "Audio", "spaceEngine_001.ogg"))
+					rl.SetSoundVolume(sound, .5)
+					rl.PlaySound(sound) // Bassy drone
+				}
+
+				// Transition to next level/screen
+				// Why does this feel so hacky? ^_^
+				// NOTE: IDs are non-zero (unsigned) integers
+				currLevelID := common.SavedgameSlotData.CurrentLevelID
+				finalLevelID := uint8(len(common.SavedgameSlotData.AllLevelIDS))
+				common.SavedgameSlotData.CurrentLevelID = min(finalLevelID, currLevelID+1)
+				if currLevelID >= finalLevelID {
+					finishScreen = 1 // => ending (gameover)
+				} else {
+					common.SavedgameSlotData.UnlockedLevelIDS = append(common.SavedgameSlotData.UnlockedLevelIDS, common.SavedgameSlotData.CurrentLevelID)
+					finishScreen = 2 // => gameplay (next-level)
+				}
 			}
-
-			// Transition to next level/screen
-			levelID = min(8, levelID+1)
-			finishScreen = 2 // Should increment levelID
-
 		}
 	}
 
@@ -274,7 +311,7 @@ func Update() {
 	for i := range MaxTriggerCount {
 		pos := triggerPositions
 		cam := camera
-		if playerEntity.Collisions.X != 0 || playerEntity.Collisions.Z != 0 {
+		if xPlayer.Collisions.X != 0 || xPlayer.Collisions.Z != 0 {
 			cam = oldCam // Avoid glitching text position on player's X/Z movement
 		}
 		triggerScreenPositions[i] = rl.GetWorldToScreen(rl.NewVector3(pos[i].X, pos[i].Y+.5, pos[i].Z), cam)
@@ -310,6 +347,19 @@ func Update() {
 		// saveAdditionalLevelState()            // (blocks,...)        82871 bytes
 	}
 
+	// TODO: Move this in package player (if possible)
+	if rl.IsKeyDown(rl.KeyW) || rl.IsKeyDown(rl.KeyA) || rl.IsKeyDown(rl.KeyS) || rl.IsKeyDown(rl.KeyD) {
+		const fps = 60.0
+		const framesInterval = fps / 2.5
+		if framesCounter%int32(framesInterval) == 0 {
+			if !rl.Vector3Equals(oldPlayer.Position, xPlayer.Position) &&
+				rl.Vector3Distance(oldCam.Position, xPlayer.Position) > 1.0 &&
+				(xPlayer.Collisions.X == 0 && xPlayer.Collisions.Z == 0) {
+				rl.PlaySound(common.FXS.FootStepsConcrete[int(framesCounter)%len(common.FXS.FootStepsConcrete)])
+			}
+		}
+	}
+
 	// Increment drillroom frames counter
 	framesCounter++
 }
@@ -324,12 +374,12 @@ func Draw() {
 
 	rl.ClearBackground(rl.RayWhite)
 
-	playerEntity.Draw()
-	floorEntity.Draw()
+	xPlayer.Draw()
+	xFloor.Draw()
 	if false {
 		rl.DrawBoundingBox(drillroomExitBoundingBox, rl.Green)
 	}
-	wall.DrawBatch(common.DrillRoom, floorEntity.Position, floorEntity.Size, cmp.Or(rl.NewVector3(5, 2, 5), common.Vector3One))
+	wall.DrawBatch(common.DrillRoom, xFloor.Position, xFloor.Size, cmp.Or(rl.NewVector3(5, 2, 5), common.Vector3One))
 
 	for i := range MaxTriggerCount {
 		// Circular model shape --expand-> to 1x1x1 bounding box

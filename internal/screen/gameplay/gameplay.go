@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -651,17 +652,22 @@ func Draw() {
 	text := "[F] PICK UP"
 	rl.DrawText(text, screenW/2-rl.MeasureText(text, 20)/2, screenH-20*2, 20, rl.White)
 
-	// Player
+	// Player stats: health / money / experience
 	{
-		rl.DrawTextEx(common.Font.Primary, fmt.Sprintf("%.0f", 100*xPlayer.Health), rl.NewVector2(10, 10+20*1), fontSize*2./3., 1, rl.Red)
+		const marginX = 20
+		const marginY = 10
+		rl.DrawTextEx(common.Font.Primary, fmt.Sprintf("%.0f", 100*xPlayer.Health), rl.NewVector2(
+			marginX,
+			marginY+20*1,
+		), fontSize*2./3., 1, rl.Red)
 		const radius = 20
-		const marginLeft = 8
+		const marginLeft = marginX * 2 / 3
 		cargoRatio := (float32(xPlayer.CargoCapacity) / float32(xPlayer.MaxCargoCapacity))
-		circlePos := rl.NewVector2(10+radius, 10+20*3+radius)
+		circlePos := rl.NewVector2(marginLeft+radius, marginY+20*3+radius)
 		if cargoRatio >= 1. {
 			rl.DrawCircleGradient(int32(circlePos.X), int32(circlePos.Y), radius+3, rl.White, rl.Fade(rl.White, .1))
 		}
-		circleCutoutRec := rl.NewRectangle(10+radius/2., 10+20*3+radius/2., radius, radius)
+		circleCutoutRec := rl.NewRectangle(marginLeft+radius/2., marginY+20*3+radius/2., radius, radius)
 		rl.DrawRectangleRoundedLinesEx(circleCutoutRec, 1., 16, 0.5+radius/2., rl.DarkGray)
 		rl.DrawCircleSector(circlePos, radius, -90, -90+360*cargoRatio, 16, rl.Gold)
 		rl.DrawCircleV(circlePos, radius/2, rl.Fade(rl.Gold, cargoRatio))
@@ -672,8 +678,25 @@ func Draw() {
 		if cargoRatio >= 0.5 {
 			rl.DrawCircleV(circlePos, radius*cargoRatio, rl.Fade(rl.Gold, 1.0))
 		}
-		rl.DrawTextEx(common.Font.Primary, fmt.Sprintf("%d", xPlayer.CargoCapacity), rl.NewVector2(10+radius*2+marginLeft, 10+radius/2+20*3-1), fontSize*2./3., 1, rl.Gold)
-		rl.DrawTextEx(common.Font.Primary, fmt.Sprintf("/%d", xPlayer.MaxCargoCapacity), rl.NewVector2(10+radius*2+marginLeft, 10+radius/2+20*4-1), fontSize*2./4., 1, rl.Gray)
+
+		capacityText := fmt.Sprintf("%d", xPlayer.CargoCapacity)
+		capacityStrLenX := rl.MeasureText(capacityText, int32(fontSize*2./3.))
+		rl.DrawTextEx(common.Font.Primary, capacityText, rl.NewVector2(
+			marginLeft+radius*2+float32(capacityStrLenX/2),
+			marginY+radius/2+20*3-10/2,
+		), fontSize*2./3., 1, rl.White)
+
+		divideText := fmt.Sprintf("%s", strings.Repeat("-", len(capacityText)))
+		divideStrLenX := rl.MeasureText(divideText, int32(fontSize)*2./4.)
+		rl.DrawTextEx(common.Font.Primary, divideText, rl.NewVector2(
+			marginLeft+radius*2+float32(capacityStrLenX)/2+float32(divideStrLenX)/2,
+			marginY+radius/2+20*4-(2*10)/1.5,
+		), fontSize*2./4., 0.0625, rl.Gray)
+
+		rl.DrawTextEx(common.Font.Primary, fmt.Sprintf(" %d", xPlayer.MaxCargoCapacity), rl.NewVector2(
+			marginLeft+radius*2+10,
+			marginY+radius/2+20*4-10/2,
+		), fontSize*2./4., 1, rl.Gray)
 	}
 
 	// Perf
