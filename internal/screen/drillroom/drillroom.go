@@ -35,6 +35,11 @@ var (
 )
 
 var (
+	// NOTE: AVOID using common.SavedgameSlotData.CurrentLevelID as reference
+	// directly.. We must init levelID with it to maintain consistency for now
+	// FIXME: UNUSED <<<---------------------------------------
+	levelID int32
+
 	// WARN: DONT NEED IT HERE
 	//       JUST READ DATA FROM FILE
 	hitCount int32
@@ -45,6 +50,23 @@ var (
 	drillroomExitBoundingBox rl.BoundingBox
 )
 
+type TriggerType uint8
+
+const (
+	TriggerDigFaster TriggerType = iota
+	TriggerDigHarder
+	TriggerDigBigger
+	TriggerDigMoveFaster
+	TriggerGetTougher
+	TriggerMakeResource
+	TriggerChangeResource
+	TriggerCarryMore
+	TriggerStartDrill
+	TriggerRefuelDrill
+
+	MaxTriggerCount
+)
+
 var (
 	triggerBoundingBoxes       [MaxTriggerCount]rl.BoundingBox
 	triggerSensorBoundingBoxes [MaxTriggerCount]rl.BoundingBox
@@ -52,12 +74,9 @@ var (
 	triggerLabels              [MaxTriggerCount]string
 	triggerScreenPositions     [MaxTriggerCount]rl.Vector2
 	isPlayerNearTriggerSensors [MaxTriggerCount]bool
+	isTriggerActive            [MaxTriggerCount]bool
 
 	triggerModels [MaxTriggerCount]rl.Model
-)
-
-const (
-	MaxTriggerCount int32 = 10
 )
 
 func Init() {
@@ -108,21 +127,21 @@ func Init() {
 	dx := float32(0.15 + triggerSize.X)
 	dz := float32(0.40 + triggerSize.Z)
 
-	for i, v := range [MaxTriggerCount]struct {
+	for i, v := range []struct {
 		Position rl.Vector3
 		Label    string
 	}{
 		// Clockwise  starting from 9 o'clock
-		0: {Position: rl.NewVector3(-kx, triggerPosY, -kz), Label: "DIG FASTER"},              // NW
-		1: {Position: rl.NewVector3(-kx+dx, triggerPosY, -kz-dz), Label: "DIG HARDER"},        // NW -> NE
-		2: {Position: rl.NewVector3(-kx+dx+dx, triggerPosY, -kz-dz-dz), Label: "DIG BIGGER"},  // NW -> NE -> NE
-		3: {Position: rl.NewVector3(+kx-dx-dx, triggerPosY, -kz-dz-dz), Label: "MOVE FASTER"}, // NE -> NW -> NW
-		4: {Position: rl.NewVector3(+kx-dx, triggerPosY, -kz-dz), Label: "GET TOUGHER"},       // NE -> NW
-		5: {Position: rl.NewVector3(+kx, triggerPosY, +kz), Label: "MAKE RESOURCE"},           // SE
-		6: {Position: rl.NewVector3(+kx-dx, triggerPosY, +kz+dz), Label: "CHANGE RESOURCE"},   // SE -> SW
-		7: {Position: rl.NewVector3(+kx, triggerPosY, -kz), Label: "CARRY MORE"},              // NE
-		8: {Position: rl.NewVector3(-kx+dx, triggerPosY, +kz+dz), Label: "START DRILL"},       // SW -> SE
-		9: {Position: rl.NewVector3(-kx, triggerPosY, +kz), Label: "REFUEL DRILL"},            // SW
+		TriggerDigFaster:      {Position: rl.NewVector3(-kx, triggerPosY, -kz), Label: "DIG FASTER"},              // NW
+		TriggerDigHarder:      {Position: rl.NewVector3(-kx+dx, triggerPosY, -kz-dz), Label: "DIG HARDER"},        // NW -> NE
+		TriggerDigBigger:      {Position: rl.NewVector3(-kx+dx+dx, triggerPosY, -kz-dz-dz), Label: "DIG BIGGER"},  // NW -> NE -> NE
+		TriggerDigMoveFaster:  {Position: rl.NewVector3(+kx-dx-dx, triggerPosY, -kz-dz-dz), Label: "MOVE FASTER"}, // NE -> NW -> NW
+		TriggerGetTougher:     {Position: rl.NewVector3(+kx-dx, triggerPosY, -kz-dz), Label: "GET TOUGHER"},       // NE -> NW
+		TriggerMakeResource:   {Position: rl.NewVector3(+kx, triggerPosY, +kz), Label: "MAKE RESOURCE"},           // SE
+		TriggerChangeResource: {Position: rl.NewVector3(+kx-dx, triggerPosY, +kz+dz), Label: "CHANGE RESOURCE"},   // SE -> SW
+		TriggerCarryMore:      {Position: rl.NewVector3(+kx, triggerPosY, -kz), Label: "CARRY MORE"},              // NE
+		TriggerStartDrill:     {Position: rl.NewVector3(-kx+dx, triggerPosY, +kz+dz), Label: "START DRILL"},       // SW -> SE
+		TriggerRefuelDrill:    {Position: rl.NewVector3(-kx, triggerPosY, +kz), Label: "REFUEL DRILL"},            // SW
 	} {
 		triggerPositions[i] = v.Position
 
@@ -141,12 +160,21 @@ func Init() {
 				rl.Vector3Scale(triggerSize, 2))
 
 		isPlayerNearTriggerSensors[i] = false
+		isTriggerActive[i] = true
 
 		dir := filepath.Join("res", "kenney_prototype-kit", "Models", "OBJ format")
 		model := rl.LoadModel(filepath.Join(dir, "weapon-shield.obj"))
 		texture := rl.LoadTexture(filepath.Join(dir, "Textures", "colormap.png"))
 		rl.SetMaterialTexture(model.Materials, rl.MapDiffuse, texture)
 		triggerModels[i] = model
+	}
+
+	// TEMPORARY
+	if __IS_TEMPORARY__ := true; __IS_TEMPORARY__ {
+		for i := range MaxTriggerCount {
+			isTriggerActive[i] = false
+		}
+		isTriggerActive[TriggerStartDrill] = true // Only enable drill
 	}
 
 	// Unequip hat sword shield
@@ -237,17 +265,16 @@ func Update() {
 	}
 
 	// Should just use maps or enumerations.. this seems kinda hacky
-	const TriggerBeginDrillingID = 8
-	if isPlayerNearTriggerSensors[TriggerBeginDrillingID] {
+	if isPlayerNearTriggerSensors[TriggerStartDrill] {
 		if rl.IsKeyPressed(rl.KeyF) {
 			var canDrill bool
 			// TEMPORARY
-			if __IS_TEMPORARY__ := false; __IS_TEMPORARY__ {
+			if __IS_TEMPORARY__ := true; __IS_TEMPORARY__ {
 				// Force success
 				if isSuccess := true; isSuccess {
 					canDrill = hitCount == 0
 				} else {
-					canDrill = hitCount == 80
+					canDrill = hitCount == xPlayer.MaxCargoCapacity
 				}
 			}
 			if !canDrill {

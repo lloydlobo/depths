@@ -32,7 +32,6 @@ var (
 	finishScreen  int
 	framesCounter int32
 
-	levelID                int32
 	camera                 rl.Camera3D
 	xFloor                 floor.Floor
 	xPlayer                player.Player
@@ -44,6 +43,10 @@ var (
 )
 
 var (
+	// NOTE: AVOID using common.SavedgameSlotData.CurrentLevelID as reference
+	// directly.. We must init levelID with it to maintain consistency for now
+	levelID int32
+
 	// Game stats
 
 	hitCount int32
@@ -423,6 +426,16 @@ func Update() {
 				hasPlayerLeftDrillBase = true // STEP [1]
 			}
 		}
+
+		// Do not allow entry till cargo capacity is full.. This is temporary.. to quickly develop a simple gameloop.
+		// Later we add transactions and resource conversions
+		if __IS_TEMPORARY__ := true; __IS_TEMPORARY__ {
+			if canSwitchToDrillRoom {
+				slog.Warn("OVERIDING ENTRY TO DRILL ROOM. (TEMPORARY)")
+				canSwitchToDrillRoom = hitScore >= xPlayer.MaxCargoCapacity
+			}
+		}
+
 		// - (gameplay ) saveScore?
 		// - (common   )   how much resource is required to drill to next level
 		// - (drillroom) how will you handle modifying currentLevelID in gamesave/slot/1.json?
@@ -618,10 +631,8 @@ func Draw() {
 
 	// Draw depth meter
 	{
-		const (
-			totalLevels = 8
-			gapX        = 10
-		)
+		const gapX = 10
+		totalLevels := len(common.SavedgameSlotData.AllLevelIDS)
 		var (
 			isShowText bool
 		)
