@@ -13,6 +13,7 @@ import (
 	"example/depths/internal/common"
 	"example/depths/internal/floor"
 	"example/depths/internal/player"
+	"example/depths/internal/util/mathutil"
 	"example/depths/internal/wall"
 )
 
@@ -263,6 +264,9 @@ func Update() {
 		}
 		triggerScreenPositions[i] = rl.GetWorldToScreen(rl.NewVector3(pos[i].X, pos[i].Y+.5, pos[i].Z), cam)
 	}
+
+	// Increment drillroom frames counter
+	framesCounter++
 }
 
 func Draw() {
@@ -319,34 +323,45 @@ func Draw() {
 		rl.DrawRectangle(0, 0, screenW, screenH, rl.Fade(rl.Black, .2))
 	}
 
-	// See https://github.com/lloydlobo/ludumdare57/blob/af417920450846aae00746c0acbdaec03750cd68/main.go#L729C1-L739C5
+	// One second fade in duration when fps==60
+	alpha := min(1., float32(framesCounter)/60.)
+	col := rl.Fade(rl.White, alpha)
+
+	// See https://www.raylib.com/examples/core/loader.html?name=core_world_screen
 	for i := range triggerCount {
 		text := fmt.Sprintf("%d", i)
 		const fontSize = 16
 		stringSize := rl.MeasureTextEx(common.Font.Primary, text, fontSize, 2)
 		x := triggerScreenPositions[i].X - stringSize.X
 		y := triggerScreenPositions[i].Y - stringSize.Y
-		rl.DrawTextEx(common.Font.Primary, text, rl.NewVector2(x, y), fontSize, 2, rl.White)
+		// Gradually fade in text wait for a second to reset World to Screen Coordinates
+		rl.DrawTextEx(common.Font.Primary, text, rl.NewVector2(x, y), fontSize, 2, col)
 	}
 
 	fontSize := float32(common.Font.Primary.BaseSize) * 3.0
 
-	pos := rl.NewVector2(
-		float32(screenW)/2.-float32(rl.MeasureText(screenTitleText, int32(fontSize*common.Phi)))/2.,
-		float32(screenH)/16.,
-	)
-	rl.DrawTextEx(common.Font.Primary, screenTitleText, pos, (fontSize * common.Phi), 4, rl.Fade(rl.Black, .5))
+	subtextSize := rl.MeasureTextEx(common.Font.Primary, screenSubtitleText, fontSize/6, 1)
+	rl.DrawTextEx(common.Font.Primary, screenSubtitleText,
+		rl.NewVector2(float32(screenW)/2-subtextSize.X/2, float32(screenH)-subtextSize.Y*3),
+		fontSize/3, 1, rl.Fade(rl.Gray, 1.0*alpha))
 
-	pos = rl.NewVector2(
-		float32(screenW)/2.-float32(rl.MeasureText("ROOM", int32(fontSize)))/2.,
-		float32(screenH)/16.+(fontSize*common.Phi),
-	)
-	rl.DrawTextEx(common.Font.Primary, "ROOM", pos, fontSize, common.Phi, rl.Fade(rl.Gray, .7))
+	if f := float32(framesCounter) / 60.; (alpha >= 1.) && (f > 2. && f < 1000.) {
+		delta := mathutil.PowF(float32(rl.GetTime()), 1.5-(2.0/f))
+		delta *= rl.GetFrameTime()
+		alpha = max(0., alpha-delta)
+	} else if f >= 1000. {
+		alpha = 0.
+	} else { // Initial delay on screen start
+		alpha *= .5 * f
+	}
 
-	subtextSize := rl.MeasureTextEx(common.Font.Primary, screenSubtitleText, fontSize/2, 1)
-	posX := int32(screenW)/2 - int32(subtextSize.X/2)
-	posY := int32(screenH) - int32(subtextSize.Y*common.Phi)
-	rl.DrawText(screenSubtitleText, posX, posY, int32(fontSize/2), rl.Gray)
+	pos := rl.NewVector2(float32(screenW)/2.-float32(rl.MeasureText(screenTitleText, int32(fontSize*common.Phi)))/2., float32(screenH)/16.)
+	rl.DrawTextEx(common.Font.Primary, screenTitleText, pos, (fontSize * common.Phi), 4, rl.Fade(rl.Black, .5*(alpha)))
+	pos = rl.NewVector2(float32(screenW)/2.-float32(rl.MeasureText("ROOM", int32(fontSize)))/2., float32(screenH)/16.+(fontSize*common.Phi))
+	rl.DrawTextEx(common.Font.Primary, "ROOM", pos, fontSize, common.Phi, rl.Fade(rl.Gray, .7*(alpha)))
+
+	rl.DrawText(fmt.Sprint(rl.GetFrameTime()), 10, 30, 20, rl.Green)
+	rl.DrawText(fmt.Sprint(framesCounter), 10, 50, 20, rl.Green)
 }
 
 func Unload() {

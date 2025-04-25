@@ -18,7 +18,16 @@ import (
 )
 
 var (
-	Font  struct{ Primary, Secondary rl.Font }
+	// User data
+
+	SavedgameSlotData SavedgameSlotDataType
+
+	// Text Resource
+
+	Font struct{ Primary, Secondary rl.Font }
+
+	// Audio Resource
+
 	Music struct {
 		OpenWorld000,
 		OpenWorld001,
@@ -28,24 +37,23 @@ var (
 		UIScreen001,
 		Ambient000 rl.Music
 	}
+
 	FX  struct{ Coin rl.Sound }
 	FXS struct {
 		ImpactsSoftHeavy, ImpactsSoftMedium, ImpactsGenericLight,
 		FootStepsConcrete []rl.Sound
 	}
-	Shader  struct{ PBR rl.Shader }
+
+	// Models Resource
+
+	Shader struct{ PBR rl.Shader }
+
 	Texture struct{ CubicmapAtlas rl.Texture2D }
-	// Rename to ModelDungeon
-	Model struct {
+
+	ModelDungeonKit struct {
 		OBJ model.ModelsOBJ
 		GLB model.ModelsGLB
 	}
-	ModelPrototype struct {
-	}
-)
 
-func GetBoundingBoxFromPositionSizeV(pos, size rl.Vector3) rl.BoundingBox {
-	return rl.NewBoundingBox(
-		rl.NewVector3(pos.X-size.X/2, pos.Y-size.Y/2, pos.Z-size.Z/2),
-		rl.NewVector3(pos.X+size.X/2, pos.Y+size.Y/2, pos.Z+size.Z/2))
-}
+	ModelPrototypeKit struct{}
+)

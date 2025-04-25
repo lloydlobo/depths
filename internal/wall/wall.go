@@ -24,10 +24,10 @@ func SetupWallModel(room common.RoomType) {
 
 	switch room {
 	case common.OpenWorldRoom:
-		wallModel = common.Model.OBJ.WallOpening
-		rl.SetMaterialTexture(wallModel.Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
-		wallCornerModel = common.Model.OBJ.Wall
-		rl.SetMaterialTexture(wallCornerModel.Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
+		wallModel = common.ModelDungeonKit.OBJ.WallOpening
+		rl.SetMaterialTexture(wallModel.Materials, rl.MapDiffuse, common.ModelDungeonKit.OBJ.Colormap)
+		wallCornerModel = common.ModelDungeonKit.OBJ.Wall
+		rl.SetMaterialTexture(wallCornerModel.Materials, rl.MapDiffuse, common.ModelDungeonKit.OBJ.Colormap)
 	case common.DrillRoom:
 		// PERF: Load once in common
 		dir := filepath.Join("res", "kenney_prototype-kit", "Models")

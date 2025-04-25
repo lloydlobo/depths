@@ -57,8 +57,8 @@ func Finish() int {
 }
 
 const (
-	screenTitleText    = "INFERNO" // "TITLE SCREEN"
-	screenSubtitleText = "enter"   //"press enter or tap to jump to gameplay screen"
+	screenTitleText    = "DEPTHS" // "TITLE SCREEN"
+	screenSubtitleText = "enter"  //"press enter or tap to jump to gameplay screen"
 )
 
 // Module Variables Definition (local)

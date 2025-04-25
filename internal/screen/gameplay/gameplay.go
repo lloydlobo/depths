@@ -59,6 +59,12 @@ var (
 func Init() {
 	framesCounter = 0
 	finishScreen = 0
+
+	levelID = int32(common.SavedgameSlotData.CurrentLevelID)
+	if levelID == 0 {
+		panic("unexpected levelID")
+	}
+
 	camera = rl.Camera3D{
 		Position:   rl.NewVector3(0., 10., 10.),
 		Target:     rl.NewVector3(0., .5, 0.),
@@ -524,19 +530,19 @@ func Draw() {
 		for i := float32(-maxIndex + 1); i < maxIndex; i++ {
 			var model rl.Model
 			var y float32
-			model = common.Model.OBJ.Column
+			model = common.ModelDungeonKit.OBJ.Column
 			y = 0.
 			rl.DrawModelEx(model, rl.NewVector3(i, y, maxIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
 			rl.DrawModelEx(model, rl.NewVector3(i, y, -maxIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
 			rl.DrawModelEx(model, rl.NewVector3(maxIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
 			rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
-			model = common.Model.OBJ.Wall
+			model = common.ModelDungeonKit.OBJ.Wall
 			y = 1. + .125*.5
 			rl.DrawModelEx(model, rl.NewVector3(i, y, maxIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
 			rl.DrawModelEx(model, rl.NewVector3(i, y, -maxIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
 			rl.DrawModelEx(model, rl.NewVector3(maxIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
 			rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
-			model = common.Model.OBJ.Column
+			model = common.ModelDungeonKit.OBJ.Column
 			y = 2. + .125*.5
 			rl.DrawModelEx(model, rl.NewVector3(i, y, maxIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
 			rl.DrawModelEx(model, rl.NewVector3(i, y, -maxIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
@@ -560,10 +566,10 @@ func Draw() {
 	if true { // ‥ Draw banners at floor corners
 		floorBBMin := gameFloor.BoundingBox.Min
 		floorBBMax := gameFloor.BoundingBox.Max
-		rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMin.X+1, 0, floorBBMin.Z+1), common.YAxis, 45, common.Vector3One, rl.White)  // leftback
-		rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMax.X-1, 0, floorBBMin.Z+1), common.YAxis, -45, common.Vector3One, rl.White) // rightback
-		rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMax.X, 0, floorBBMax.Z), common.YAxis, 45, common.Vector3One, rl.White)      // rightfront
-		rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMin.X, 0, floorBBMax.Z), common.YAxis, -45, common.Vector3One, rl.White)     // leftfront
+		rl.DrawModelEx(common.ModelDungeonKit.OBJ.Banner, rl.NewVector3(floorBBMin.X+1, 0, floorBBMin.Z+1), common.YAxis, 45, common.Vector3One, rl.White)  // leftback
+		rl.DrawModelEx(common.ModelDungeonKit.OBJ.Banner, rl.NewVector3(floorBBMax.X-1, 0, floorBBMin.Z+1), common.YAxis, -45, common.Vector3One, rl.White) // rightback
+		rl.DrawModelEx(common.ModelDungeonKit.OBJ.Banner, rl.NewVector3(floorBBMax.X, 0, floorBBMax.Z), common.YAxis, 45, common.Vector3One, rl.White)      // rightfront
+		rl.DrawModelEx(common.ModelDungeonKit.OBJ.Banner, rl.NewVector3(floorBBMin.X, 0, floorBBMax.Z), common.YAxis, -45, common.Vector3One, rl.White)     // leftfront
 	}
 
 	rl.EndMode3D()
