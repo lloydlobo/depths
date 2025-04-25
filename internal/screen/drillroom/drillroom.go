@@ -47,14 +47,18 @@ var (
 )
 
 var (
-	triggerBoundingBoxes       []rl.BoundingBox
-	triggerSensorBoundingBoxes []rl.BoundingBox
-	triggerPositions           []rl.Vector3
-	triggerScreenPositions     []rl.Vector2
-	isPlayerNearTriggerSensors []bool
-	triggerCount               int32
+	triggerBoundingBoxes       [MaxTriggerCount]rl.BoundingBox
+	triggerSensorBoundingBoxes [MaxTriggerCount]rl.BoundingBox
+	triggerPositions           [MaxTriggerCount]rl.Vector3
+	triggerLabels              [MaxTriggerCount]string
+	triggerScreenPositions     [MaxTriggerCount]rl.Vector2
+	isPlayerNearTriggerSensors [MaxTriggerCount]bool
 
-	triggerModels []rl.Model
+	triggerModels [MaxTriggerCount]rl.Model
+)
+
+const (
+	MaxTriggerCount int32 = 10
 )
 
 func Init() {
@@ -85,19 +89,19 @@ func Init() {
 	// Layout copied from https://annekatran.itch.io/dig-and-delve
 	triggerSize := rl.NewVector3(.5, .5, .5)
 	triggerPosY := triggerSize.Y / 2.
-	triggerPositions = []rl.Vector3{
-		// Corners
-		rl.NewVector3(-2, triggerPosY, -2),
-		rl.NewVector3(+2, triggerPosY, -2),
-		rl.NewVector3(-2, triggerPosY, +2),
-		rl.NewVector3(+2, triggerPosY, +2),
-
-		// Sides
-		rl.NewVector3(-2, triggerPosY, +0),
-		rl.NewVector3(+2, triggerPosY, +0),
-		rl.NewVector3(+0, triggerPosY, -2),
-		rl.NewVector3(+0, triggerPosY, +2),
-	}
+	// triggerPositions = []rl.Vector3{
+	// 	// Corners
+	// 	rl.NewVector3(-2, triggerPosY, -2),
+	// 	rl.NewVector3(+2, triggerPosY, -2),
+	// 	rl.NewVector3(-2, triggerPosY, +2),
+	// 	rl.NewVector3(+2, triggerPosY, +2),
+	//
+	// 	// Sides
+	// 	rl.NewVector3(-2, triggerPosY, +0),
+	// 	rl.NewVector3(+2, triggerPosY, +0),
+	// 	rl.NewVector3(+0, triggerPosY, -2),
+	// 	rl.NewVector3(+0, triggerPosY, +2),
+	// }
 	kx := (floorEntity.Size.X / (1. * math.Pi)) - 1.
 	kz := (floorEntity.Size.Z / (1. * math.Pi)) - 2.
 
@@ -105,52 +109,44 @@ func Init() {
 	dx := float32(0.15 + triggerSize.X)
 	dz := float32(0.40 + triggerSize.Z)
 
-	triggerPositions = []rl.Vector3{
-		// Upper corners
-		rl.NewVector3(-kx, triggerPosY, -kz), // NW
-		rl.NewVector3(+kx, triggerPosY, -kz), // NE
+	for i, v := range [MaxTriggerCount]struct {
+		Position rl.Vector3
+		Label    string
+	}{
+		0: {Position: rl.NewVector3(-kx, triggerPosY, -kz), Label: "DIG FASTER"},              // NW				|-- Upper corners --|
+		1: {Position: rl.NewVector3(+kx, triggerPosY, -kz), Label: "CARRY MORE"},              // NE
+		2: {Position: rl.NewVector3(-kx+dx, triggerPosY, -kz-dz), Label: "DIG HARDER"},        // NW -> NE		|--Upper arcs--|
+		3: {Position: rl.NewVector3(-kx+dx+dx, triggerPosY, -kz-dz-dz), Label: "DIG BIGGER"},  // NW -> NE -> NE
+		4: {Position: rl.NewVector3(+kx-dx, triggerPosY, -kz-dz), Label: "GET TOUGHER"},       // NE -> NW
+		5: {Position: rl.NewVector3(+kx-dx-dx, triggerPosY, -kz-dz-dz), Label: "MOVE FASTER"}, // NE -> NW -> NW
+		6: {Position: rl.NewVector3(-kx, triggerPosY, +kz), Label: "REFUEL DRILL"},            // SW				|-- Lower corners --|
+		7: {Position: rl.NewVector3(+kx, triggerPosY, +kz), Label: "MAKE RESOURCE"},           // SE
+		8: {Position: rl.NewVector3(-kx+dx, triggerPosY, +kz+dz), Label: "START DRILL"},       // SW -> SE		|-- Lower arcs --|
+		9: {Position: rl.NewVector3(+kx-dx, triggerPosY, +kz+dz), Label: "CHANGE RESOURCE"},   // SE -> SW
+	} {
+		triggerPositions[i] = v.Position
 
-		// Upper arcs
-		rl.NewVector3(-kx+dx, triggerPosY, -kz-dz),       // NW -> NE
-		rl.NewVector3(-kx+dx+dx, triggerPosY, -kz-dz-dz), // NW -> NE -> NE
-		rl.NewVector3(+kx-dx, triggerPosY, -kz-dz),       // NE -> NW
-		rl.NewVector3(+kx-dx-dx, triggerPosY, -kz-dz-dz), // NE -> NW -> NW
+		triggerLabels[i] = v.Label
 
-		// Lower corners
-		rl.NewVector3(-kx, triggerPosY, +kz), // SW
-		rl.NewVector3(+kx, triggerPosY, +kz), // SE
+		const text3DOffsetY = .5
+		triggerScreenPositions[i] =
+			rl.GetWorldToScreen(rl.NewVector3(v.Position.X,
+				v.Position.Y+text3DOffsetY, v.Position.Z), camera)
 
-		// Start drill trigger
-		rl.NewVector3(-kx+dx, triggerPosY, +kz+dz), // SW -> SE
-		// Change resource trigger
-		rl.NewVector3(+kx-dx, triggerPosY, +kz+dz), // SE -> SW
-	}
+		triggerBoundingBoxes[i] =
+			common.GetBoundingBoxFromPositionSizeV(v.Position, triggerSize)
 
-	triggerCount = int32(len(triggerPositions))
+		triggerSensorBoundingBoxes[i] =
+			common.GetBoundingBoxFromPositionSizeV(v.Position,
+				rl.Vector3Scale(triggerSize, 2))
 
-	for i := range triggerCount {
-		const offsetY = .5
-		pos := triggerPositions[i]
-		triggerScreenPositions = append(triggerScreenPositions,
-			rl.GetWorldToScreen(rl.NewVector3(pos.X, pos.Y+offsetY, pos.Z), camera))
-	}
-	for i := range triggerCount {
-		triggerBoundingBoxes = append(triggerBoundingBoxes,
-			common.GetBoundingBoxFromPositionSizeV(triggerPositions[i], triggerSize))
-	}
-	for i := range triggerCount {
-		triggerSensorBoundingBoxes = append(triggerSensorBoundingBoxes,
-			common.GetBoundingBoxFromPositionSizeV(triggerPositions[i], rl.Vector3Scale(triggerSize, 2)))
-	}
-	for range triggerCount {
-		isPlayerNearTriggerSensors = append(isPlayerNearTriggerSensors, false)
-	}
-	for range triggerCount {
+		isPlayerNearTriggerSensors[i] = false
+
 		dir := filepath.Join("res", "kenney_prototype-kit", "Models", "OBJ format")
 		model := rl.LoadModel(filepath.Join(dir, "weapon-shield.obj"))
 		texture := rl.LoadTexture(filepath.Join(dir, "Textures", "colormap.png"))
 		rl.SetMaterialTexture(model.Materials, rl.MapDiffuse, texture)
-		triggerModels = append(triggerModels, model)
+		triggerModels[i] = model
 	}
 
 	// Unequip hat sword shield
@@ -224,16 +220,30 @@ func Update() {
 	}
 
 	// Check player collisions with instruments
-	for i := range triggerCount {
-		isPlayerNearTriggerSensors[i] = rl.CheckCollisionBoxes(playerEntity.BoundingBox, triggerSensorBoundingBoxes[i])
-		if rl.CheckCollisionBoxes(playerEntity.BoundingBox, triggerBoundingBoxes[i]) {
+	for i := range MaxTriggerCount {
+		isPlayerNearTriggerSensors[i] = rl.CheckCollisionBoxes(
+			playerEntity.BoundingBox,
+			triggerSensorBoundingBoxes[i],
+		)
+
+		if rl.CheckCollisionBoxes(
+			playerEntity.BoundingBox,
+			triggerBoundingBoxes[i],
+		) {
 			playerEntity.Collisions.X = 1
 			playerEntity.Collisions.Z = 1
 			player.RevertPlayerAndCameraPositions(&playerEntity, oldPlayer, &camera, oldCam)
 		}
 	}
+	const TriggerBeginDrillingID = 8
+	if isPlayerNearTriggerSensors[TriggerBeginDrillingID] {
+		if rl.IsKeyPressed(rl.KeyF) {
+			panic("[F] works")
+		}
+	}
+
 	// Update screen position after accumulating all player entity collisions with trigger
-	for i := range triggerCount {
+	for i := range MaxTriggerCount {
 		pos := triggerPositions
 		cam := camera
 		if playerEntity.Collisions.X != 0 || playerEntity.Collisions.Z != 0 {
@@ -293,7 +303,7 @@ func Draw() {
 	}
 	wall.DrawBatch(common.DrillRoom, floorEntity.Position, floorEntity.Size, cmp.Or(rl.NewVector3(5, 2, 5), common.Vector3One))
 
-	for i := range triggerCount {
+	for i := range MaxTriggerCount {
 		// Circular model shape --expand-> to 1x1x1 bounding box
 		const k = 1. + common.OneMinusInvPhi
 		var scale rl.Vector3
@@ -325,7 +335,7 @@ func Draw() {
 	col := rl.Fade(rl.White, alpha)
 
 	// See https://www.raylib.com/examples/core/loader.html?name=core_world_screen
-	for i := range triggerCount {
+	for i := range MaxTriggerCount {
 		text := fmt.Sprintf("%d", i)
 		const fontSize = 16
 		stringSize := rl.MeasureTextEx(common.Font.Primary, text, fontSize, 2)
@@ -334,14 +344,23 @@ func Draw() {
 		// Gradually fade in text wait for a second to reset World to Screen Coordinates
 		rl.DrawTextEx(common.Font.Primary, text, rl.NewVector2(x, y), fontSize, 2, col)
 	}
+	instructionPosY := float32(screenH) - 40
+	for i := range MaxTriggerCount {
+		textCol := rl.Fade(rl.Black, .6)
+		bgCol := rl.RayWhite
+		if isPlayerNearTriggerSensors[i] {
+			fontSize := float32(common.Font.Primary.BaseSize) * 2
+			const maxLabelLenForFontSizeX2 = 148
+			text := triggerLabels[i]
+			pos := rl.NewVector2(float32(screenW)/2-maxLabelLenForFontSizeX2*2./3., instructionPosY)
+			rl.DrawRectangleRounded(rl.NewRectangle(pos.X-2, pos.Y-2, fontSize+4, fontSize+4), .3, 16, textCol)
+			rl.DrawText("F", int32(pos.X)+2+2+1, int32(pos.Y)+2, int32(fontSize)-2, bgCol)
+			rl.DrawTextEx(common.Font.Primary, text, rl.Vector2{X: pos.X + fontSize + fontSize/2 + 1, Y: pos.Y}, fontSize, 2, textCol)
+			break // Avoid overlapping text
+		}
+	}
 
-	fontSize := float32(common.Font.Primary.BaseSize) * 3.0
-
-	subtextSize := rl.MeasureTextEx(common.Font.Primary, screenSubtitleText, fontSize/6, 1)
-	rl.DrawTextEx(common.Font.Primary, screenSubtitleText,
-		rl.NewVector2(float32(screenW)/2-subtextSize.X/2, float32(screenH)-subtextSize.Y*3),
-		fontSize/3, 1, rl.Fade(rl.Gray, 1.0*alpha))
-
+	fontSize := float32(common.Font.Primary.BaseSize) * 3.
 	if f := float32(framesCounter) / 60.; (alpha >= 1.) && (f > 2. && f < 1000.) {
 		delta := mathutil.PowF(float32(rl.GetTime()), 1.5-(2.0/f))
 		delta *= rl.GetFrameTime()
@@ -351,11 +370,18 @@ func Draw() {
 	} else { // Initial delay on screen start
 		alpha *= .5 * f
 	}
-
 	pos := rl.NewVector2(float32(screenW)/2.-float32(rl.MeasureText(screenTitleText, int32(fontSize*common.Phi)))/2., float32(screenH)/16.)
 	rl.DrawTextEx(common.Font.Primary, screenTitleText, pos, (fontSize * common.Phi), 4, rl.Fade(rl.Black, .5*(alpha)))
 	pos = rl.NewVector2(float32(screenW)/2.-float32(rl.MeasureText("ROOM", int32(fontSize)))/2., float32(screenH)/16.+(fontSize*common.Phi))
 	rl.DrawTextEx(common.Font.Primary, "ROOM", pos, fontSize, common.Phi, rl.Fade(rl.Gray, .7*(alpha)))
+
+	{
+		fontSize := float32(20. - 9.)
+		subtextSize := rl.MeasureTextEx(common.Font.Primary, screenSubtitleText, fontSize, 1)
+		rl.DrawTextEx(common.Font.Primary, screenSubtitleText,
+			rl.NewVector2(float32(screenW)/2-subtextSize.X/2, min(instructionPosY-40-fontSize, float32(screenH)-subtextSize.Y*3)),
+			fontSize, 1, rl.Fade(rl.Gray, 1.0*alpha))
+	}
 
 	rl.DrawText(fmt.Sprint(rl.GetFrameTime()), 10, 30, 20, rl.Green)
 	rl.DrawText(fmt.Sprint(framesCounter), 10, 50, 20, rl.Green)
