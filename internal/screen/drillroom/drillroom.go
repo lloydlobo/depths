@@ -315,7 +315,7 @@ func Draw() {
 
 	// 2D World
 
-	if true { // TEMPORARY
+	if false { // TEMPORARY
 		rl.DrawRectangle(0, 0, screenW, screenH, rl.Fade(rl.Black, .2))
 	}
 
@@ -335,13 +335,13 @@ func Draw() {
 		float32(screenW)/2.-float32(rl.MeasureText(screenTitleText, int32(fontSize*common.Phi)))/2.,
 		float32(screenH)/16.,
 	)
-	rl.DrawTextEx(common.Font.Primary, screenTitleText, pos, (fontSize * common.Phi), 4, rl.Fade(rl.Black, .4))
+	rl.DrawTextEx(common.Font.Primary, screenTitleText, pos, (fontSize * common.Phi), 4, rl.Fade(rl.Black, .5))
 
 	pos = rl.NewVector2(
 		float32(screenW)/2.-float32(rl.MeasureText("ROOM", int32(fontSize)))/2.,
 		float32(screenH)/16.+(fontSize*common.Phi),
 	)
-	rl.DrawTextEx(common.Font.Primary, "ROOM", pos, fontSize, common.Phi, rl.Fade(rl.LightGray, .7))
+	rl.DrawTextEx(common.Font.Primary, "ROOM", pos, fontSize, common.Phi, rl.Fade(rl.Gray, .7))
 
 	subtextSize := rl.MeasureTextEx(common.Font.Primary, screenSubtitleText, fontSize/2, 1)
 	posX := int32(screenW)/2 - int32(subtextSize.X/2)

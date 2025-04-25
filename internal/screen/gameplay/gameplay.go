@@ -5,8 +5,10 @@ import (
 	"cmp"
 	"encoding/json"
 	"fmt"
+	"image/color"
 	"log"
 	"log/slog"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -438,15 +440,60 @@ func Draw() {
 	rl.ClearBackground(rl.RayWhite)
 
 	gameFloor.Draw()
-
 	if false { // ‥ Draw pseudo-infinite(ish) floor backdrop
 		rl.DrawModel(checkedModel, rl.NewVector3(0., -.05, 0.), 1., rl.RayWhite)
 	}
 
 	wall.DrawBatch(common.OpenWorldRoom, gameFloor.Position, gameFloor.Size, common.Vector3One)
 
-	for i := range blocks {
-		blocks[i].Draw()
+	{
+		type BlockResourceType uint8
+		const (
+			DefaultBlockResource BlockResourceType = iota
+			CopperBlockResource
+			SilverBlockResource
+			GoldBlockResource
+		)
+		drawSpecialBlock := func(block block.Block, typ BlockResourceType) {
+			var col color.RGBA
+			switch typ {
+			case CopperBlockResource:
+				col = rl.DarkPurple
+			case SilverBlockResource:
+				col = rl.Maroon
+			case GoldBlockResource:
+				col = rl.Orange
+			default:
+				panic(fmt.Sprintf("unexpected gameplay.BlockResourceType: %#v", typ))
+			}
+			if true {
+				rl.DrawSphereWires(block.Pos, -.0625+common.InvPhi*rl.Vector3Length(block.Size)/math.Pi, 8, 8, rl.Fade(col, .35))
+			} else {
+				rl.DrawCapsuleWires(
+					rl.Vector3Add(block.Pos, rl.NewVector3(.0625, block.Size.Y/2, .0625)),
+					rl.Vector3Subtract(block.Pos, rl.NewVector3(.0625, block.Size.Y/4, .0625)),
+					-.0625+common.InvPhi*rl.Vector3Length(block.Size)/math.Pi,
+					2, 2, rl.Fade(col, .1))
+			}
+		}
+
+		rl.BeginBlendMode(rl.BlendAlphaPremultiply) // For special block
+
+		for i := range blocks {
+			blocks[i].Draw()
+
+			if false {
+				if i%11 == 0 && blocks[i].IsActive && blocks[i].State != block.MaxBlockState-1 {
+					drawSpecialBlock(blocks[i], CopperBlockResource)
+				} else if i%13 == 0 && blocks[i].IsActive && blocks[i].State != block.MaxBlockState-1 {
+					drawSpecialBlock(blocks[i], SilverBlockResource)
+				} else if i%23 == 0 && blocks[i].IsActive && blocks[i].State != block.MaxBlockState-1 {
+					drawSpecialBlock(blocks[i], GoldBlockResource)
+				}
+			}
+		}
+
+		rl.EndBlendMode()
 	}
 
 	gamePlayer.Draw()
@@ -517,17 +564,6 @@ func Draw() {
 		rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMax.X-1, 0, floorBBMin.Z+1), common.YAxis, -45, common.Vector3One, rl.White) // rightback
 		rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMax.X, 0, floorBBMax.Z), common.YAxis, 45, common.Vector3One, rl.White)      // rightfront
 		rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMin.X, 0, floorBBMax.Z), common.YAxis, -45, common.Vector3One, rl.White)     // leftfront
-	}
-
-	if false { //  ‥ DEBUG: Draw camera movement gimble-like interpretation
-		var cameraViewMatrix rl.Matrix = rl.GetCameraMatrix(camera)
-		var quat rl.Quaternion = rl.QuaternionFromMatrix(cameraViewMatrix)
-		quatEulerPos := rl.QuaternionToEuler(quat)
-		quatEulerLen := rl.Vector3Length(quatEulerPos)
-		originOffset := rl.NewVector3(0., 5., 0.)
-		position := rl.Vector3Add(quatEulerPos, originOffset)
-		rl.DrawCubeWiresV(position, rl.NewVector3(.125, quatEulerLen, .125), rl.Violet)
-		rl.DrawCubeWiresV(position, quatEulerPos, rl.Purple)
 	}
 
 	rl.EndMode3D()

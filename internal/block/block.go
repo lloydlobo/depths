@@ -105,8 +105,7 @@ func SetupBlockModels() {
 
 func (b Block) Draw() {
 	if /* b.State > 0 && */ b.IsActive {
-		rl.DrawModelEx(blockModels[b.State], b.Pos,
-			rl.NewVector3(0, 1, 0), b.Rotn, b.Size, rl.White)
+		rl.DrawModelEx(blockModels[b.State], b.Pos, common.YAxis, b.Rotn, b.Size, rl.White)
 	}
 }
 
