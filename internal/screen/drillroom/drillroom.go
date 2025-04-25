@@ -4,6 +4,7 @@ package drillroom
 import (
 	"cmp"
 	"fmt"
+	"image/color"
 	"math"
 	"path/filepath"
 
@@ -49,6 +50,8 @@ var (
 	triggerPositions           []rl.Vector3
 	isPlayerNearTriggerSensors []bool
 	triggerCount               int32
+
+	triggerModels []rl.Model
 )
 
 func Init() {
@@ -122,7 +125,6 @@ func Init() {
 	}
 
 	triggerCount = int32(len(triggerPositions))
-	fmt.Printf("triggerCount: %v\n", triggerCount)
 	for i := range triggerCount {
 		triggerBoundingBoxes = append(triggerBoundingBoxes, common.GetBoundingBoxFromPositionSizeV(triggerPositions[i], triggerSize))
 	}
@@ -131,6 +133,13 @@ func Init() {
 	}
 	for range triggerCount {
 		isPlayerNearTriggerSensors = append(isPlayerNearTriggerSensors, false)
+	}
+	for range triggerCount {
+		dir := filepath.Join("res", "kenney_prototype-kit", "Models", "OBJ format")
+		model := rl.LoadModel(filepath.Join(dir, "weapon-shield.obj"))
+		texture := rl.LoadTexture(filepath.Join(dir, "Textures", "colormap.png"))
+		rl.SetMaterialTexture(model.Materials, rl.MapDiffuse, texture)
+		triggerModels = append(triggerModels, model)
 	}
 
 	// Unequip hat sword shield
@@ -250,12 +259,25 @@ func Draw() {
 	floorEntity.Draw()
 	rl.DrawBoundingBox(drillroomExitBoundingBox, rl.Green)
 	wall.DrawBatch(common.DrillRoom, floorEntity.Position, floorEntity.Size, cmp.Or(rl.NewVector3(5, 2, 5), common.Vector3One))
+
 	for i := range triggerCount {
-		rl.DrawBoundingBox(triggerBoundingBoxes[i], rl.SkyBlue)
+		// Circular model shape --expand-> to 1x1x1 bounding box
+		const k = 1. + common.OneMinusInvPhi // math.Pi / 2.
+		var scale rl.Vector3
+		var col color.RGBA
+
 		if isPlayerNearTriggerSensors[i] {
-			rl.DrawBoundingBox(triggerSensorBoundingBoxes[i], rl.Purple)
+			scale = rl.Vector3{X: k * 1.25, Y: k * 1.25, Z: k * 1.25}
+			col = rl.Purple
 		} else {
-			rl.DrawBoundingBox(triggerSensorBoundingBoxes[i], rl.Pink)
+			scale = rl.Vector3{X: k, Y: k, Z: k}
+			col = rl.Pink
+		}
+		rl.DrawModelEx(triggerModels[i], triggerPositions[i], common.YAxis, 0., scale, rl.White)
+
+		if true {
+			rl.DrawBoundingBox(triggerBoundingBoxes[i], rl.Fade(rl.SkyBlue, 0.1))
+			rl.DrawBoundingBox(triggerSensorBoundingBoxes[i], rl.Fade(col, 0.1))
 		}
 	}
 
