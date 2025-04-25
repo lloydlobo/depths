@@ -25,8 +25,10 @@ func SetupWallModel(room common.RoomType) {
 	switch room {
 	case common.OpenWorldRoom:
 		wallModel = common.ModelDungeonKit.OBJ.WallOpening
+		wallModel = common.ModelDungeonKit.OBJ.Dirt
 		rl.SetMaterialTexture(wallModel.Materials, rl.MapDiffuse, common.ModelDungeonKit.OBJ.Colormap)
 		wallCornerModel = common.ModelDungeonKit.OBJ.Wall
+		wallCornerModel = common.ModelDungeonKit.OBJ.Dirt
 		rl.SetMaterialTexture(wallCornerModel.Materials, rl.MapDiffuse, common.ModelDungeonKit.OBJ.Colormap)
 	case common.DrillRoom:
 		// PERF: Load once in common
