@@ -47,6 +47,9 @@ var (
 
 	hitCount int32
 	hitScore int32
+
+	money      int32
+	experience int32
 )
 
 var (
@@ -85,7 +88,7 @@ func Init() {
 	// Prefers loading data from saved game files if any, else generates new data.
 	//
 	// If new game flag is turned on, generates new game.
-	loadNewCoreData := func() {
+	loadNewEntityData := func() {
 		var mu sync.Mutex
 
 		mu.Lock()
@@ -94,7 +97,7 @@ func Init() {
 		finishScreen = 0
 		framesCounter = 0
 
-		// Order is maybe important
+		// Order could be important
 		player.InitPlayer(&xPlayer, camera)
 		xFloor = floor.NewFloor(common.Vector3Zero, rl.NewVector3(16*2, 0.001*2, 9*2)) // 16:9 ratio // floor.InitFloor(&gameFloor)
 		wall.InitWall()                                                                // NOTE: Empty func for convention
@@ -102,7 +105,6 @@ func Init() {
 		hasPlayerLeftDrillBase = false
 		xPlayer.IsPlayerWallCollision = false
 	}
-
 	loadNewAdditionalData := func() {
 		var mu sync.Mutex
 
@@ -111,6 +113,17 @@ func Init() {
 
 		blocks = []block.Block{} // Clear
 		block.InitBlocks(&blocks, block.GenerateRandomBlockPositions(xFloor))
+	}
+	loadNewLogicData := func() {
+		var mu sync.Mutex
+
+		mu.Lock()
+		defer mu.Unlock()
+
+		money = 1000
+		experience = 0
+		hitCount = 0
+		hitScore = 0
 	}
 
 	const isNewGame = false
@@ -123,28 +136,26 @@ func Init() {
 
 	// Core data
 	if !isNewGame {
-		data, err := loadCoreGameData()
+		data, err := loadGameEntityData()
 		if err == nil { // OK
 			finishScreen = 0
 			framesCounter = 0
 			camera = data.Camera
-			xFloor = data.GameFloor
-			xPlayer = data.GamePlayer
-			hitScore = data.HitScore
-			hitCount = data.HitCount
+			xFloor = data.XFloor
+			xPlayer = data.XPlayer
 			if true {
 				hasPlayerLeftDrillBase = data.HasPlayerLeftDrillBase // If save game when far from drill and exit -> this will tell the reality
 			} else {
 				hasPlayerLeftDrillBase = false // How do we know?
 			}
 			xPlayer.IsPlayerWallCollision = false
-			saveCoreLevelState() // Save ASAP
+			saveGameEntityData() // Save ASAP
 		} else { // ERR
 			slog.Warn(err.Error())
-			loadNewCoreData()
+			loadNewEntityData()
 		}
 	} else {
-		loadNewCoreData()
+		loadNewEntityData()
 	}
 
 	// Additional resources
@@ -161,13 +172,30 @@ func Init() {
 			} else {
 				log.Panic("Incorrect saved file. Please delete it")
 			}
-			saveAdditionalLevelState() // Save ASAP
+			saveGameAdditionalData() // Save ASAP
 		} else { // ERR
 			slog.Warn(err.Error())
 			loadNewAdditionalData()
 		}
 	} else {
 		loadNewAdditionalData()
+	}
+
+	if !isNewGame {
+		data, err := loadGameLogicData()
+		if err == nil { // OK
+			money = data.Money
+			experience = data.Experience
+			hitCount = data.HitCount
+			hitScore = data.HitScore
+			fmt.Printf("data: %v\n", data)
+			saveGameLogicData() // Save ASAP
+		} else { // ERR
+			slog.Warn(err.Error())
+			loadNewLogicData()
+		}
+	} else {
+		loadNewLogicData()
 	}
 
 	{
@@ -223,24 +251,6 @@ func Init() {
 
 func Update() {
 	rl.UpdateMusicStream(currentMusic)
-
-	// Press enter or tap to change to ending game screen
-	if rl.IsKeyDown(rl.KeyF10) || rl.IsGestureDetected(rl.GesturePinchOut) {
-		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "rollover3.ogg")))
-		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "switch33.ogg")))
-		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", "confirmation_001.ogg")))
-
-		{ // Save screen state
-			//
-			// PERF: Find way to reduce size. => Size of "additional level state" is
-			//       117x times size of "core level state"
-			//
-			finishScreen = 1                      // 1=>ending
-			camera.Up = rl.NewVector3(0., 1., 0.) // Reset yaw/pitch/roll
-			saveCoreLevelState()                  // (player,camera,...) 705 bytes
-			saveAdditionalLevelState()            // (blocks,...)        82871 bytes
-		}
-	}
 
 	if rl.IsKeyDown(rl.KeyF) {
 		log.Println("[F] Picked up item")
@@ -405,7 +415,6 @@ func Update() {
 			player.SetColor(rl.Red)
 		} else { // => is outside bounds check
 			player.SetColor(rl.RayWhite) // How to check non-binary logic.. more options.. unlike drill room
-
 			// - RESET FLAG as soon as player leaves bounds check
 			// - This is useful when player spawns near the drill room.
 			// - This avoids re-entering drill base Immediately.
@@ -413,6 +422,12 @@ func Update() {
 				hasPlayerLeftDrillBase = true // STEP [1]
 			}
 		}
+		// - (gameplay ) saveScore?
+		// - (common   )   how much resource is required to drill to next level
+		// - (drillroom) how will you handle modifying currentLevelID in gamesave/slot/1.json?
+		// - (drillroom) what decides
+		// - Are we drilling asteroids in space?
+		//	- Draw a protection barrier over the scene (like a firmament)
 		if canSwitchToDrillRoom {
 			// Play entry sounds
 			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("footstep0%d.ogg", rl.GetRandomValue(0, 9))))) // 05
@@ -423,9 +438,24 @@ func Update() {
 			// Save screen state
 			finishScreen = 2                      // 1=>ending 2=>drillroom
 			camera.Up = rl.NewVector3(0., 1., 0.) // Reset yaw/pitch/roll
-			saveCoreLevelState()                  // (player,camera,...) 705 bytes
-			saveAdditionalLevelState()            // (blocks,...)        82871 bytes
+			saveGameEntityData()                  // (player,camera,...) 705 bytes
+			saveGameAdditionalData()              // (blocks,...)        82871 bytes
+			saveGameLogicData()
 		}
+	}
+
+	// Press enter or tap to change to ending game screen
+	if rl.IsKeyDown(rl.KeyF10) || rl.IsGestureDetected(rl.GesturePinchOut) {
+		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "rollover3.ogg")))
+		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "switch33.ogg")))
+		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", "confirmation_001.ogg")))
+
+		// Save screen state
+		finishScreen = 1                      // 1=>ending 2=>drillroom
+		camera.Up = rl.NewVector3(0., 1., 0.) // Reset yaw/pitch/roll
+		saveGameEntityData()                  // (player,camera,...) 705 bytes
+		saveGameAdditionalData()              // (blocks,...)        82871 bytes
+		saveGameLogicData()
 	}
 
 	// TODO: Move this in package player (if possible)
@@ -721,54 +751,92 @@ func Finish() int {
 // }
 //
 
-type GameCoreData struct {
+type GameEntityData struct {
+	LevelID int32 `json:"levelID"`
+
 	Camera                 rl.Camera3D   `json:"camera"`
 	FinishScreen           int           `json:"finishScreen"`
 	FramesCounter          int32         `json:"framesCounter"`
-	GameFloor              floor.Floor   `json:"gameFloor"`
-	GamePlayer             player.Player `json:"gamePlayer"`
+	XFloor                 floor.Floor   `json:"xFloor"`
+	XPlayer                player.Player `json:"xPlayer"`
 	HasPlayerLeftDrillBase bool          `json:"hasPlayerLeftDrillBase"`
-	HitScore               int32         `json:"hitScore"`
-	HitCount               int32         `json:"hitCount"`
 }
 
 type GameAdditionalData struct {
+	LevelID int32
+
 	Blocks []block.Block `json:"blocks"`
 }
 
+type GameLogicData struct {
+	LevelID int32
+
+	Money      int32 `json:"money"`
+	Experience int32 `json:"experience"`
+	HitScore   int32 `json:"hitScore"`
+	HitCount   int32 `json:"hitCount"`
+}
+
 const (
+	entityGameDataVersionSuffix     = "entity"
 	additionalGameDataVersionSuffix = "additional"
+	logicGameDataVersionSuffix      = "logic"
 )
 
-func saveCoreLevelState() {
-	input := GameCoreData{
-		Camera:                 camera,
-		FinishScreen:           finishScreen,
-		FramesCounter:          framesCounter,
-		GameFloor:              xFloor,
-		GamePlayer:             xPlayer,
-		HasPlayerLeftDrillBase: hasPlayerLeftDrillBase,
-		HitScore:               hitScore,
-		HitCount:               hitCount,
+func saveGameLogicData() {
+	const suffix = logicGameDataVersionSuffix
+	input := GameLogicData{
+		LevelID: levelID,
+
+		Money:      1000,
+		Experience: 0,
+		HitScore:   hitScore,
+		HitCount:   hitCount,
 	}
 	var b []byte
 	bb := bytes.NewBuffer(b)
 	{
 		enc := json.NewEncoder(bb)
 		if err := enc.Encode(input); err != nil {
-			panic(fmt.Errorf("encode level: %w", err))
+			panic(fmt.Errorf("encode game %s level data: %w", suffix, err))
 		}
 	}
 	dataJSON := storage.GameStorageLevelJSON{
-		Version: "0.0.0",
+		Version: "0.0.0" + "-" + suffix,
 		LevelID: levelID,
 		Data:    bb.Bytes(),
 	}
-	storage.SaveStorageLevel(dataJSON)
-
+	storage.SaveStorageLevelEx(dataJSON, suffix)
 }
+func saveGameEntityData() {
+	const suffix = entityGameDataVersionSuffix
+	input := GameEntityData{
+		LevelID: levelID,
 
-func saveAdditionalLevelState() {
+		Camera:                 camera,
+		FinishScreen:           finishScreen,
+		FramesCounter:          framesCounter,
+		XFloor:                 xFloor,
+		XPlayer:                xPlayer,
+		HasPlayerLeftDrillBase: hasPlayerLeftDrillBase,
+	}
+	var b []byte
+	bb := bytes.NewBuffer(b)
+	{
+		enc := json.NewEncoder(bb)
+		if err := enc.Encode(input); err != nil {
+			panic(fmt.Errorf("encode game %s level data: %w", suffix, err))
+		}
+	}
+	dataJSON := storage.GameStorageLevelJSON{
+		Version: "0.0.0" + "-" + suffix,
+		LevelID: levelID,
+		Data:    bb.Bytes(),
+	}
+	storage.SaveStorageLevelEx(dataJSON, suffix)
+}
+func saveGameAdditionalData() {
+	const suffix = additionalGameDataVersionSuffix
 	input := GameAdditionalData{
 		Blocks: blocks,
 	}
@@ -777,25 +845,60 @@ func saveAdditionalLevelState() {
 	{
 		enc := json.NewEncoder(bb)
 		if err := enc.Encode(input); err != nil {
-			panic(fmt.Errorf("encode level: %w", err))
+			panic(fmt.Errorf("encode game %s level data: %w", suffix, err))
 		}
 	}
 	data := storage.GameStorageLevelJSON{
-		Version: "0.0.0-" + additionalGameDataVersionSuffix,
+		Version: "0.0.0" + "-" + suffix,
 		LevelID: levelID,
 		Data:    bb.Bytes(),
 	}
-	storage.SaveStorageLevelEx(data, additionalGameDataVersionSuffix)
+	storage.SaveStorageLevelEx(data, suffix)
 }
 
-func loadCoreGameData() (*GameCoreData, error) {
+func loadGameLogicData() (*GameLogicData, error) {
+	const suffix = logicGameDataVersionSuffix
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("get working directory: %w", err)
 	}
 
 	saveDir := filepath.Join(cwd, "storage")
-	name := filepath.Join(saveDir, "level_"+strconv.Itoa(int(levelID))+".json")
+	name := filepath.Join(saveDir, "level_"+strconv.Itoa(int(levelID))+"_"+suffix+".json")
+
+	f, err := os.OpenFile(name, os.O_RDONLY, 0644)
+	if err != nil {
+		return nil, fmt.Errorf("create %q: %w", name, err)
+	}
+
+	dest := &storage.GameStorageLevelJSON{}
+	dec := json.NewDecoder(f)
+	if err := dec.Decode(&dest); err != nil {
+		return nil, fmt.Errorf("decode level: %w", err)
+	}
+
+	switch version := dest.Version; version {
+	case "0.0.0" + "-" + suffix:
+		var v *GameLogicData
+		if err := json.Unmarshal(dest.Data, &v); err != nil {
+			return nil, err
+		}
+		return v, nil
+	default:
+		return nil, fmt.Errorf("invalid game %s data version %q", suffix, version)
+	}
+}
+func loadGameEntityData() (*GameEntityData, error) {
+	const suffix = entityGameDataVersionSuffix
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("get working directory: %w", err)
+	}
+
+	saveDir := filepath.Join(cwd, "storage")
+	name := filepath.Join(saveDir, "level_"+strconv.Itoa(int(levelID))+"_"+suffix+".json")
 
 	f, err := os.OpenFile(name, os.O_RDONLY, 0644)
 	if err != nil {
@@ -810,24 +913,24 @@ func loadCoreGameData() (*GameCoreData, error) {
 	// return dest,nil // => Upto here.. same as storage.LoadStorageLevel
 
 	switch version := dest.Version; version {
-	case "0.0.0":
-		var v *GameCoreData
+	case "0.0.0" + "-" + suffix:
+		var v *GameEntityData
 		err := json.Unmarshal(dest.Data, &v)
 		return v, err
 	default:
-		return nil, fmt.Errorf("invalid game core data version %q", version)
+		return nil, fmt.Errorf("invalid game %s data version %q", suffix, version)
 	}
 }
-
 func loadAdditionalGameData() (*GameAdditionalData, error) {
+	const suffix = additionalGameDataVersionSuffix
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("get working directory: %w", err)
 	}
 
 	saveDir := filepath.Join(cwd, "storage")
-	filename := "level_" + strconv.Itoa(int(levelID)) + "_" + additionalGameDataVersionSuffix + ".json"
-	name := filepath.Join(saveDir, filename)
+	name := filepath.Join(saveDir, "level_"+strconv.Itoa(int(levelID))+"_"+suffix+".json")
 
 	f, err := os.OpenFile(name, os.O_RDONLY, 0644)
 	if err != nil {
@@ -839,17 +942,16 @@ func loadAdditionalGameData() (*GameAdditionalData, error) {
 	if err := dec.Decode(&dest); err != nil {
 		return nil, fmt.Errorf("decode level: %w", err)
 	}
-	// return dest,nil // => Upto here.. same as storage.LoadStorageLevel
 
 	switch version := dest.Version; version {
-	case "0.0.0" + "-" + additionalGameDataVersionSuffix:
+	case "0.0.0" + "-" + suffix:
 		var v *GameAdditionalData
 		if err := json.Unmarshal(dest.Data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
 	default:
-		return nil, fmt.Errorf("invalid game additional data version %q", version)
+		return nil, fmt.Errorf("invalid game %s data version %q", suffix, version)
 	}
 }
 

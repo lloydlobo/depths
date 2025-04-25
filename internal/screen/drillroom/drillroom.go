@@ -169,30 +169,6 @@ func Init() {
 func Update() {
 	rl.UpdateMusicStream(common.Music.DrillRoom000)
 
-	// Change to ENDING/GAMEPLAY screen
-	if rl.IsKeyDown(rl.KeyF10) || rl.IsGestureDetected(rl.GesturePinchOut) ||
-		rl.IsMouseButtonDown(rl.MouseButtonRight) {
-		finishScreen = 1 // 1=>ending
-
-		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "rollover3.ogg")))
-		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "switch33.ogg")))
-		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", "confirmation_001.ogg")))
-	}
-	if rl.IsKeyDown(rl.KeyBackspace) || rl.IsGestureDetected(rl.GestureSwipeLeft) {
-		// Play exit sounds
-		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("footstep0%d.ogg", rl.GetRandomValue(0, 9)))))  // 05
-		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "metalClick.ogg")))                                         // metalClick
-		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("creak%d.ogg", rl.GetRandomValue(1, 3)))))      // 3
-		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("doorClose_%d.ogg", rl.GetRandomValue(1, 4))))) // 4
-
-		// Save screen state
-		finishScreen = 2                      // 1=>ending 2=>gameplay(openworldroom)
-		camera.Up = rl.NewVector3(0., 1., 0.) // Reset yaw/pitch/roll
-		// TODO: implement drillroom save/load functions (data and filenames)
-		// saveCoreLevelState()                  // (player,camera,...) 705 bytes
-		// saveAdditionalLevelState()            // (blocks,...)        82871 bytes
-	}
-
 	// PERF: Just check if player is not colliding wit floor bounding box * scale of 0.9
 
 	// Save variables this frame
@@ -264,6 +240,36 @@ func Update() {
 			cam = oldCam // Avoid glitching text position on player's X/Z movement
 		}
 		triggerScreenPositions[i] = rl.GetWorldToScreen(rl.NewVector3(pos[i].X, pos[i].Y+.5, pos[i].Z), cam)
+	}
+
+	// Change to ENDING screen
+	if rl.IsKeyDown(rl.KeyF10) || rl.IsGestureDetected(rl.GesturePinchOut) ||
+		rl.IsMouseButtonDown(rl.MouseButtonRight) {
+
+		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "rollover3.ogg")))
+		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "switch33.ogg")))
+		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", "confirmation_001.ogg")))
+
+		finishScreen = 1                      // 1=>ending
+		camera.Up = rl.NewVector3(0., 1., 0.) // Reset yaw/pitch/roll
+		// TODO: implement drillroom save/load functions (data and filenames)
+		// saveCoreLevelState()                  // (player,camera,...) 705 bytes
+		// saveAdditionalLevelState()            // (blocks,...)        82871 bytes
+	}
+	// Change to GAMEPLAY screen
+	if rl.IsKeyDown(rl.KeyBackspace) || rl.IsGestureDetected(rl.GestureSwipeLeft) {
+		// Play exit sounds
+		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("footstep0%d.ogg", rl.GetRandomValue(0, 9)))))  // 05
+		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "metalClick.ogg")))                                         // metalClick
+		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("creak%d.ogg", rl.GetRandomValue(1, 3)))))      // 3
+		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("doorClose_%d.ogg", rl.GetRandomValue(1, 4))))) // 4
+
+		// Save screen state
+		finishScreen = 2                      // 1=>ending 2=>gameplay(openworldroom)
+		camera.Up = rl.NewVector3(0., 1., 0.) // Reset yaw/pitch/roll
+		// TODO: implement drillroom save/load functions (data and filenames)
+		// saveCoreLevelState()                  // (player,camera,...) 705 bytes
+		// saveAdditionalLevelState()            // (blocks,...)        82871 bytes
 	}
 
 	// Increment drillroom frames counter

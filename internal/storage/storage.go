@@ -42,7 +42,7 @@ func SaveStorageLevel(l GameStorageLevelJSON) error {
 }
 
 // Extended
-// filetag is added as a version suffix. e.g. filetag="blocks" => level_1_blocks.json
+// filetag is added as a version suffix. e.g. filetag="entity" => level_1_entity.json
 func SaveStorageLevelEx(l GameStorageLevelJSON, filetag string) error {
 	cwd, err := os.Getwd()
 	if err != nil {
