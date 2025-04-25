@@ -25,3 +25,6 @@
 
 </details>
 
+
+![screenrec](./static/screenrec/20250426/screenrec002.gif)
+
