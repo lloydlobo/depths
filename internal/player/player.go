@@ -3,9 +3,6 @@ package player
 import (
 	"bytes"
 	"cmp"
-	"example/depths/internal/common"
-	"example/depths/internal/floor"
-	"example/depths/internal/util/mathutil"
 	"fmt"
 	"image/color"
 	"path/filepath"
@@ -14,15 +11,68 @@ import (
 	"sync"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
+
+	"example/depths/internal/common"
+	"example/depths/internal/floor"
+	"example/depths/internal/util/mathutil"
 )
 
 type Player struct {
-	Position              rl.Vector3
-	Size                  rl.Vector3
-	Rotation              int32
-	BoundingBox           rl.BoundingBox
+	Position    rl.Vector3
+	Size        rl.Vector3
+	Rotation    int32
+	BoundingBox rl.BoundingBox
+
 	Collisions            rl.Quaternion
 	IsPlayerWallCollision bool
+
+	Health           float32 // [0..1]
+	CargoCapacity    int32   // [0..80]
+	MaxCargoCapacity int32   // upgrade lvl01=>80
+}
+
+func NewPlayer(camera rl.Camera3D) Player {
+	player := Player{
+		Position:   camera.Target,
+		Size:       cmp.Or(rl.NewVector3(.5, 1.-.5, .5), rl.NewVector3(1, 2, 1)),
+		Collisions: rl.NewQuaternion(0, 0, 0, 0),
+	}
+	player.BoundingBox = common.GetBoundingBoxFromPositionSizeV(camera.Target, player.Size)
+
+	player.Health = 1.
+	player.CargoCapacity = 0
+	player.MaxCargoCapacity = 80
+
+	// Auto scale MaxCargoCapacity per level
+	if __IS_TEMPORARY__ := true; __IS_TEMPORARY__ {
+		primes := []int32{
+			2, 3, 5, 7,
+			11, 13, 17, 19,
+			23, 29,
+			31, 37,
+			41, 43, 47,
+			53, 59, 61, 67, 73, 79,
+			83, 89,
+			97,
+		}
+		maxLevels := len(common.SavedgameSlotData.AllLevelIDS)
+		if maxLevels < len(primes)+1 { // Avoid '2' with additional index
+			var levelPrimes []int32
+			for i := range maxLevels {
+				levelPrimes = append(levelPrimes, primes[i+1])
+			}
+			// WARN: This panicked as levelIDS are 1 index based, to avoid level 0
+			x := 2 * levelPrimes[int(common.SavedgameSlotData.CurrentLevelID)-1]
+			player.MaxCargoCapacity = x
+		}
+	}
+
+	return player
+}
+
+// FIXME: Remove this or bring the one from NewPlayer here
+func InitPlayer(player *Player, camera rl.Camera3D) {
+	*player = NewPlayer(camera)
 }
 
 type ActionType int32
@@ -37,6 +87,15 @@ const (
 var (
 	action ActionType = Idle
 )
+
+func Action() ActionType {
+	var mu sync.Mutex
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	return action
+}
 
 var (
 	playerColor = rl.RayWhite
@@ -75,34 +134,12 @@ var (
 	characterRotate rl.Quaternion
 )
 
-var (
-	playerModel rl.Model // UNUSED -> not compatible with kenney models
-)
-
-func NewPlayer(camera rl.Camera3D) Player {
-	player := Player{
-		Position:   camera.Target,
-		Size:       cmp.Or(rl.NewVector3(.5, 1.-.5, .5), rl.NewVector3(1, 2, 1)),
-		Collisions: rl.NewQuaternion(0, 0, 0, 0),
-	}
-	player.BoundingBox = common.GetBoundingBoxFromPositionSizeV(camera.Target, player.Size)
-	return player
-}
-
-// FIXME: Remove this or bring the one from NewPlayer here
-func InitPlayer(player *Player, camera rl.Camera3D) {
-	*player = NewPlayer(camera)
-}
-
 // FIXME: This has File i/o logic.. Should use resources loaded common to load models apriori
 func SetupPlayerModel() {
 	var mu sync.Mutex
 
 	mu.Lock()
 	defer mu.Unlock()
-
-	playerModel = common.Model.OBJ.CharacterHuman
-	rl.SetMaterialTexture(playerModel.Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
 
 	// Load gltf model
 	// See https://www.raylib.com/examples/models/loader.html?name=models_bone_socket
@@ -281,19 +318,9 @@ func (p *Player) Update(camera rl.Camera3D, flr floor.Floor) {
 }
 
 func (p Player) Draw() {
-	if false {
-		rl.DrawModelEx(playerModel,
-			rl.NewVector3(p.Position.X, p.Position.Y-p.Size.Y/2, p.Position.Z),
-			rl.NewVector3(0, 1, 0), 0.0,
-			rl.NewVector3(1., common.InvPhi, 1.), rl.White)
-		rl.DrawCapsule(
-			rl.Vector3Add(p.Position, rl.NewVector3(0, p.Size.Y/8, 0)),
-			rl.Vector3Add(p.Position, rl.NewVector3(0, -p.Size.Y/4, 0)),
-			p.Size.X/2, 8, 8, playerColor)
-	} else {
-		// Draw character and equipments
-		rl.PushMatrix()
-
+	// Draw character and equipments
+	rl.PushMatrix()
+	{
 		const scaleToReduceBy = 3.
 		const cameraTargetPlayerCenterYOffset = .5
 
@@ -346,13 +373,15 @@ func (p Player) Draw() {
 			// Draw mesh at socket position with socket angle rotation
 			rl.DrawMesh(equippedModels[i].GetMeshes()[0], equippedModels[i].GetMaterials()[1], matrixTransform)
 		}
-
-		rl.PopMatrix()
 	}
+	rl.PopMatrix()
 
 	// Debug
-	if true {
+	if false {
 		size := rl.Vector3Scale(p.Size, .5)
+
+		// Debug player color near player's feet
+		rl.DrawCubeV(rl.Vector3Subtract(p.Position, rl.NewVector3(0., p.Size.Y, 0.)), p.Size, rl.Fade(playerColor, .3))
 
 		if p.Collisions.X != 0 {
 			pos := p.Position
@@ -385,7 +414,7 @@ func (p Player) Draw() {
 
 func ToggleEquippedModels(values [MaxBoneSockets]bool) {
 	var mu sync.Mutex
-	
+
 	mu.Lock()
 	defer mu.Unlock()
 

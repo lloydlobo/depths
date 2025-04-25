@@ -63,6 +63,9 @@ func Run() {
 
 	rl.InitAudioDevice()
 
+	// Assume user picked slot 1 out of slots 1,2,3
+	common.SavedgameSlotData = *common.Must(common.LoadSavegameSlot(1))
+
 	// Load common assets once
 	common.Font.Primary = rl.GetFontDefault()
 	common.Font.Secondary = rl.LoadFont("res/mecha.png")
@@ -132,7 +135,7 @@ func Run() {
 		}
 	}
 
-	common.Model.OBJ = model.LoadAssetModelOBJ()
+	common.ModelDungeonKit.OBJ = model.LoadAssetModelOBJ()
 
 	if shouldBeArchived := true; !shouldBeArchived {
 		common.Texture.CubicmapAtlas = rl.LoadTexture(filepath.Join("res", "texture", "cubicmap_atlas.png"))
@@ -444,7 +447,9 @@ func UpdateDrawFrame() {
 		DrawTransition()
 	}
 
-	rl.DrawFPS(10, 10)
+	if false {
+		rl.DrawFPS(10, 10)
+	}
 
 	rl.EndDrawing()
 	// -----------------------------------------------------------------------------

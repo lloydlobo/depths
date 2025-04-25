@@ -1,0 +1,11 @@
+{
+	"version": "0.0.0",
+	"slotID": 1,
+	"allLevelIDS": [1,2,3,4,5],
+	"unlockedLevelIDS": [1],
+	"currentLevelID": 1,
+	"money": 1000,
+	"experience": 0,
+	"modifiedAt": "2006-01-02T15:04:05Z",
+	"createdAt": "2006-01-02T15:04:05Z"
+}

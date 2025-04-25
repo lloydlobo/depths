@@ -5,11 +5,14 @@ import (
 	"cmp"
 	"encoding/json"
 	"fmt"
+	"image/color"
 	"log"
 	"log/slog"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -19,6 +22,7 @@ import (
 	"example/depths/internal/floor"
 	"example/depths/internal/player"
 	"example/depths/internal/storage"
+	"example/depths/internal/util/mathutil"
 	"example/depths/internal/wall"
 )
 
@@ -28,18 +32,28 @@ var (
 	finishScreen  int
 	framesCounter int32
 
-	levelID                int32
 	camera                 rl.Camera3D
-	gameFloor              floor.Floor
-	gamePlayer             player.Player
+	xFloor                 floor.Floor
+	xPlayer                player.Player
 	hasPlayerLeftDrillBase bool
-
-	hitCount int32
-	hitScore int32
 
 	// Additional data
 
 	blocks []block.Block
+)
+
+var (
+	// NOTE: AVOID using common.SavedgameSlotData.CurrentLevelID as reference
+	// directly.. We must init levelID with it to maintain consistency for now
+	levelID int32
+
+	// Game stats
+
+	hitCount int32
+	hitScore int32
+
+	money      int32
+	experience int32
 )
 
 var (
@@ -57,6 +71,12 @@ var (
 func Init() {
 	framesCounter = 0
 	finishScreen = 0
+
+	levelID = int32(common.SavedgameSlotData.CurrentLevelID)
+	if levelID == 0 {
+		panic("unexpected levelID")
+	}
+
 	camera = rl.Camera3D{
 		Position:   rl.NewVector3(0., 10., 10.),
 		Target:     rl.NewVector3(0., .5, 0.),
@@ -72,7 +92,7 @@ func Init() {
 	// Prefers loading data from saved game files if any, else generates new data.
 	//
 	// If new game flag is turned on, generates new game.
-	loadNewCoreData := func() {
+	loadNewEntityData := func() {
 		var mu sync.Mutex
 
 		mu.Lock()
@@ -81,17 +101,14 @@ func Init() {
 		finishScreen = 0
 		framesCounter = 0
 
-		// Order is maybe important
-		player.InitPlayer(&gamePlayer, camera)
-		gameFloor = floor.NewFloor(
-			common.Vector3Zero,
-			rl.NewVector3(16*2, 0.001*2, 9*2)) // floor.InitFloor(&gameFloor)
-		wall.InitWall() // NOTE: Empty func for convention
+		// Order could be important
+		player.InitPlayer(&xPlayer, camera)
+		xFloor = floor.NewFloor(common.Vector3Zero, rl.NewVector3(16*2, 0.001*2, 9*2)) // 16:9 ratio // floor.InitFloor(&gameFloor)
+		wall.InitWall()                                                                // NOTE: Empty func for convention
 
 		hasPlayerLeftDrillBase = false
-		gamePlayer.IsPlayerWallCollision = false
+		xPlayer.IsPlayerWallCollision = false
 	}
-
 	loadNewAdditionalData := func() {
 		var mu sync.Mutex
 
@@ -99,41 +116,50 @@ func Init() {
 		defer mu.Unlock()
 
 		blocks = []block.Block{} // Clear
-		block.InitBlocks(&blocks, block.GenerateRandomBlockPositions(gameFloor))
+		block.InitBlocks(&blocks, block.GenerateRandomBlockPositions(xFloor))
+	}
+	loadNewLogicData := func() {
+		var mu sync.Mutex
+
+		mu.Lock()
+		defer mu.Unlock()
+
+		money = 1000
+		experience = 0
+		hitCount = 0
+		hitScore = 0
 	}
 
 	const isNewGame = false
 
 	// Core resources
 	floor.SetupFloorModel()
-	wall.SetupWallModel()
+	wall.SetupWallModel(common.OpenWorldRoom)
 	player.SetupPlayerModel() // FIXME: in this func, use package common for models
 	player.ToggleEquippedModels([player.MaxBoneSockets]bool{false, true, true})
 
 	// Core data
 	if !isNewGame {
-		data, err := loadCoreGameData()
+		data, err := loadGameEntityData()
 		if err == nil { // OK
 			finishScreen = 0
 			framesCounter = 0
 			camera = data.Camera
-			gameFloor = data.GameFloor
-			gamePlayer = data.GamePlayer
-			hitScore = data.HitScore
-			hitCount = data.HitCount
-			if false {
-				hasPlayerLeftDrillBase = data.HasPlayerLeftDrillBase
+			xFloor = data.XFloor
+			xPlayer = data.XPlayer
+			if true {
+				hasPlayerLeftDrillBase = data.HasPlayerLeftDrillBase // If save game when far from drill and exit -> this will tell the reality
 			} else {
-				hasPlayerLeftDrillBase = false
+				hasPlayerLeftDrillBase = false // How do we know?
 			}
-			gamePlayer.IsPlayerWallCollision = false
-			saveCoreLevelState() // Save ASAP
+			xPlayer.IsPlayerWallCollision = false
+			saveGameEntityData() // Save ASAP
 		} else { // ERR
 			slog.Warn(err.Error())
-			loadNewCoreData()
+			loadNewEntityData()
 		}
 	} else {
-		loadNewCoreData()
+		loadNewEntityData()
 	}
 
 	// Additional resources
@@ -150,13 +176,30 @@ func Init() {
 			} else {
 				log.Panic("Incorrect saved file. Please delete it")
 			}
-			saveAdditionalLevelState() // Save ASAP
+			saveGameAdditionalData() // Save ASAP
 		} else { // ERR
 			slog.Warn(err.Error())
 			loadNewAdditionalData()
 		}
 	} else {
 		loadNewAdditionalData()
+	}
+
+	if !isNewGame {
+		data, err := loadGameLogicData()
+		if err == nil { // OK
+			money = data.Money
+			experience = data.Experience
+			hitCount = data.HitCount
+			hitScore = data.HitScore
+			fmt.Printf("data: %v\n", data)
+			saveGameLogicData() // Save ASAP
+		} else { // ERR
+			slog.Warn(err.Error())
+			loadNewLogicData()
+		}
+	} else {
+		loadNewLogicData()
 	}
 
 	{
@@ -213,32 +256,26 @@ func Init() {
 func Update() {
 	rl.UpdateMusicStream(currentMusic)
 
-	// Press enter or tap to change to ending game screen
-	if rl.IsKeyDown(rl.KeyF10) || rl.IsGestureDetected(rl.GesturePinchOut) {
-		finishScreen = 1 // 1=>ending
-		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "rollover3.ogg")))
-		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "switch33.ogg")))
-		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", "confirmation_001.ogg")))
-	}
-
-	if rl.IsKeyDown(rl.KeyF) {
-		log.Println("[F] Picked up item")
-	}
-
 	// Save variables this frame
 	oldCam := camera
-	oldPlayer := gamePlayer
+	oldPlayer := xPlayer
 
 	// Reset flags/variables
-	gamePlayer.Collisions = rl.Quaternion{}
-	gamePlayer.IsPlayerWallCollision = false
+	xPlayer.Collisions = rl.Quaternion{}
+	xPlayer.IsPlayerWallCollision = false
 
+	// Update the game camera for this screen
 	rl.UpdateCamera(&camera, rl.CameraThirdPerson)
 
-	gamePlayer.Update(camera, gameFloor)
+	// Reset camera yaw(y-axis)/roll(z-axis) (on key [W] or [E])
+	if got, want := camera.Up, (rl.Vector3{X: 0., Y: 1., Z: 0.}); !rl.Vector3Equals(got, want) {
+		camera.Up = want
+	}
 
-	if gamePlayer.IsPlayerWallCollision {
-		player.RevertPlayerAndCameraPositions(&gamePlayer, oldPlayer, &camera, oldCam)
+	xPlayer.Update(camera, xFloor)
+
+	if xPlayer.IsPlayerWallCollision {
+		player.RevertPlayerAndCameraPositions(&xPlayer, oldPlayer, &camera, oldCam)
 	}
 
 	for i := range blocks {
@@ -248,38 +285,38 @@ func Update() {
 		}
 		if rl.CheckCollisionBoxes(
 			common.GetBoundingBoxFromPositionSizeV(blocks[i].Pos, blocks[i].Size),
-			gamePlayer.BoundingBox,
+			xPlayer.BoundingBox,
 		) {
 			// FIND OUT WHERE PLAYER TOUCHED THE BOX
 			// HACK
 			//		HACK
 			//			HACK
-			gamePlayer.Collisions.Z = 1
-			dx := oldPlayer.Position.X - gamePlayer.Position.X
+			xPlayer.Collisions.Z = 1
+			dx := oldPlayer.Position.X - xPlayer.Position.X
 			if dx < 0.0 { // new <- old
-				gamePlayer.Collisions.X = 1
+				xPlayer.Collisions.X = 1
 			} else if dx > 0.0 { // new -> old
-				gamePlayer.Collisions.X = -1
+				xPlayer.Collisions.X = -1
 			} else {
-				if gamePlayer.Collisions.X != 0 { // Placeholder (do not overwrite previous)
-					gamePlayer.Collisions.X = 0
+				if xPlayer.Collisions.X != 0 { // Placeholder (do not overwrite previous)
+					xPlayer.Collisions.X = 0
 				}
 			}
-			dz := oldPlayer.Position.Z - gamePlayer.Position.Z
+			dz := oldPlayer.Position.Z - xPlayer.Position.Z
 			if dz < 0.0 { // new <- old
-				gamePlayer.Collisions.Z = 1
+				xPlayer.Collisions.Z = 1
 			} else if dz > 0.0 { // new -> old
-				gamePlayer.Collisions.Z = -1
+				xPlayer.Collisions.Z = -1
 			} else {
-				if gamePlayer.Collisions.Z != 0 { // Placeholder (do not overwrite previous)
-					gamePlayer.Collisions.Z = 0
+				if xPlayer.Collisions.Z != 0 { // Placeholder (do not overwrite previous)
+					xPlayer.Collisions.Z = 0
 				}
 			}
 			//			HACK
 			//		HACK
 			// HACK
 
-			player.RevertPlayerAndCameraPositions(&gamePlayer, oldPlayer, &camera, oldCam)
+			player.RevertPlayerAndCameraPositions(&xPlayer, oldPlayer, &camera, oldCam)
 
 			// Trigger once while mining
 			if (rl.IsKeyDown(rl.KeySpace) && framesCounter%16 == 0) ||
@@ -329,13 +366,22 @@ func Update() {
 
 				// Update stats
 				hitCount++
+
 				const finalState = (block.MaxBlockState - 1)
-				if state == finalState-1 {
+				canIncrementScore := state == finalState-1
+
+				if canIncrementScore {
 					hitScore++
+					xPlayer.CargoCapacity = min(xPlayer.MaxCargoCapacity, xPlayer.CargoCapacity+1)
+
 					// FIXME: Record.. hitCount and hitScore to save game.. and load and update directly
 					if hitCount/hitScore != int32(finalState) {
 						msg := fmt.Sprintf("expect for %d hits, score to incrementby 1. (except if counter started from an already semi-mined block)", finalState)
-						slog.Warn(msg)
+						if isEnablePerfectionist := false; isEnablePerfectionist {
+							panic(msg)
+						} else {
+							slog.Warn(msg)
+						}
 					}
 				}
 				// Increment state on successful mining action
@@ -346,69 +392,90 @@ func Update() {
 
 	// Update player─block collision+breaking/mining
 	{
-		origin := common.Vector3Zero
+		origin := xFloor.Position
 		bb1 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(3, 2, 3)) // player is inside
 		bb2 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(5, 2, 5)) // player is entering
 		bb3 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(7, 2, 7)) // bot barrier
+		isPlayerInsideBase := rl.CheckCollisionBoxes(xPlayer.BoundingBox, bb1)
+		isPlayerEnteringBase := rl.CheckCollisionBoxes(xPlayer.BoundingBox, bb2)
+		isPlayerInsideBotBarrier := rl.CheckCollisionBoxes(xPlayer.BoundingBox, bb3)
 
-		isPlayerInsideBase := rl.CheckCollisionBoxes(gamePlayer.BoundingBox, bb1)
-		isPlayerEnteringBase := rl.CheckCollisionBoxes(gamePlayer.BoundingBox, bb2)
-		isPlayerInsideBotBarrier := rl.CheckCollisionBoxes(gamePlayer.BoundingBox, bb3)
+		canSwitchToDrillRoom := false
 
 		if isPlayerInsideBotBarrier && !isPlayerEnteringBase && !isPlayerInsideBase {
 			player.SetColor(rl.Blue)
 		} else if isPlayerEnteringBase && !isPlayerInsideBase {
-			if hasPlayerLeftDrillBase { // HACK: Placeholder change scene check logic
-				hasPlayerLeftDrillBase = false
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				// TODO
-				finishScreen = 2 // 1=>ending 2=>drillroom
-
-				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("footstep0%d.ogg", rl.GetRandomValue(0, 9))))) // 05
-				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "metalClick.ogg")))                                        // metalClick
-				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("creak%d.ogg", rl.GetRandomValue(1, 3)))))     // 3
-				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("doorOpen_%d.ogg", rl.GetRandomValue(1, 2))))) // 2
-			}
 			player.SetColor(rl.Green)
+
+			if hasPlayerLeftDrillBase { // STEP [2] ─ Wait a frame before switching // Avoid glitches (also quick dodge to not-exit)
+				hasPlayerLeftDrillBase = false
+				canSwitchToDrillRoom = true // Actual work done here
+			}
 		} else if isPlayerInsideBase {
 			player.SetColor(rl.Red)
-		} else {
+		} else { // => is outside bounds check
+			player.SetColor(rl.RayWhite) // How to check non-binary logic.. more options.. unlike drill room
+			// - RESET FLAG as soon as player leaves bounds check
+			// - This is useful when player spawns near the drill room.
+			// - This avoids re-entering drill base Immediately.
 			if !hasPlayerLeftDrillBase {
-				hasPlayerLeftDrillBase = true
+				hasPlayerLeftDrillBase = true // STEP [1]
 			}
-			player.SetColor(rl.RayWhite)
+		}
+
+		// Do not allow entry till cargo capacity is full.. This is temporary.. to quickly develop a simple gameloop.
+		// Later we add transactions and resource conversions
+		if __IS_TEMPORARY__ := true; __IS_TEMPORARY__ {
+			if canSwitchToDrillRoom {
+				slog.Warn("OVERIDING ENTRY TO DRILL ROOM. (TEMPORARY)")
+				canSwitchToDrillRoom = hitScore >= xPlayer.MaxCargoCapacity
+			}
+		}
+
+		// - (gameplay ) saveScore?
+		// - (common   )   how much resource is required to drill to next level
+		// - (drillroom) how will you handle modifying currentLevelID in gamesave/slot/1.json?
+		// - (drillroom) what decides
+		// - Are we drilling asteroids in space?
+		//	- Draw a protection barrier over the scene (like a firmament)
+		if canSwitchToDrillRoom {
+			// Play entry sounds
+			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("footstep0%d.ogg", rl.GetRandomValue(0, 9))))) // 05
+			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "metalClick.ogg")))                                        // metalClick
+			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("creak%d.ogg", rl.GetRandomValue(1, 3)))))     // 3
+			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("doorOpen_%d.ogg", rl.GetRandomValue(1, 2))))) // 2
+
+			// Save screen state
+			finishScreen = 2                      // 1=>ending 2=>drillroom
+			camera.Up = rl.NewVector3(0., 1., 0.) // Reset yaw/pitch/roll
+			saveGameEntityData()                  // (player,camera,...) 705 bytes
+			saveGameAdditionalData()              // (blocks,...)        82871 bytes
+			saveGameLogicData()
 		}
 	}
 
-	// Move this in package player
+	// Press enter or tap to change to ending game screen
+	if rl.IsKeyDown(rl.KeyF10) || rl.IsGestureDetected(rl.GesturePinchOut) {
+		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "rollover3.ogg")))
+		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "switch33.ogg")))
+		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", "confirmation_001.ogg")))
+
+		// Save screen state
+		finishScreen = 1                      // 1=>ending 2=>drillroom
+		camera.Up = rl.NewVector3(0., 1., 0.) // Reset yaw/pitch/roll
+		saveGameEntityData()                  // (player,camera,...) 705 bytes
+		saveGameAdditionalData()              // (blocks,...)        82871 bytes
+		saveGameLogicData()
+	}
+
+	// TODO: Move this in package player (if possible)
 	if rl.IsKeyDown(rl.KeyW) || rl.IsKeyDown(rl.KeyA) || rl.IsKeyDown(rl.KeyS) || rl.IsKeyDown(rl.KeyD) {
 		const fps = 60.0
 		const framesInterval = fps / 2.5
 		if framesCounter%int32(framesInterval) == 0 {
-			if !rl.Vector3Equals(oldPlayer.Position, gamePlayer.Position) &&
-				rl.Vector3Distance(oldCam.Position, gamePlayer.Position) > 1.0 &&
-				(gamePlayer.Collisions.X == 0 && gamePlayer.Collisions.Z == 0) {
+			if !rl.Vector3Equals(oldPlayer.Position, xPlayer.Position) &&
+				rl.Vector3Distance(oldCam.Position, xPlayer.Position) > 1.0 &&
+				(xPlayer.Collisions.X == 0 && xPlayer.Collisions.Z == 0) {
 				rl.PlaySound(common.FXS.FootStepsConcrete[int(framesCounter)%len(common.FXS.FootStepsConcrete)])
 			}
 		}
@@ -425,28 +492,74 @@ func Draw() {
 	// 3D World
 	rl.BeginMode3D(camera)
 
-	rl.ClearBackground(rl.RayWhite)
-
-	gameFloor.Draw()
+	rl.ClearBackground(rl.Black)
 
 	if false { // ‥ Draw pseudo-infinite(ish) floor backdrop
 		rl.DrawModel(checkedModel, rl.NewVector3(0., -.05, 0.), 1., rl.RayWhite)
 	}
 
-	wall.DrawBatch(gameFloor.Position, gameFloor.Size, common.Vector3One)
+	xFloor.Draw()
 
-	for i := range blocks {
-		blocks[i].Draw()
+	wall.DrawBatch(common.OpenWorldRoom, xFloor.Position, xFloor.Size, common.Vector3One)
+
+	{
+		type BlockResourceType uint8
+		const (
+			DefaultBlockResource BlockResourceType = iota
+			CopperBlockResource
+			SilverBlockResource
+			GoldBlockResource
+		)
+		drawSpecialBlock := func(block block.Block, typ BlockResourceType) {
+			var col color.RGBA
+			switch typ {
+			case CopperBlockResource:
+				col = rl.DarkPurple
+			case SilverBlockResource:
+				col = rl.Maroon
+			case GoldBlockResource:
+				col = rl.Orange
+			default:
+				panic(fmt.Sprintf("unexpected gameplay.BlockResourceType: %#v", typ))
+			}
+			if true {
+				rl.DrawSphereWires(block.Pos, -.0625+common.InvPhi*rl.Vector3Length(block.Size)/math.Pi, 8, 8, rl.Fade(col, .35))
+			} else {
+				rl.DrawCapsuleWires(
+					rl.Vector3Add(block.Pos, rl.NewVector3(.0625, block.Size.Y/2, .0625)),
+					rl.Vector3Subtract(block.Pos, rl.NewVector3(.0625, block.Size.Y/4, .0625)),
+					-.0625+common.InvPhi*rl.Vector3Length(block.Size)/math.Pi,
+					2, 2, rl.Fade(col, .1))
+			}
+		}
+
+		rl.BeginBlendMode(rl.BlendAlphaPremultiply) // For special block
+
+		for i := range blocks {
+			blocks[i].Draw()
+
+			if false {
+				if i%11 == 0 && blocks[i].IsActive && blocks[i].State != block.MaxBlockState-1 {
+					drawSpecialBlock(blocks[i], CopperBlockResource)
+				} else if i%13 == 0 && blocks[i].IsActive && blocks[i].State != block.MaxBlockState-1 {
+					drawSpecialBlock(blocks[i], SilverBlockResource)
+				} else if i%23 == 0 && blocks[i].IsActive && blocks[i].State != block.MaxBlockState-1 {
+					drawSpecialBlock(blocks[i], GoldBlockResource)
+				}
+			}
+		}
+
+		rl.EndBlendMode()
 	}
 
-	gamePlayer.Draw()
-	{ // ‥ Draw player to camera forward projected direction ray & area blob/blurb
+	xPlayer.Draw()
+	if false { // ‥ Draw player to camera forward projected direction ray & area blob/blurb
 		const maxRays = float32(8. * 2)
 		const rayGapFactor = 16 * maxRays
 		rayCol := rl.Fade(rl.Yellow, .3)
-		startPos := gamePlayer.Position // NOTE: startPos.Y and endPos.Y may fluctuate
+		startPos := xPlayer.Position // NOTE: startPos.Y and endPos.Y may fluctuate
 		endPos := rl.Vector3Add(
-			gamePlayer.Position,
+			xPlayer.Position,
 			rl.Vector3Multiply(
 				rl.GetCameraForward(&camera),
 				rl.NewVector3(9., .125/2., 9.),
@@ -461,25 +574,25 @@ func Draw() {
 		rl.DrawCapsule(startPos, endPos, 2, 7, 7, rl.Fade(rl.Gray, .125/2)) // Draw forward movement lookahead area
 	}
 
-	{ // ‥ Draw drill
+	{ // ‥ Draw drillroom entry
 		const maxIndex = 2
 		wallScale := rl.NewVector3(1., 1., 1.)
 		for i := float32(-maxIndex + 1); i < maxIndex; i++ {
 			var model rl.Model
 			var y float32
-			model = common.Model.OBJ.Column
+			model = common.ModelDungeonKit.OBJ.Column
 			y = 0.
 			rl.DrawModelEx(model, rl.NewVector3(i, y, maxIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
 			rl.DrawModelEx(model, rl.NewVector3(i, y, -maxIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
 			rl.DrawModelEx(model, rl.NewVector3(maxIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
 			rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
-			model = common.Model.OBJ.Wall
+			model = common.ModelDungeonKit.OBJ.Wall
 			y = 1. + .125*.5
 			rl.DrawModelEx(model, rl.NewVector3(i, y, maxIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
 			rl.DrawModelEx(model, rl.NewVector3(i, y, -maxIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
 			rl.DrawModelEx(model, rl.NewVector3(maxIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
 			rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
-			model = common.Model.OBJ.Column
+			model = common.ModelDungeonKit.OBJ.Column
 			y = 2. + .125*.5
 			rl.DrawModelEx(model, rl.NewVector3(i, y, maxIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
 			rl.DrawModelEx(model, rl.NewVector3(i, y, -maxIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
@@ -489,48 +602,120 @@ func Draw() {
 
 		if false { // ‥ DEBUG: Draw drill door gate entry logic before changing scene to drill base
 			origin := common.Vector3Zero
+			origin = xFloor.Position
 			bb1 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(3, 2, 3)) // player is inside
 			bb2 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(5, 2, 5)) // player is entering
 			bb3 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(7, 2, 7)) // bot barrier
-
 			rl.DrawBoundingBox(bb1, rl.Red)
 			rl.DrawBoundingBox(bb2, rl.Green)
 			rl.DrawBoundingBox(bb3, rl.Blue)
 		}
 	}
 
-	if true { // ‥ Draw banners at floor corners
-		floorBBMin := gameFloor.BoundingBox.Min
-		floorBBMax := gameFloor.BoundingBox.Max
-		rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMin.X+1, 0, floorBBMin.Z+1), common.YAxis, 45, common.Vector3One, rl.White)  // leftback
-		rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMax.X-1, 0, floorBBMin.Z+1), common.YAxis, -45, common.Vector3One, rl.White) // rightback
-		rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMax.X, 0, floorBBMax.Z), common.YAxis, 45, common.Vector3One, rl.White)      // rightfront
-		rl.DrawModelEx(common.Model.OBJ.Banner, rl.NewVector3(floorBBMin.X, 0, floorBBMax.Z), common.YAxis, -45, common.Vector3One, rl.White)     // leftfront
-	}
-
-	if false { //  ‥ DEBUG: Draw camera movement gimble-like interpretation
-		var cameraViewMatrix rl.Matrix = rl.GetCameraMatrix(camera)
-		var quat rl.Quaternion = rl.QuaternionFromMatrix(cameraViewMatrix)
-		quatEulerPos := rl.QuaternionToEuler(quat)
-		quatEulerLen := rl.Vector3Length(quatEulerPos)
-		originOffset := rl.NewVector3(0., 5., 0.)
-		position := rl.Vector3Add(quatEulerPos, originOffset)
-		rl.DrawCubeWiresV(position, rl.NewVector3(.125, quatEulerLen, .125), rl.Violet)
-		rl.DrawCubeWiresV(position, quatEulerPos, rl.Purple)
+	if false { // ‥ Draw banners at floor corners
+		floorBBMin := xFloor.BoundingBox.Min
+		floorBBMax := xFloor.BoundingBox.Max
+		rl.DrawModelEx(common.ModelDungeonKit.OBJ.Banner, rl.NewVector3(floorBBMin.X+1, 0, floorBBMin.Z+1), common.YAxis, 45, common.Vector3One, rl.White)  // leftback
+		rl.DrawModelEx(common.ModelDungeonKit.OBJ.Banner, rl.NewVector3(floorBBMax.X-1, 0, floorBBMin.Z+1), common.YAxis, -45, common.Vector3One, rl.White) // rightback
+		rl.DrawModelEx(common.ModelDungeonKit.OBJ.Banner, rl.NewVector3(floorBBMax.X, 0, floorBBMax.Z), common.YAxis, 45, common.Vector3One, rl.White)      // rightfront
+		rl.DrawModelEx(common.ModelDungeonKit.OBJ.Banner, rl.NewVector3(floorBBMin.X, 0, floorBBMax.Z), common.YAxis, -45, common.Vector3One, rl.White)     // leftfront
 	}
 
 	rl.EndMode3D()
 
 	// 2D World
-	fontSize := float32(common.Font.Primary.BaseSize) * 3.0
-	text := "[F] PICK UP"
-	rl.DrawFPS(10, 10)
-	rl.DrawText(text, screenW/2-rl.MeasureText(text, 20)/2, screenH-20*2, 20, rl.White)
-	rl.DrawTextEx(common.Font.Primary, fmt.Sprintf("%.6f", rl.GetFrameTime()), rl.NewVector2(10, 10+20*1), fontSize*2./3., 1, rl.Lime)
+
+	// Draw depth meter
 	{
+		const gapX = 10
+		totalLevels := len(common.SavedgameSlotData.AllLevelIDS)
+		var (
+			isShowText bool
+		)
+		if rl.IsKeyDown(rl.KeyApostrophe) {
+			isShowText = true
+		}
+		gapY := int32(mathutil.CeilF(float32(screenH) / float32(totalLevels))) // parts
+		rl.DrawLine(screenW-gapX, gapY/2, screenW-gapX, screenH-gapY/2, rl.Gray)
+		for i := range int32(totalLevels) {
+			x := screenW - gapX
+			y := gapY/2 + i*gapY
+			rl.DrawLine(x, y, x-gapX/2, y, rl.Gray)
+			radius := float32(4)
+			if (i + 1) == levelID {
+				col := rl.Orange
+				if isShowText {
+					col = rl.Red
+				}
+				rl.DrawCircle(x-int32(radius*2.5), y, radius, col)
+			}
+			if isShowText {
+				rl.DrawText(fmt.Sprintf("%.2d", i+1), x-gapX*2-int32(radius*2), y-5, 10, rl.LightGray)
+			}
+		}
+	}
+
+	fontSize := float32(common.Font.Primary.BaseSize) * 3.0
+
+	// Player stats: health / money / experience
+	{
+		const marginX = 20
+		const marginY = 10
+		if false { // UNIMPLEMENTED HEATLH
+			rl.DrawTextEx(common.Font.Primary, fmt.Sprintf("%.0f",
+				100*xPlayer.Health), rl.NewVector2(marginX, marginY+20*1),
+				fontSize*2./3., 1, rl.Red)
+		}
+		const radius = 20
+		const marginLeft = marginX * 2 / 3
+		cargoRatio := (float32(xPlayer.CargoCapacity) / float32(xPlayer.MaxCargoCapacity))
+		circlePos := rl.NewVector2(marginLeft+radius, marginY+20*3+radius)
+		if cargoRatio >= 1. {
+			rl.DrawCircleGradient(int32(circlePos.X), int32(circlePos.Y), radius+3, rl.White, rl.Fade(rl.White, .1))
+		}
+		circleCutoutRec := rl.NewRectangle(marginLeft+radius/2., marginY+20*3+radius/2., radius, radius)
+		rl.DrawRectangleRoundedLinesEx(circleCutoutRec, 1., 16, 0.5+radius/2., rl.DarkGray)
+		rl.DrawCircleSector(circlePos, radius, -90, -90+360*cargoRatio, 16, rl.Gold)
+		rl.DrawCircleV(circlePos, radius/2, rl.Fade(rl.Gold, cargoRatio))
+		// Glass Half-Empty
+		rl.DrawCircleV(circlePos, radius*max(.5, (1-cargoRatio)), rl.Fade(rl.Gold, 1.-cargoRatio))
+		rl.DrawCircleV(circlePos, radius*max(.5, (1-cargoRatio)), rl.DarkGray)
+		// Glass Half-Full
+		if cargoRatio >= 0.5 {
+			rl.DrawCircleV(circlePos, radius*cargoRatio, rl.Fade(rl.Gold, 1.0))
+		}
+
+		capacityText := fmt.Sprintf("%d", xPlayer.CargoCapacity)
+		capacityStrLenX := rl.MeasureText(capacityText, int32(fontSize*2./3.))
+		rl.DrawTextEx(common.Font.Primary, capacityText, rl.NewVector2(
+			marginLeft+radius*2+float32(capacityStrLenX/2),
+			marginY+radius/2+20*3-10/2,
+		), fontSize*2./3., 1, rl.White)
+
+		divideText := fmt.Sprintf("%s", strings.Repeat("-", len(capacityText)))
+		divideStrLenX := rl.MeasureText(divideText, int32(fontSize)*2./4.)
+		rl.DrawTextEx(common.Font.Primary, divideText, rl.NewVector2(
+			marginLeft+radius*2+float32(capacityStrLenX)/2+float32(divideStrLenX)/2,
+			marginY+radius/2+20*4-(2*10)/1.5,
+		), fontSize*2./4., 0.0625, rl.Gray)
+
+		rl.DrawTextEx(common.Font.Primary, fmt.Sprintf(" %d", xPlayer.MaxCargoCapacity), rl.NewVector2(
+			marginLeft+radius*2+10,
+			marginY+radius/2+20*4-10/2,
+		), fontSize*2./4., 1, rl.Gray)
+	}
+
+	if false {
+		// Perf
+		rl.DrawFPS(10, screenH-35)
+		rl.DrawTextEx(common.Font.Primary, fmt.Sprintf("%.6f", rl.GetFrameTime()), rl.NewVector2(10, float32(screenH)-35-20*1), fontSize*2./3., 1, rl.Lime)
+		rl.DrawTextEx(common.Font.Primary, fmt.Sprintf("%.3d", framesCounter), rl.NewVector2(10, float32(screenH)-35-20*2), fontSize*2./3., 1, rl.Lime)
+
+		// Debug Score
 		text := fmt.Sprintf("hitScore: %.3d\nhitCount: %.3d\n", hitScore, hitCount)
 		rl.DrawText(text, (screenW-10)-rl.MeasureText(text, 10), screenH-40, 10, rl.Green)
 	}
+
 }
 
 func Unload() {
@@ -544,14 +729,8 @@ func Unload() {
 }
 
 // Gameplay screen should finish?
+// NOTE: This is called each frame in main game loop
 func Finish() int {
-	//
-	// PERF: Find way to reduce size. => Size of "additional level state" is
-	//       117x times size of "core level state"
-	//
-	saveCoreLevelState()       // (player,camera,...) 705 bytes
-	saveAdditionalLevelState() // (blocks,...)        82871 bytes
-
 	return finishScreen
 }
 
@@ -603,54 +782,92 @@ func Finish() int {
 // }
 //
 
-type GameCoreData struct {
+type GameEntityData struct {
+	LevelID int32 `json:"levelID"`
+
 	Camera                 rl.Camera3D   `json:"camera"`
 	FinishScreen           int           `json:"finishScreen"`
 	FramesCounter          int32         `json:"framesCounter"`
-	GameFloor              floor.Floor   `json:"gameFloor"`
-	GamePlayer             player.Player `json:"gamePlayer"`
+	XFloor                 floor.Floor   `json:"xFloor"`
+	XPlayer                player.Player `json:"xPlayer"`
 	HasPlayerLeftDrillBase bool          `json:"hasPlayerLeftDrillBase"`
-	HitScore               int32         `json:"hitScore"`
-	HitCount               int32         `json:"hitCount"`
 }
 
 type GameAdditionalData struct {
+	LevelID int32
+
 	Blocks []block.Block `json:"blocks"`
 }
 
+type GameLogicData struct {
+	LevelID int32
+
+	Money      int32 `json:"money"`
+	Experience int32 `json:"experience"`
+	HitScore   int32 `json:"hitScore"`
+	HitCount   int32 `json:"hitCount"`
+}
+
 const (
+	entityGameDataVersionSuffix     = "entity"
 	additionalGameDataVersionSuffix = "additional"
+	logicGameDataVersionSuffix      = "logic"
 )
 
-func saveCoreLevelState() {
-	input := GameCoreData{
-		Camera:                 camera,
-		FinishScreen:           finishScreen,
-		FramesCounter:          framesCounter,
-		GameFloor:              gameFloor,
-		GamePlayer:             gamePlayer,
-		HasPlayerLeftDrillBase: hasPlayerLeftDrillBase,
-		HitScore:               hitScore,
-		HitCount:               hitCount,
+func saveGameLogicData() {
+	const suffix = logicGameDataVersionSuffix
+	input := GameLogicData{
+		LevelID: levelID,
+
+		Money:      1000,
+		Experience: 0,
+		HitScore:   hitScore,
+		HitCount:   hitCount,
 	}
 	var b []byte
 	bb := bytes.NewBuffer(b)
 	{
 		enc := json.NewEncoder(bb)
 		if err := enc.Encode(input); err != nil {
-			panic(fmt.Errorf("encode level: %w", err))
+			panic(fmt.Errorf("encode game %s level data: %w", suffix, err))
 		}
 	}
 	dataJSON := storage.GameStorageLevelJSON{
-		Version: "0.0.0",
+		Version: "0.0.0" + "-" + suffix,
 		LevelID: levelID,
 		Data:    bb.Bytes(),
 	}
-	storage.SaveStorageLevel(dataJSON)
-
+	storage.SaveStorageLevelEx(dataJSON, suffix)
 }
+func saveGameEntityData() {
+	const suffix = entityGameDataVersionSuffix
+	input := GameEntityData{
+		LevelID: levelID,
 
-func saveAdditionalLevelState() {
+		Camera:                 camera,
+		FinishScreen:           finishScreen,
+		FramesCounter:          framesCounter,
+		XFloor:                 xFloor,
+		XPlayer:                xPlayer,
+		HasPlayerLeftDrillBase: hasPlayerLeftDrillBase,
+	}
+	var b []byte
+	bb := bytes.NewBuffer(b)
+	{
+		enc := json.NewEncoder(bb)
+		if err := enc.Encode(input); err != nil {
+			panic(fmt.Errorf("encode game %s level data: %w", suffix, err))
+		}
+	}
+	dataJSON := storage.GameStorageLevelJSON{
+		Version: "0.0.0" + "-" + suffix,
+		LevelID: levelID,
+		Data:    bb.Bytes(),
+	}
+	storage.SaveStorageLevelEx(dataJSON, suffix)
+}
+func saveGameAdditionalData() {
+	const suffix = additionalGameDataVersionSuffix
 	input := GameAdditionalData{
 		Blocks: blocks,
 	}
@@ -659,25 +876,60 @@ func saveAdditionalLevelState() {
 	{
 		enc := json.NewEncoder(bb)
 		if err := enc.Encode(input); err != nil {
-			panic(fmt.Errorf("encode level: %w", err))
+			panic(fmt.Errorf("encode game %s level data: %w", suffix, err))
 		}
 	}
 	data := storage.GameStorageLevelJSON{
-		Version: "0.0.0-" + additionalGameDataVersionSuffix,
+		Version: "0.0.0" + "-" + suffix,
 		LevelID: levelID,
 		Data:    bb.Bytes(),
 	}
-	storage.SaveStorageLevelEx(data, additionalGameDataVersionSuffix)
+	storage.SaveStorageLevelEx(data, suffix)
 }
 
-func loadCoreGameData() (*GameCoreData, error) {
+func loadGameLogicData() (*GameLogicData, error) {
+	const suffix = logicGameDataVersionSuffix
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("get working directory: %w", err)
 	}
 
 	saveDir := filepath.Join(cwd, "storage")
-	name := filepath.Join(saveDir, "level_"+strconv.Itoa(int(levelID))+".json")
+	name := filepath.Join(saveDir, "level_"+strconv.Itoa(int(levelID))+"_"+suffix+".json")
+
+	f, err := os.OpenFile(name, os.O_RDONLY, 0644)
+	if err != nil {
+		return nil, fmt.Errorf("create %q: %w", name, err)
+	}
+
+	dest := &storage.GameStorageLevelJSON{}
+	dec := json.NewDecoder(f)
+	if err := dec.Decode(&dest); err != nil {
+		return nil, fmt.Errorf("decode level: %w", err)
+	}
+
+	switch version := dest.Version; version {
+	case "0.0.0" + "-" + suffix:
+		var v *GameLogicData
+		if err := json.Unmarshal(dest.Data, &v); err != nil {
+			return nil, err
+		}
+		return v, nil
+	default:
+		return nil, fmt.Errorf("invalid game %s data version %q", suffix, version)
+	}
+}
+func loadGameEntityData() (*GameEntityData, error) {
+	const suffix = entityGameDataVersionSuffix
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("get working directory: %w", err)
+	}
+
+	saveDir := filepath.Join(cwd, "storage")
+	name := filepath.Join(saveDir, "level_"+strconv.Itoa(int(levelID))+"_"+suffix+".json")
 
 	f, err := os.OpenFile(name, os.O_RDONLY, 0644)
 	if err != nil {
@@ -692,24 +944,24 @@ func loadCoreGameData() (*GameCoreData, error) {
 	// return dest,nil // => Upto here.. same as storage.LoadStorageLevel
 
 	switch version := dest.Version; version {
-	case "0.0.0":
-		var v *GameCoreData
+	case "0.0.0" + "-" + suffix:
+		var v *GameEntityData
 		err := json.Unmarshal(dest.Data, &v)
 		return v, err
 	default:
-		return nil, fmt.Errorf("invalid game core data version %q", version)
+		return nil, fmt.Errorf("invalid game %s data version %q", suffix, version)
 	}
 }
-
 func loadAdditionalGameData() (*GameAdditionalData, error) {
+	const suffix = additionalGameDataVersionSuffix
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("get working directory: %w", err)
 	}
 
 	saveDir := filepath.Join(cwd, "storage")
-	filename := "level_" + strconv.Itoa(int(levelID)) + "_" + additionalGameDataVersionSuffix + ".json"
-	name := filepath.Join(saveDir, filename)
+	name := filepath.Join(saveDir, "level_"+strconv.Itoa(int(levelID))+"_"+suffix+".json")
 
 	f, err := os.OpenFile(name, os.O_RDONLY, 0644)
 	if err != nil {
@@ -721,17 +973,16 @@ func loadAdditionalGameData() (*GameAdditionalData, error) {
 	if err := dec.Decode(&dest); err != nil {
 		return nil, fmt.Errorf("decode level: %w", err)
 	}
-	// return dest,nil // => Upto here.. same as storage.LoadStorageLevel
 
 	switch version := dest.Version; version {
-	case "0.0.0" + "-" + additionalGameDataVersionSuffix:
+	case "0.0.0" + "-" + suffix:
 		var v *GameAdditionalData
 		if err := json.Unmarshal(dest.Data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
 	default:
-		return nil, fmt.Errorf("invalid game additional data version %q", version)
+		return nil, fmt.Errorf("invalid game %s data version %q", suffix, version)
 	}
 }
 

@@ -43,8 +43,8 @@ func SetupFloorModel() {
 	mu.Lock()
 	defer mu.Unlock()
 
-	floorTileLargeModel = common.Model.OBJ.Floor // Floor,FloorDetail
-	rl.SetMaterialTexture(floorTileLargeModel.Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
+	floorTileLargeModel = common.ModelDungeonKit.OBJ.Floor // Floor,FloorDetail
+	rl.SetMaterialTexture(floorTileLargeModel.Materials, rl.MapDiffuse, common.ModelDungeonKit.OBJ.Colormap)
 }
 
 func (fl Floor) Draw() {
@@ -54,8 +54,10 @@ func (fl Floor) Draw() {
 			rl.DrawModel(floorTileLargeModel, position, 1.0, rl.White)
 		}
 	}
-	rl.DrawBoundingBox(fl.BoundingBox, rl.DarkGray)
 
-	common.DrawXYZOrbitV(rl.Vector3Zero(), 2.)
-	common.DrawWorldXYZAxis()
+	if false { // DEBUG
+		rl.DrawBoundingBox(fl.BoundingBox, rl.DarkGray)
+		common.DrawXYZOrbitV(rl.Vector3Zero(), 2.)
+		common.DrawWorldXYZAxis()
+	}
 }

@@ -89,24 +89,23 @@ func SetupBlockModels() {
 	for i := range MaxBlockState {
 		switch i {
 		case DirtBlockState:
-			blockModels[i] = common.Model.OBJ.Dirt
+			blockModels[i] = common.ModelDungeonKit.OBJ.Dirt
 		case RockBlockState:
-			blockModels[i] = common.Model.OBJ.Rocks
+			blockModels[i] = common.ModelDungeonKit.OBJ.Rocks
 		case StoneBlockState:
-			blockModels[i] = common.Model.OBJ.Stones
+			blockModels[i] = common.ModelDungeonKit.OBJ.Stones
 		case FloorDetailBlockState:
-			blockModels[i] = common.Model.OBJ.FloorDetail
+			blockModels[i] = common.ModelDungeonKit.OBJ.FloorDetail
 		default:
 			panic(fmt.Sprintf("unexpected gameplay.BlockState: %#v", i))
 		}
-		rl.SetMaterialTexture(blockModels[i].Materials, rl.MapDiffuse, common.Model.OBJ.Colormap)
+		rl.SetMaterialTexture(blockModels[i].Materials, rl.MapDiffuse, common.ModelDungeonKit.OBJ.Colormap)
 	}
 }
 
 func (b Block) Draw() {
 	if /* b.State > 0 && */ b.IsActive {
-		rl.DrawModelEx(blockModels[b.State], b.Pos,
-			rl.NewVector3(0, 1, 0), b.Rotn, b.Size, rl.White)
+		rl.DrawModelEx(blockModels[b.State], b.Pos, common.YAxis, b.Rotn, b.Size, rl.White)
 	}
 }
 
