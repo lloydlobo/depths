@@ -236,10 +236,37 @@ func Update() {
 			player.RevertPlayerAndCameraPositions(&playerEntity, oldPlayer, &camera, oldCam)
 		}
 	}
+
+	// Should just use maps or enumerations.. this seems kinda hacky
 	const TriggerBeginDrillingID = 8
 	if isPlayerNearTriggerSensors[TriggerBeginDrillingID] {
 		if rl.IsKeyPressed(rl.KeyF) {
-			panic("[F] works")
+			// TODO: SAVE STATE HERE AND PLAY TRANSITION SOUNDS
+			// - Extend transition time (so drilling seems to take a few more seconds)
+			// - Affect global value of levelID -> via file IO -> savegame/slot/1.json
+
+			// Play exit sounds
+			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("footstep0%d.ogg", rl.GetRandomValue(0, 9)))))
+			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "metalClick.ogg")))
+			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_sci-fi-sounds", "Audio", "forceField_000.ogg")))
+			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_sci-fi-sounds", "Audio", "lowFrequency_explosion_001.ogg")))
+			if true {
+				sound := rl.LoadSound(filepath.Join("res", "fx", "kenney_sci-fi-sounds", "Audio", "engineCircular_000.ogg"))
+				rl.SetSoundVolume(sound, .1)
+				rl.PlaySound(sound)
+				rl.StopSound(sound)
+			}
+			{
+				sound := rl.LoadSound(filepath.Join("res", "fx", "kenney_sci-fi-sounds", "Audio", "explosionCrunch_002.ogg"))
+				rl.SetSoundPitch(sound, .5)
+				rl.SetSoundVolume(sound, .4)
+				rl.PlaySound(sound)
+			}
+
+			// Transition to next level/screen
+			levelID = min(8, levelID+1)
+			finishScreen = 2 // Should increment levelID
+
 		}
 	}
 
@@ -390,7 +417,8 @@ func Draw() {
 
 func Unload() {
 	// TODO: Unload gameplay screen variables here!
-	if isTransToGameScreen := finishScreen == 2; !isTransToGameScreen && rl.IsCursorHidden() {
+	// 1 is ending screen
+	if isTransToGameScreen := finishScreen == 1; !isTransToGameScreen && rl.IsCursorHidden() {
 		rl.EnableCursor() // without 3d ThirdPersonPerspective
 	}
 	// Commented out as it hinders switching to drill room or
