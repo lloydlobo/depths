@@ -512,8 +512,10 @@ func Draw() {
 			fontSize, 1, rl.Fade(rl.Gray, 1.0*alpha))
 	}
 
-	rl.DrawText(fmt.Sprint(rl.GetFrameTime()), 10, 30, 20, rl.Green)
-	rl.DrawText(fmt.Sprint(framesCounter), 10, 50, 20, rl.Green)
+	if false {
+		rl.DrawText(fmt.Sprint(rl.GetFrameTime()), 10, 30, 20, rl.Green)
+		rl.DrawText(fmt.Sprint(framesCounter), 10, 50, 20, rl.Green)
+	}
 }
 
 func Unload() {

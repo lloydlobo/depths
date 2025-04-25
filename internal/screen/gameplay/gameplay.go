@@ -256,10 +256,6 @@ func Init() {
 func Update() {
 	rl.UpdateMusicStream(currentMusic)
 
-	if rl.IsKeyDown(rl.KeyF) {
-		log.Println("[F] Picked up item")
-	}
-
 	// Save variables this frame
 	oldCam := camera
 	oldPlayer := xPlayer
@@ -660,17 +656,16 @@ func Draw() {
 	}
 
 	fontSize := float32(common.Font.Primary.BaseSize) * 3.0
-	text := "[F] PICK UP"
-	rl.DrawText(text, screenW/2-rl.MeasureText(text, 20)/2, screenH-20*2, 20, rl.White)
 
 	// Player stats: health / money / experience
 	{
 		const marginX = 20
 		const marginY = 10
-		rl.DrawTextEx(common.Font.Primary, fmt.Sprintf("%.0f", 100*xPlayer.Health), rl.NewVector2(
-			marginX,
-			marginY+20*1,
-		), fontSize*2./3., 1, rl.Red)
+		if false { // UNIMPLEMENTED HEATLH
+			rl.DrawTextEx(common.Font.Primary, fmt.Sprintf("%.0f",
+				100*xPlayer.Health), rl.NewVector2(marginX, marginY+20*1),
+				fontSize*2./3., 1, rl.Red)
+		}
 		const radius = 20
 		const marginLeft = marginX * 2 / 3
 		cargoRatio := (float32(xPlayer.CargoCapacity) / float32(xPlayer.MaxCargoCapacity))
@@ -710,14 +705,16 @@ func Draw() {
 		), fontSize*2./4., 1, rl.Gray)
 	}
 
-	// Perf
-	rl.DrawFPS(10, screenH-35)
-	rl.DrawTextEx(common.Font.Primary, fmt.Sprintf("%.6f", rl.GetFrameTime()), rl.NewVector2(10, float32(screenH)-35-20*1), fontSize*2./3., 1, rl.Lime)
-	rl.DrawTextEx(common.Font.Primary, fmt.Sprintf("%.3d", framesCounter), rl.NewVector2(10, float32(screenH)-35-20*2), fontSize*2./3., 1, rl.Lime)
+	if false {
+		// Perf
+		rl.DrawFPS(10, screenH-35)
+		rl.DrawTextEx(common.Font.Primary, fmt.Sprintf("%.6f", rl.GetFrameTime()), rl.NewVector2(10, float32(screenH)-35-20*1), fontSize*2./3., 1, rl.Lime)
+		rl.DrawTextEx(common.Font.Primary, fmt.Sprintf("%.3d", framesCounter), rl.NewVector2(10, float32(screenH)-35-20*2), fontSize*2./3., 1, rl.Lime)
 
-	// Debug Score
-	text = fmt.Sprintf("hitScore: %.3d\nhitCount: %.3d\n", hitScore, hitCount)
-	rl.DrawText(text, (screenW-10)-rl.MeasureText(text, 10), screenH-40, 10, rl.Green)
+		// Debug Score
+		text := fmt.Sprintf("hitScore: %.3d\nhitCount: %.3d\n", hitScore, hitCount)
+		rl.DrawText(text, (screenW-10)-rl.MeasureText(text, 10), screenH-40, 10, rl.Green)
+	}
 
 }
 
