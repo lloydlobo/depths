@@ -4,6 +4,7 @@ package game
 import (
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -197,13 +198,26 @@ func Run() {
 	currentScreen = logoGameScreen
 	logo.Init()
 
+	if true {
+		slog.Warn("rl.SetMasterVolume(.2)")
+		rl.SetMasterVolume(.2)
+	}
+
 	if _, ok := os.LookupEnv("PLATFORM_WEB"); ok {
 		// emscripten_set_main_loop(UpdateDrawFrame, 60, 1)
 		log.Printf("env: %v\n", "PLATFORM_WEB")
 	} else {
 		rl.SetTargetFPS(60)
 
+		//
+		//
+		//
+		//
 		// Main game loop
+		//
+		//
+		//
+		//
 		for !rl.WindowShouldClose() {
 			UpdateDrawFrame()
 		}

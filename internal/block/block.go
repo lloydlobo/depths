@@ -69,7 +69,11 @@ func InitBlocks(dst *[]Block, positions []rl.Vector3) {
 			rl.NewVector3(1, 1, 1),
 			rl.NewVector3(
 				float32(rl.GetRandomValue(88, 101))/100.,
-				float32(rl.GetRandomValue(100, 300))/100.,
+				float32(cmp.Or(
+					rl.GetRandomValue(200, 200), // Consistent size--higher than player
+					rl.GetRandomValue(100, 100), // Consistent size--lower than player
+					rl.GetRandomValue(100, 300), // Non-Consistent size
+				)/100.),
 				float32(rl.GetRandomValue(88, 101))/100.))
 
 		obj := NewBlock(positions[i], size)
@@ -104,7 +108,7 @@ func SetupBlockModels() {
 }
 
 func (b Block) Draw() {
-	if /* b.State > 0 && */ b.IsActive {
+	if b.IsActive {
 		rl.DrawModelEx(blockModels[b.State], b.Pos, common.YAxis, b.Rotn, b.Size, rl.White)
 	}
 }

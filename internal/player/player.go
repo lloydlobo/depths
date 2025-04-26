@@ -62,7 +62,8 @@ func NewPlayer(camera rl.Camera3D) Player {
 				levelPrimes = append(levelPrimes, primes[i+1])
 			}
 			// WARN: This panicked as levelIDS are 1 index based, to avoid level 0
-			x := 2 * levelPrimes[int(common.SavedgameSlotData.CurrentLevelID)-1]
+			x := 5 * levelPrimes[int(common.SavedgameSlotData.CurrentLevelID)-1]
+			x = int32(mathutil.RoundEvenF(x))
 			player.MaxCargoCapacity = x
 		}
 	}
@@ -425,6 +426,11 @@ func ToggleEquippedModels(values [MaxBoneSockets]bool) {
 
 // FIXME: Camera gets stuck if player keeps moving into the box.
 // NOTE:  Maybe lerp or free camera if "distance to the box is less" or touching.
+// PERF: https://github.com/raylib-extras/examples-c/blob/6ed2ac244d961239b1695d0b6a729f6fd7bc209b/platformer_motion/platformer.c#L34C1-L147C2
+//
+//	checks a moving rectangle against some static object, stopping them motion based on what side of the static object is hit.
+//	hit booleans return back what part of the object was hit to help with state collisons
+//	void CollideRectWithObject(const Rectangle mover, const Rectangle object, Vector2* motion, bool* hitSide, bool* hitTop, bool* hitBottom)
 func RevertPlayerAndCameraPositions(
 	dstPlayer *Player,
 	srcPlayer Player,
