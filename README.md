@@ -7,6 +7,32 @@ A lone alien searching the depths in the depths of an asteroid hurling in space.
 
 ![screenshot](./static/screenshot/20250426/screenshot002.png)
 
+## Game controls
+
+| Keymap | Description |
+| ------------- | -------------- |
+| WASD                  | Move player |
+| Spacebar/Mouse Left   | Action |
+| F                     | Interact |
+| Arrow Keys/Mouse      | Move camera around |
+| Esc                   | Force quit |
+
+## Install
+
+- Download the executable/binary from the Links > Binary. [Direct link](https://github.com/lloydlobo/depths/releases/tag/v0.1.0-alpha)
+- Create a new folder and call it anything you want, e.g. "game"
+- Move the executable in it
+- Change the access permission. Gives the [u]ser who owns a file the right to e[x]ecute it:
+```shell
+chmod u+x depths
+```
+- Download the `res` and `storage` folder from https://github.com/lloydlobo/depths/archive/refs/heads/master.zip or see the repository itself at https://github.com/lloydlobo/depths
+- Move the `res` and `storage` folders into the newly create `game` directory. Note that it has the executable there already.
+- Go into the `game` folder.
+- Execute the `depths` executable/binary in your terminal with `./depths`, or double click on it.
+
+## About
+
 The game is nowhere near completion, although it has a small demo, to showcase
 a fraction of the core idea.
 
@@ -22,6 +48,9 @@ Thanks to all the artists of the wonderful music included, and to Kenney for the
 License of assets are credited in `res/licenses.md`.
 
 ## Preview
+
+> [!NOTE]
+> Progress so far...
 
 ### Screenrec
 
