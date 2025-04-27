@@ -21,6 +21,7 @@ import (
 	"example/depths/internal/common"
 	"example/depths/internal/floor"
 	"example/depths/internal/player"
+	"example/depths/internal/projectile"
 	"example/depths/internal/storage"
 	"example/depths/internal/util/mathutil"
 	"example/depths/internal/wall"
@@ -45,6 +46,7 @@ var (
 var (
 	_playerRay          rl.Ray
 	_playerRayCollision rl.RayCollision
+	projectiles         projectile.ProjectileSOA
 )
 
 var (
@@ -76,6 +78,9 @@ var (
 func Init() {
 	framesCounter = 0
 	finishScreen = 0
+
+	projectiles.Reset()
+	fmt.Printf("playerProjectiles: %v\n", projectiles)
 
 	levelID = int32(common.SavedgameSlotData.CurrentLevelID)
 	if levelID == 0 {
@@ -261,6 +266,61 @@ func Init() {
 
 func Update() {
 	rl.UpdateMusicStream(currentMusic)
+
+	// Simulate firing OR implement keyspace firing
+	if rl.IsKeyPressed(rl.KeySpace) || rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
+		cameraForward := rl.GetCameraForward(&camera)
+		playerForwardEstimateMagnitude := rl.Vector3{X: 5., Y: .125 / 2., Z: 5.} // HACK: Projection
+		playerReticlePosition := rl.Vector3Multiply(cameraForward, playerForwardEstimateMagnitude)
+
+		// Update and Set ray each frame
+		_playerRay = rl.NewRay(rl.Vector3{X: xPlayer.Position.X, Y: xPlayer.Position.Y + xPlayer.Size.Y/4, Z: xPlayer.Position.Z}, playerReticlePosition)
+		playerForwardAimStartPos := xPlayer.Position // NOTE: startPos.Y and playerForwardAimEndPos.Y may fluctuate
+		playerForwardAimEndPos := rl.Vector3Add(xPlayer.Position, playerReticlePosition)
+
+		if false {
+			projectile.FireEntityProjectile(&projectiles, xPlayer.Position, xPlayer.Size, mathutil.Angle2D(
+				playerForwardAimStartPos.X,
+				playerForwardAimStartPos.Z,
+				playerForwardAimEndPos.X,
+				playerForwardAimEndPos.Z,
+			))
+		} else {
+			// projectile.FireEntityProjectile(&projectiles, xPlayer.Position, xPlayer.Size, float32(xPlayer.Rotation+90))
+			projectile.FireEntityProjectile(&projectiles, xPlayer.Position, xPlayer.Size, float32(xPlayer.Rotation+90))
+		}
+	}
+
+	// See https://github.com/lloydlobo/tinycreatures/blob/210c4a44ed62fbb08b5f003872e046c99e288bb9/src/main.lua#L624
+	for i := range projectile.MaxProjectiles {
+		if !projectiles.IsActive[i] {
+			continue
+		}
+
+		projectiles.TimeLeft[i] -= rl.GetFrameTime()
+		isKillAnim := projectiles.TimeLeft[i] <= 0
+
+		if isKillAnim {
+			projectiles.IsActive[i] = false
+		} else {
+			playerProjectileSpeed := 10 * rl.GetFrameTime()
+
+			angleRad := projectiles.AngleXZPlaneDegree[i] * rl.Deg2rad
+
+			displacement := rl.NewVector3(mathutil.CosF(angleRad)*playerProjectileSpeed, 0, mathutil.SinF(angleRad)*playerProjectileSpeed)
+
+			projectiles.Position[i] = rl.Vector3Add(projectiles.Position[i], displacement)
+
+			pos := projectiles.Position[i]
+
+			isOOBX := pos.X < xFloor.BoundingBox.Min.X || pos.X > xFloor.BoundingBox.Max.X
+			isOOBZ := pos.Z < xFloor.BoundingBox.Min.Z || pos.Z > xFloor.BoundingBox.Max.Z
+
+			if isOOBX || isOOBZ {
+				projectiles.IsActive[i] = false
+			}
+		}
+	}
 
 	// Save variables this frame
 	oldCam := camera
@@ -501,6 +561,35 @@ func Draw() {
 
 	rl.ClearBackground(rl.Black)
 
+	// Draw player fired projectiles
+	for i := range projectile.MaxProjectiles {
+		if !projectiles.IsActive[i] {
+			continue
+		}
+
+		rl.DrawSphere(projectiles.Position[i], .05, rl.Orange)              // Projectile Head
+		rl.DrawSphereWires(projectiles.Position[i], .05, 16, 16, rl.Orange) // Projectile Head
+
+		const maxTrailThick = 0.05 // Radius
+		const maxTrailLength = 3   // Projectile trail
+
+		radius := float32(maxTrailThick * (projectiles.TimeLeft[i] / projectile.MaxTimeLeft))
+		angle := projectiles.AngleXZPlaneDegree[i] * rl.Deg2rad
+
+		// Avoid passing projectile trail through the player body itself when
+		// animation just started
+		trailLength := float32(maxTrailLength)
+		if d := rl.Vector3Distance(xPlayer.Position, projectiles.Position[i]); d < maxTrailLength {
+			trailLength = d
+		}
+
+		currPos := projectiles.Position[i]
+		prevPos := rl.Vector3{X: projectiles.Position[i].X - mathutil.CosF(angle)*trailLength, Y: 0, Z: projectiles.Position[i].Z - mathutil.SinF(angle)*trailLength}
+
+		rl.DrawLine3D(prevPos, currPos, rl.Fade(rl.Orange, .3))
+		rl.DrawCapsule(prevPos, currPos, radius, 16, 16, rl.Fade(rl.Orange, .3))
+	}
+
 	if false { // ‥ Draw pseudo-infinite(ish) floor backdrop
 		rl.DrawModel(checkedModel, rl.NewVector3(0., -.05, 0.), 1., rl.RayWhite)
 	}
@@ -604,6 +693,7 @@ func Draw() {
 	_playerRay = rl.NewRay(rl.Vector3{X: xPlayer.Position.X, Y: xPlayer.Position.Y + xPlayer.Size.Y/4, Z: xPlayer.Position.Z}, playerReticlePosition)
 	playerForwardAimStartPos := xPlayer.Position // NOTE: startPos.Y and playerForwardAimEndPos.Y may fluctuate
 	playerForwardAimEndPos := rl.Vector3Add(xPlayer.Position, playerReticlePosition)
+
 	// ‥ Draw player to camera forward projected direction ray & area blob/blurb
 	if false {
 		const maxRays = float32(8. * 2)

@@ -20,7 +20,7 @@ import (
 type Player struct {
 	Position    rl.Vector3
 	Size        rl.Vector3
-	Rotation    int32
+	Rotation    int32 // FIXME: We are adding 90 degree to adapt to original model's default rotation
 	BoundingBox rl.BoundingBox
 
 	Collisions            rl.Quaternion
