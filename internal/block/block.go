@@ -30,7 +30,7 @@ const (
 )
 
 type Block struct {
-	Pos      rl.Vector3
+	Position rl.Vector3
 	Size     rl.Vector3
 	Rotn     float32
 	Health   float32 // [0..1]
@@ -42,9 +42,22 @@ var (
 	blockModels [MaxBlockState]rl.Model
 )
 
+// WARN: The asset uses a 1:1:1 block but places the bottom at the unit cubes bottom
+func (b *Block) GetBlockBoundingBox() rl.BoundingBox {
+	modelCenterPositionY := (b.Position.Y + b.Size.Y/2)
+	return rl.BoundingBox{
+		Min: rl.Vector3{X: b.Position.X - b.Size.X/2, Y: modelCenterPositionY - b.Size.Y/2, Z: b.Position.Z - b.Size.Z/2},
+		Max: rl.Vector3{X: b.Position.X + b.Size.X/2, Y: modelCenterPositionY + b.Size.Y/2, Z: b.Position.Z + b.Size.Z/2},
+	}
+}
+
+const (
+	blockModelYSize = 1.0
+)
+
 func NewBlock(pos, size rl.Vector3) Block {
 	return Block{
-		Pos:      pos,
+		Position: pos,
 		Size:     size,
 		Rotn:     0.0,
 		State:    DirtBlockState,
@@ -70,12 +83,17 @@ func InitBlocks(dst *[]Block, positions []rl.Vector3) {
 			rl.NewVector3(
 				float32(rl.GetRandomValue(88, 101))/100.,
 				float32(cmp.Or(
-					rl.GetRandomValue(200, 200), // Consistent size--higher than player
-					rl.GetRandomValue(100, 100), // Consistent size--lower than player
-					rl.GetRandomValue(100, 300), // Non-Consistent size
-				)/100.),
+					blockModelYSize,
+					cmp.Or(
+						rl.GetRandomValue(100, 100), // Consistent size--lower than player
+						rl.GetRandomValue(200, 200), // Consistent size--higher than player
+						rl.GetRandomValue(100, 300), // Non-Consistent size
+					)/100.),
+				),
 				float32(rl.GetRandomValue(88, 101))/100.))
 
+		fmt.Printf("positions[i]: %v\n", positions[i])
+		size = common.Vector3One
 		obj := NewBlock(positions[i], size)
 		obj.Rotn = cmp.Or(float32(rl.GetRandomValue(-50, 50)/10.), 0.)
 
@@ -109,7 +127,7 @@ func SetupBlockModels() {
 
 func (b Block) Draw() {
 	if b.IsActive {
-		rl.DrawModelEx(blockModels[b.State], b.Pos, common.YAxis, b.Rotn, b.Size, rl.White)
+		rl.DrawModelEx(blockModels[b.State], b.Position, common.YAxis, b.Rotn, b.Size, rl.White)
 	}
 }
 
@@ -125,7 +143,7 @@ func GenerateRandomBlockPositions(gameFloor floor.Floor) []rl.Vector3 {
 		offX = float32(3)
 		offZ = float32(3)
 	)
-
+	y = gameFloor.Position.Y // gameFloor is a plane
 	var (
 		maxGridCells            = gameFloor.Size.X * gameFloor.Size.Z // just-in-case
 		maxSkipLoopPositionOdds = int32(2)                            // if 2 -> 0,1,2 -> 1/3 odds
@@ -152,7 +170,10 @@ NextCol:
 			if rl.GetRandomValue(0, maxSkipLoopPositionOdds) == 0 {
 				continue NextRow
 			}
-			positions = append(positions, rl.NewVector3(x, y, z))
+			pos := rl.NewVector3(x, y, z)
+			pos = rl.NewVector3(pos.X, pos.Y+blockModelYSize/2., pos.Z)
+			pos = rl.NewVector3(pos.X, pos.Y-blockModelYSize/2., pos.Z)
+			positions = append(positions, pos)
 		}
 	}
 	return positions

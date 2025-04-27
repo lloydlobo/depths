@@ -7,8 +7,9 @@ import (
 )
 
 const (
-	MaxProjectiles                  = int32(64)
-	MaxTimeLeft                     = float32(.8)  // Should decrement time to compare with by dt (i.e. rl.GetFrameTime())
+	MaxProjectiles = int32(64)
+	MaxTimeLeft    = float32(1.0) // 1 second in 60fps. Should decrement time to compare with by dt (i.e. rl.GetFrameTime())
+	// WARN: UNIMPLEMENTED
 	MaxProjectileFireRateTimerLimit = float32(0.1) //  Reduce this to increase fire rate.
 )
 
