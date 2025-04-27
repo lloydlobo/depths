@@ -603,7 +603,7 @@ func Draw() {
 	}
 
 	// Draw ray reticle on block
-	if closestBlockIndex := GetClosestBlockIndexOnRayCollision(); closestBlockIndex > -1 && closestBlockIndex < len(xBlocks) {
+	if closestBlockIndex := GetClosestMiningBlockIndexOnRayCollision(); closestBlockIndex > -1 && closestBlockIndex < len(xBlocks) {
 		collision := rl.GetRayCollisionBox(gPlayerRay, xBlocks[closestBlockIndex].GetBlockBoundingBox())
 		pos := rl.GetWorldToScreen(collision.Point, camera) // Draw a diamond
 		rl.DrawRectanglePro(rl.NewRectangle(pos.X, pos.Y, 5, 5), rl.NewVector2(0, 0), 45, rl.Fade(rl.Orange, .3))
@@ -705,14 +705,16 @@ func DrawProjectiles() {
 		if !projectiles.IsActive[i] {
 			continue
 		}
-		rl.DrawSphere(projectiles.Position[i], .05, rl.Orange)              // Projectile Head
-		rl.DrawSphereWires(projectiles.Position[i], .05, 16, 16, rl.Orange) // Projectile Head
 
-		const maxTrailThick = 0.05 // Radius
-		const maxTrailLength = 3   // Projectile trail
-		radius := float32(maxTrailThick * (projectiles.TimeLeft[i] / projectile.MaxTimeLeft))
+		const maxTrailLength = 3. // Projectile trail
+		const maxTrailThick = .04 // Radius
+
+		rl.DrawSphere(projectiles.Position[i], maxTrailThick+.005, rl.Fade(rl.Orange, .6)) // Projectile Head
+		rl.DrawSphereWires(projectiles.Position[i], maxTrailThick+.005, 16, 16, rl.Gold)   // Projectile Head
+
+		timeFactor := (projectiles.TimeLeft[i] / projectile.MaxTimeLeft)
+		radius := float32(maxTrailThick * timeFactor)
 		angle := projectiles.AngleXZPlaneDegree[i] * rl.Deg2rad
-
 		trailLength := float32(maxTrailLength)
 
 		// Avoid passing projectile trail through the player body itself when animation just started
@@ -726,8 +728,9 @@ func DrawProjectiles() {
 			Y: 0,
 			Z: projectiles.Position[i].Z - mathutil.SinF(angle)*trailLength,
 		}
-		rl.DrawLine3D(prevPos, currPos, rl.Fade(rl.Orange, .3))
-		rl.DrawCapsule(prevPos, currPos, radius, 16, 16, rl.Fade(rl.Orange, .3))
+
+		// rl.DrawCapsule(prevPos, currPos, radius, 16, 16, rl.Fade(rl.Orange, .35))
+		rl.DrawCylinderEx(prevPos, currPos, (radius/5)/timeFactor, radius, 16, rl.Fade(rl.Orange, .35))
 	}
 }
 
