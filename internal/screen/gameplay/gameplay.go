@@ -82,13 +82,24 @@ func Init() {
 		panic("unexpected levelID")
 	}
 
+	// PERF: See also https://github.com/raylib-extras/extras-c/blob/main/cameras/rlTPCamera/rlTPCamera.h
+	// ViewCamera.target = position;
+	// ViewCamera.position = Vector3Add(ViewCamera.target, Vector3{ 0, 0, CameraPullbackDistance });
+	// ViewCamera.up = Vector3{ 0.0f, 1.0f, 0.0f };
+	// ViewCamera.fovy = fovY;
+	// ViewCamera.projection = CAMERA_PERSPECTIVE;
+	cameraPullbackDistance := float32(cmp.Or(3, 5))
+
 	camera = rl.Camera3D{
-		Position:   rl.NewVector3(0., 10., 10.),
-		Target:     rl.NewVector3(0., .5, 0.),
+		Target: rl.NewVector3(0., .5, 0.),
+		Position: cmp.Or(
+			rl.Vector3Add(rl.NewVector3(0., .5, 0.), rl.NewVector3(0, 0, cameraPullbackDistance)),
+			rl.NewVector3(0., 10., 10.),
+		),
 		Up:         rl.NewVector3(0., 1., 0.),
 		Fovy:       15. * float32(cmp.Or(4., 3., 2.)),
 		Projection: rl.CameraPerspective,
-	} // See also https://github.com/raylib-extras/extras-c/blob/main/cameras/rlTPCamera/rlTPCamera.h
+	}
 
 	loadNewEntityData := func() {
 		var mu sync.Mutex
