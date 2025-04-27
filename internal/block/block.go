@@ -32,7 +32,7 @@ const (
 type Block struct {
 	Position rl.Vector3
 	Size     rl.Vector3
-	Rotn     float32
+	Rotation float32
 	Health   float32 // [0..1]
 	IsActive bool
 	State    BlockState
@@ -59,7 +59,7 @@ func NewBlock(pos, size rl.Vector3) Block {
 	return Block{
 		Position: pos,
 		Size:     size,
-		Rotn:     0.0,
+		Rotation: 0.0,
 		State:    DirtBlockState,
 		IsActive: true,
 	}
@@ -75,31 +75,23 @@ func (o *Block) NextState() {
 
 func InitBlocks(dst *[]Block, positions []rl.Vector3) {
 	var mu sync.Mutex
+
 	mu.Lock()
+	defer mu.Unlock()
 
 	for i := range positions {
 		size := rl.Vector3Multiply(
 			rl.NewVector3(1, 1, 1),
 			rl.NewVector3(
-				float32(rl.GetRandomValue(88, 101))/100.,
-				float32(cmp.Or(
-					blockModelYSize,
-					cmp.Or(
-						rl.GetRandomValue(100, 100), // Consistent size--lower than player
-						rl.GetRandomValue(200, 200), // Consistent size--higher than player
-						rl.GetRandomValue(100, 300), // Non-Consistent size
-					)/100.),
-				),
-				float32(rl.GetRandomValue(88, 101))/100.))
-
-		fmt.Printf("positions[i]: %v\n", positions[i])
-		size = common.Vector3One
+				float32(rl.GetRandomValue(88, 94))/100.,
+				float32(rl.GetRandomValue(100, 100))/100.,
+				float32(rl.GetRandomValue(88, 94))/100.,
+			),
+		)
 		obj := NewBlock(positions[i], size)
-		obj.Rotn = cmp.Or(float32(rl.GetRandomValue(-50, 50)/10.), 0.)
-
+		obj.Rotation = cmp.Or(float32(rl.GetRandomValue(-40, 40)/10.), 0.)
 		*dst = append(*dst, obj)
 	}
-	mu.Unlock()
 }
 
 func SetupBlockModels() {
@@ -127,7 +119,7 @@ func SetupBlockModels() {
 
 func (b Block) Draw() {
 	if b.IsActive {
-		rl.DrawModelEx(blockModels[b.State], b.Position, common.YAxis, b.Rotn, b.Size, rl.White)
+		rl.DrawModelEx(blockModels[b.State], b.Position, common.YAxis, b.Rotation, b.Size, rl.White)
 	}
 }
 

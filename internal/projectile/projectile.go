@@ -7,10 +7,9 @@ import (
 )
 
 const (
-	MaxProjectiles = int32(64)
-	MaxTimeLeft    = float32(1.0) // 1 second in 60fps. Should decrement time to compare with by dt (i.e. rl.GetFrameTime())
-	// WARN: UNIMPLEMENTED
-	MaxProjectileFireRateTimerLimit = float32(0.1) //  Reduce this to increase fire rate.
+	MaxProjectiles                  = int32(32)
+	MaxTimeLeft                     = float32(1.0) // 1 second in 60fps. Should decrement time to compare with by dt (i.e. rl.GetFrameTime())
+	MaxProjectileFireRateTimerLimit = float32(0.5) // Reduce this to increase fire rate.
 )
 
 type ProjectileSOA struct { // size=1352 (0x548)
@@ -20,7 +19,7 @@ type ProjectileSOA struct { // size=1352 (0x548)
 	IsActive           [MaxProjectiles]bool
 
 	CircularBufIndex int32
-	FireRateTimer    float32
+	FireRateTimer    float32 // Wait for MaxProjectileFireRateTimerLimit cooldown wait time before next emit. Update -= dt each frame
 }
 
 // See https://github.com/lloydlobo/tinycreatures/blob/210c4a44ed62fbb08b5f003872e046c99e288bb9/src/main.lua#L2522C3-L2529C61
@@ -51,11 +50,15 @@ func (ps *ProjectileSOA) Emit(position rl.Vector3, rotationDegree float32) {
 }
 
 // Example
-func FireEntityProjectile(ps *ProjectileSOA, entityPos, entitySize rl.Vector3, rotationDegree float32) {
-	initialOrigin := rl.Vector3{
-		X: entityPos.X + mathutil.CosF(rotationDegree*rl.Deg2rad)*entitySize.X/2,
-		Y: entityPos.Y + entitySize.Y/2,
-		Z: entityPos.Z + mathutil.SinF(rotationDegree*rl.Deg2rad)*entitySize.Z/2,
+func FireEntityProjectile(ps *ProjectileSOA, entityPos, entitySize rl.Vector3, rotationDegree float32) (didFire bool) {
+	if ps.FireRateTimer <= 0 {
+		initialOrigin := rl.Vector3{
+			X: entityPos.X + mathutil.CosF(rotationDegree*rl.Deg2rad)*entitySize.X/2,
+			Y: entityPos.Y + entitySize.Y/2,
+			Z: entityPos.Z + mathutil.SinF(rotationDegree*rl.Deg2rad)*entitySize.Z/2,
+		}
+		ps.Emit(initialOrigin, rotationDegree)
+		return true
 	}
-	ps.Emit(initialOrigin, rotationDegree)
+	return false
 }

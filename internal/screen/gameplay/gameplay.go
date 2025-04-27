@@ -88,7 +88,7 @@ func Init() {
 	// ViewCamera.up = Vector3{ 0.0f, 1.0f, 0.0f };
 	// ViewCamera.fovy = fovY;
 	// ViewCamera.projection = CAMERA_PERSPECTIVE;
-	cameraPullbackDistance := float32(cmp.Or(3, 5))
+	cameraPullbackDistance := float32(cmp.Or(5, 3))
 
 	camera = rl.Camera3D{
 		Target: rl.NewVector3(0., .5, 0.),
@@ -144,8 +144,8 @@ func Init() {
 	// Core resources
 	floor.SetupFloorModel()
 	wall.SetupWallModel(common.OpenWorldRoom)
-	player.SetupPlayerModel() // FIXME: in this func, use package common for models
-	player.ToggleEquippedModels([player.MaxBoneSockets]bool{false, true, true})
+	player.SetupPlayerModel()                                                    // FIXME: in this func, use package common for models
+	player.ToggleEquippedModels([player.MaxBoneSockets]bool{false, true, false}) // Unequip hat sword shield
 
 	// Core data
 	if !isNewGame {
@@ -259,12 +259,20 @@ func Update() {
 	rl.UpdateMusicStream(currentMusic)
 
 	// Simulate firing OR implement keyspace firing
-	if rl.IsKeyPressed(rl.KeySpace) || rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
-		cameraForward := rl.GetCameraForward(&camera)
+	if rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
 		playerForwardEstimateMagnitude := rl.Vector3{X: 5., Y: .125 / 2., Z: 5.} // HACK: Projection
-		playerReticlePosition := rl.Vector3Multiply(cameraForward, playerForwardEstimateMagnitude)
+		playerReticlePosition := rl.Vector3Multiply(rl.GetCameraForward(&camera), playerForwardEstimateMagnitude)
+
 		gPlayerRay = rl.NewRay(rl.Vector3{X: xPlayer.Position.X, Y: xPlayer.Position.Y + xPlayer.Size.Y/4, Z: xPlayer.Position.Z}, playerReticlePosition)
-		projectile.FireEntityProjectile(&projectiles, xPlayer.Position, xPlayer.Size, float32(xPlayer.Rotation+90))
+
+		didFire := projectile.FireEntityProjectile(&projectiles, xPlayer.Position, xPlayer.Size, float32(xPlayer.Rotation+90))
+		if didFire {
+			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("drawKnife%d.ogg", rl.GetRandomValue(1, 3)))))
+			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("cloth%d.ogg", rl.GetRandomValue(1, 4)))))
+			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_sci-fi-sounds", "Audio", fmt.Sprintf("laserSmall_00%d.ogg", rl.GetRandomValue(0, 4)))))
+		} else {
+			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", fmt.Sprintf("glitch_00%d.ogg", rl.GetRandomValue(0, 4)))))
+		}
 	}
 
 	// See https://github.com/lloydlobo/tinycreatures/blob/210c4a44ed62fbb08b5f003872e046c99e288bb9/src/main.lua#L624
@@ -273,7 +281,6 @@ func Update() {
 			continue
 		}
 
-		projectiles.TimeLeft[i] -= rl.GetFrameTime()
 		isKillAnim := projectiles.TimeLeft[i] <= 0
 
 		if isKillAnim {
@@ -297,6 +304,8 @@ func Update() {
 			}
 		}
 	}
+	projectiles.FireRateTimer -= rl.GetFrameTime()
+	fmt.Printf("projectiles.FireRateTimer: %v\n", projectiles.FireRateTimer)
 
 	// Save variables this frame
 	oldCam := camera
@@ -323,7 +332,7 @@ func Update() {
 
 	// Update player─block collision+breaking/mining
 	{
-		closestIndex := GetClosestBlockIndexOnRayCollision()
+		closestIndex := GetClosestMiningBlockIndexOnRayCollision()
 
 		if closestIndex > -1 && closestIndex < len(xBlocks) {
 			blBB := xBlocks[closestIndex].GetBlockBoundingBox()
@@ -339,17 +348,27 @@ func Update() {
 				}
 				if !xBlocks[closestIndex].IsActive {
 					slog.Warn("Unreachable: !blocks[closestIndex].IsActive", "closestIndex", closestIndex)
-					// continue NextProjectile
 				}
 				if common.GetCollisionPointBox(projectiles.Position[i], xBlocks[closestIndex].GetBlockBoundingBox()) {
-					xBlocks[closestIndex].NextState()
-					projectiles.IsActive[i] = false
-					break NextProjectile
+					if xBlocks[closestIndex].State < block.MaxBlockState-1 {
+						xBlocks[closestIndex].NextState()
+						projectiles.IsActive[i] = false
+						break NextProjectile
+					}
 				}
 			}
 		}
 	}
 
+	// Play player weapon sounds
+	if rl.IsKeyDown(rl.KeySpace) && framesCounter%16 == 0 {
+		v := rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "drawKnife3.ogg"))
+		rl.SetSoundPan(v, 0.5+float32(rl.GetRandomValue(-10, 10)/(2*10)))
+		rl.SetSoundVolume(v, 0.7)
+		rl.PlaySound(v)
+	}
+
+	// Update block and player interaction/mining
 	for i := range xBlocks {
 		// Skip final broken/mined block residue
 		if xBlocks[i].State == block.MaxBlockState-1 {
@@ -392,15 +411,7 @@ func Update() {
 			player.RevertPlayerAndCameraPositions(&xPlayer, oldPlayer, &camera, oldCam)
 
 			// Trigger once while mining
-			if (rl.IsKeyDown(rl.KeySpace) && framesCounter%16 == 0) ||
-				(rl.IsMouseButtonDown(rl.MouseLeftButton) && framesCounter%16 == 0) {
-				// Play player weapon sounds
-				if true {
-					v := rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "drawKnife3.ogg"))
-					rl.SetSoundPan(v, 0.5+float32(rl.GetRandomValue(-10, 10)/(2*10)))
-					rl.SetSoundVolume(v, 0.1)
-					rl.PlaySound(v)
-				}
+			if rl.IsKeyDown(rl.KeySpace) && framesCounter%16 == 0 {
 				// Play mining impacts with variations (s1:kick + s2:snare + s3:hollow-thock)
 				state := xBlocks[i].State
 				if state == block.DirtBlockState { // First state
@@ -571,7 +582,9 @@ func Draw() {
 	drawOuterDrillroom()
 	for i := range xBlocks {
 		xBlocks[i].Draw()
-		rl.DrawBoundingBox(xBlocks[i].GetBlockBoundingBox(), rl.Pink)
+		if false { // DEBUG
+			rl.DrawBoundingBox(xBlocks[i].GetBlockBoundingBox(), rl.Pink)
+		}
 	}
 	xPlayer.Draw()
 	DrawProjectiles()
@@ -585,9 +598,11 @@ func Draw() {
 		rl.DrawLine3D(rl.Vector3{X: gPlayerRay.Position.X, Y: gPlayerRay.Position.Y + xPlayer.Size.Y/4, Z: gPlayerRay.Position.Z}, gPlayerRayCollision.Point, rl.Orange)
 	}
 
-	rl.DrawBoundingBox(rayTargetBoundingBox, rl.Blue)
-	rl.DrawModel(common.ModelDungeonKit.OBJ.Dirt, xFloor.Position, 1., rl.White)
-	rl.DrawBoundingBox(rayTargetBoundingBox, rl.Blue)
+	if false {
+		rl.DrawBoundingBox(rayTargetBoundingBox, rl.Blue)
+		rl.DrawModel(common.ModelDungeonKit.OBJ.Dirt, xFloor.Position, 1., rl.White)
+		rl.DrawBoundingBox(rayTargetBoundingBox, rl.Blue)
+	}
 
 	rl.EndMode3D()
 
@@ -751,13 +766,13 @@ func UpdatePlayerRay() {
 	playerForwardAimEndPos = rl.Vector3Add(xPlayer.Position, playerReticlePosition)
 }
 
-func GetClosestBlockIndexOnRayCollision() int {
+func GetClosestMiningBlockIndexOnRayCollision() int {
 	var (
 		index           = -1
 		minimumDistance = float32(math.MaxFloat32)
 	)
 	for i := range xBlocks {
-		if !xBlocks[i].IsActive {
+		if !xBlocks[i].IsActive || xBlocks[i].State >= (block.MaxBlockState-1) { // for max==4 -> where last is 3 , only allow 0,1,2
 			continue
 		}
 		if rc := rl.GetRayCollisionBox(gPlayerRay, xBlocks[i].GetBlockBoundingBox()); rc.Hit {
