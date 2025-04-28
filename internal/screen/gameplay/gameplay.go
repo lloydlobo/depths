@@ -305,7 +305,6 @@ func Update() {
 		}
 	}
 	projectiles.FireRateTimer -= rl.GetFrameTime()
-	fmt.Printf("projectiles.FireRateTimer: %v\n", projectiles.FireRateTimer)
 
 	// Save variables this frame
 	oldCam := camera
