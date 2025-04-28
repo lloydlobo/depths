@@ -41,32 +41,24 @@ func NewPlayer(camera rl.Camera3D) Player {
 
 	player.Health = 1.
 	player.CargoCapacity = 0
-	player.MaxCargoCapacity = 80
 
-	// Auto scale MaxCargoCapacity per level
-	if __IS_TEMPORARY__ := true; __IS_TEMPORARY__ {
-		primes := []int32{
-			2, 3, 5, 7,
-			11, 13, 17, 19,
-			23, 29,
-			31, 37,
-			41, 43, 47,
-			53, 59, 61, 67, 73, 79,
-			83, 89,
-			97,
-		}
+	player.MaxCargoCapacity = 80
+	setAutoMaxCapacity := func() { // Auto scale MaxCargoCapacity per level ORELSE use it from hardcoded levels (meh too generic?)
+		primes := []int32{2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 73, 79, 83, 89, 97}
 		maxLevels := len(common.SavedgameSlotData.AllLevelIDS)
 		if maxLevels < len(primes)+1 { // Avoid '2' with additional index
 			var levelPrimes []int32
 			for i := range maxLevels {
 				levelPrimes = append(levelPrimes, primes[i+1])
 			}
-			// WARN: This panicked as levelIDS are 1 index based, to avoid level 0
-			x := 5 * levelPrimes[int(common.SavedgameSlotData.CurrentLevelID)-1]
-			x = int32(mathutil.RoundEvenF(x))
-			player.MaxCargoCapacity = x
+			maxCapacity := 5 * levelPrimes[int(common.SavedgameSlotData.CurrentLevelID)-1] // WARN: This panicked as levelIDS are 1 index based, to avoid level 0
+			if maxCapacity%2 != 0 {                                                        // Use even numbers
+				maxCapacity++
+			}
+			player.MaxCargoCapacity = maxCapacity
 		}
 	}
+	setAutoMaxCapacity()
 
 	return player
 }

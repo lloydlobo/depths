@@ -425,8 +425,10 @@ func Draw() {
 		// Circular model shape --expand-> to 1x1x1 bounding box
 		const k = 1. + common.OneMinusInvPhi
 
-		var scale rl.Vector3
-		var col color.RGBA
+		var (
+			scale rl.Vector3
+			col   color.RGBA
+		)
 
 		if isPlayerNearTriggerSensors[i] {
 			scale = rl.Vector3{X: k * 1.25, Y: k * 1.25, Z: k * 1.25}
@@ -435,11 +437,11 @@ func Draw() {
 			scale = rl.Vector3{X: k, Y: k, Z: k}
 			col = rl.Pink
 		}
-		if false {
+
+		if true {
 			rl.DrawBoundingBox(triggerBoundingBoxes[i], rl.Fade(rl.SkyBlue, 0.1))
 			rl.DrawBoundingBox(triggerSensorBoundingBoxes[i], rl.Fade(col, 0.1))
 		}
-
 		rl.DrawModelEx(triggerModels[i], triggerPositions[i], common.YAxis, 0., scale, rl.White)
 
 	}
@@ -448,15 +450,11 @@ func Draw() {
 
 	// 2D World
 
-	if false { // TEMPORARY
-		rl.DrawRectangle(0, 0, screenW, screenH, rl.Fade(rl.Black, .2))
-	}
-
 	// One second fade in duration when fps==60
 	alpha := min(1., float32(framesCounter)/60.)
 	col := rl.Fade(rl.White, alpha)
 
-	if false {
+	if true {
 		// Draw trigger index
 		// See https://www.raylib.com/examples/core/loader.html?name=core_world_screen
 		for i := range MaxTriggerCount {
@@ -474,6 +472,7 @@ func Draw() {
 	for i := range MaxTriggerCount {
 		textCol := rl.Fade(rl.Black, .6)
 		bgCol := rl.RayWhite
+
 		if isPlayerNearTriggerSensors[i] {
 			fontSize := float32(common.Font.Primary.BaseSize) * 2
 			const maxLabelLenForFontSizeX2 = 148
