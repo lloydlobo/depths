@@ -189,9 +189,6 @@ func Init() {
 		isTriggerActive[TriggerStartDrill] = true // Only enable drill
 	}
 
-	// Unequip hat sword shield
-	player.ToggleEquippedModels([player.MaxBoneSockets]bool{false, false, false})
-
 	// Compute once
 	drillroomExitBoundingBox = common.GetBoundingBoxFromPositionSizeV(
 		xFloor.Position,

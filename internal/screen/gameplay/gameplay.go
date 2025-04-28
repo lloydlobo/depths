@@ -5,7 +5,6 @@ import (
 	"cmp"
 	"encoding/json"
 	"fmt"
-	"image/color"
 	"log"
 	"log/slog"
 	"math"
@@ -21,6 +20,7 @@ import (
 	"example/depths/internal/common"
 	"example/depths/internal/floor"
 	"example/depths/internal/player"
+	"example/depths/internal/projectile"
 	"example/depths/internal/storage"
 	"example/depths/internal/util/mathutil"
 	"example/depths/internal/wall"
@@ -39,7 +39,14 @@ var (
 
 	// Additional data
 
-	blocks []block.Block
+	xBlocks []block.Block
+)
+
+var (
+	gPlayerRay             rl.Ray
+	gPlayerRayCollision    rl.RayCollision
+	projectiles            projectile.ProjectileSOA
+	playerForwardAimEndPos rl.Vector3 // Aim start is player position
 )
 
 var (
@@ -61,37 +68,39 @@ var (
 
 	currentMusic  rl.Music
 	previousMusic rl.Music
-
-	// Other
-
-	checkedTexture rl.Texture2D
-	checkedModel   rl.Model
 )
 
 func Init() {
 	framesCounter = 0
 	finishScreen = 0
 
+	projectiles.Reset()
+	fmt.Printf("playerProjectiles: %v\n", projectiles)
+
 	levelID = int32(common.SavedgameSlotData.CurrentLevelID)
 	if levelID == 0 {
 		panic("unexpected levelID")
 	}
 
+	// PERF: See also https://github.com/raylib-extras/extras-c/blob/main/cameras/rlTPCamera/rlTPCamera.h
+	// ViewCamera.target = position;
+	// ViewCamera.position = Vector3Add(ViewCamera.target, Vector3{ 0, 0, CameraPullbackDistance });
+	// ViewCamera.up = Vector3{ 0.0f, 1.0f, 0.0f };
+	// ViewCamera.fovy = fovY;
+	// ViewCamera.projection = CAMERA_PERSPECTIVE;
+	cameraPullbackDistance := float32(cmp.Or(5, 3))
+
 	camera = rl.Camera3D{
-		Position:   rl.NewVector3(0., 10., 10.),
-		Target:     rl.NewVector3(0., .5, 0.),
+		Target: rl.NewVector3(0., .5, 0.),
+		Position: cmp.Or(
+			rl.Vector3Add(rl.NewVector3(0., .5, 0.), rl.NewVector3(0, 0, cameraPullbackDistance)),
+			rl.NewVector3(0., 10., 10.),
+		),
 		Up:         rl.NewVector3(0., 1., 0.),
 		Fovy:       15. * float32(cmp.Or(4., 3., 2.)),
 		Projection: rl.CameraPerspective,
-	} // See also https://github.com/raylib-extras/extras-c/blob/main/cameras/rlTPCamera/rlTPCamera.h
+	}
 
-	// INIT WOULD REQUIRE A LEVEL ID? OR CREATE MULTIPLE gameplay000.go files
-	//
-	// InitWorld loads resources each time it is called.
-	//
-	// Prefers loading data from saved game files if any, else generates new data.
-	//
-	// If new game flag is turned on, generates new game.
 	loadNewEntityData := func() {
 		var mu sync.Mutex
 
@@ -115,8 +124,8 @@ func Init() {
 		mu.Lock()
 		defer mu.Unlock()
 
-		blocks = []block.Block{} // Clear
-		block.InitBlocks(&blocks, block.GenerateRandomBlockPositions(xFloor))
+		xBlocks = []block.Block{} // Clear
+		block.InitBlocks(&xBlocks, block.GenerateRandomBlockPositions(xFloor))
 	}
 	loadNewLogicData := func() {
 		var mu sync.Mutex
@@ -135,8 +144,8 @@ func Init() {
 	// Core resources
 	floor.SetupFloorModel()
 	wall.SetupWallModel(common.OpenWorldRoom)
-	player.SetupPlayerModel() // FIXME: in this func, use package common for models
-	player.ToggleEquippedModels([player.MaxBoneSockets]bool{false, true, true})
+	player.SetupPlayerModel()                                                    // FIXME: in this func, use package common for models
+	player.ToggleEquippedModels([player.MaxBoneSockets]bool{false, true, false}) // Unequip hat sword shield
 
 	// Core data
 	if !isNewGame {
@@ -169,8 +178,8 @@ func Init() {
 	if !isNewGame {
 		additionalGameData, err := loadAdditionalGameData()
 		if err == nil { // OK
-			blocks = make([]block.Block, len(additionalGameData.Blocks))
-			copiedBlockCount := copy(blocks, additionalGameData.Blocks)
+			xBlocks = make([]block.Block, len(additionalGameData.Blocks))
+			copiedBlockCount := copy(xBlocks, additionalGameData.Blocks)
 			if copiedBlockCount != 0 {
 				log.Printf("blocks copied: %v", copiedBlockCount)
 			} else {
@@ -200,14 +209,6 @@ func Init() {
 		}
 	} else {
 		loadNewLogicData()
-	}
-
-	{
-		checkedImg := rl.GenImageChecked(100, 100, 1, 1, rl.ColorBrightness(rl.Black, .24), rl.ColorBrightness(rl.Black, .20))
-		checkedTexture = rl.LoadTextureFromImage(checkedImg)
-		rl.UnloadImage(checkedImg)
-		checkedModel = rl.LoadModelFromMesh(rl.GenMeshPlane(100, 100, 10, 10))
-		checkedModel.Materials.Maps.Texture = checkedTexture
 	}
 
 	musicChoices := []rl.Music{common.Music.OpenWorld000, common.Music.OpenWorld001}
@@ -246,7 +247,8 @@ func Init() {
 		}
 	}
 	// TEMPORARY
-	if false {
+	if true {
+		slog.Warn("rl.PauseMusicStream(currentMusic)")
 		rl.PauseMusicStream(currentMusic)
 	}
 
@@ -255,6 +257,55 @@ func Init() {
 
 func Update() {
 	rl.UpdateMusicStream(currentMusic)
+
+	// Simulate firing OR implement keyspace firing
+	if rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
+		playerForwardEstimateMagnitude := rl.Vector3{X: 5., Y: .125 / 2., Z: 5.} // HACK: Projection
+		playerReticlePosition := rl.Vector3Multiply(rl.GetCameraForward(&camera), playerForwardEstimateMagnitude)
+
+		gPlayerRay = rl.NewRay(rl.Vector3{X: xPlayer.Position.X, Y: xPlayer.Position.Y + xPlayer.Size.Y/4, Z: xPlayer.Position.Z}, playerReticlePosition)
+
+		didFire := projectile.FireEntityProjectile(&projectiles, xPlayer.Position, xPlayer.Size, float32(xPlayer.Rotation+90))
+		if didFire {
+			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("drawKnife%d.ogg", rl.GetRandomValue(1, 3)))))
+			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("cloth%d.ogg", rl.GetRandomValue(1, 4)))))
+			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_sci-fi-sounds", "Audio", fmt.Sprintf("laserSmall_00%d.ogg", rl.GetRandomValue(0, 4)))))
+		} else {
+			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", fmt.Sprintf("glitch_00%d.ogg", rl.GetRandomValue(0, 4)))))
+		}
+	}
+
+	// See https://github.com/lloydlobo/tinycreatures/blob/210c4a44ed62fbb08b5f003872e046c99e288bb9/src/main.lua#L624
+	for i := range projectile.MaxProjectiles {
+		if !projectiles.IsActive[i] {
+			continue
+		}
+
+		isKillAnim := projectiles.TimeLeft[i] <= 0
+
+		if isKillAnim {
+			projectiles.IsActive[i] = false
+		} else {
+			playerProjectileSpeed := 10 * rl.GetFrameTime()
+
+			angleRad := projectiles.AngleXZPlaneDegree[i] * rl.Deg2rad
+
+			displacement := rl.NewVector3(mathutil.CosF(angleRad)*playerProjectileSpeed, 0, mathutil.SinF(angleRad)*playerProjectileSpeed)
+
+			projectiles.Position[i] = rl.Vector3Add(projectiles.Position[i], displacement)
+
+			pos := projectiles.Position[i]
+
+			isOOBX := pos.X < xFloor.BoundingBox.Min.X || pos.X > xFloor.BoundingBox.Max.X
+			isOOBZ := pos.Z < xFloor.BoundingBox.Min.Z || pos.Z > xFloor.BoundingBox.Max.Z
+
+			if isOOBX || isOOBZ {
+				projectiles.IsActive[i] = false
+			}
+		}
+	}
+	projectiles.FireRateTimer -= rl.GetFrameTime()
+	fmt.Printf("projectiles.FireRateTimer: %v\n", projectiles.FireRateTimer)
 
 	// Save variables this frame
 	oldCam := camera
@@ -273,18 +324,59 @@ func Update() {
 	}
 
 	xPlayer.Update(camera, xFloor)
+	UpdatePlayerRay()
 
 	if xPlayer.IsPlayerWallCollision {
 		player.RevertPlayerAndCameraPositions(&xPlayer, oldPlayer, &camera, oldCam)
 	}
 
-	for i := range blocks {
+	// Update player─block collision+breaking/mining
+	{
+		closestIndex := GetClosestMiningBlockIndexOnRayCollision()
+
+		if closestIndex > -1 && closestIndex < len(xBlocks) {
+			blBB := xBlocks[closestIndex].GetBlockBoundingBox()
+			collision := rl.GetRayCollisionBox(gPlayerRay, blBB)
+			_ = collision
+		}
+		if closestIndex > -1 && closestIndex < len(xBlocks) {
+		NextProjectile:
+
+			for i := range projectile.MaxProjectiles {
+				if !projectiles.IsActive[i] {
+					continue NextProjectile
+				}
+				if !xBlocks[closestIndex].IsActive {
+					slog.Warn("Unreachable: !blocks[closestIndex].IsActive", "closestIndex", closestIndex)
+				}
+				if common.GetCollisionPointBox(projectiles.Position[i], xBlocks[closestIndex].GetBlockBoundingBox()) {
+					if xBlocks[closestIndex].State < block.MaxBlockState-1 {
+						xBlocks[closestIndex].NextState()
+						projectiles.IsActive[i] = false
+						break NextProjectile
+					}
+				}
+			}
+		}
+	}
+
+	// Play player weapon sounds
+	if rl.IsKeyDown(rl.KeySpace) && framesCounter%16 == 0 {
+		v := rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "drawKnife3.ogg"))
+		rl.SetSoundPan(v, 0.5+float32(rl.GetRandomValue(-10, 10)/(2*10)))
+		rl.SetSoundVolume(v, 0.7)
+		rl.PlaySound(v)
+	}
+
+	// Update block and player interaction/mining
+	for i := range xBlocks {
 		// Skip final broken/mined block residue
-		if blocks[i].State == block.MaxBlockState-1 {
+		if xBlocks[i].State == block.MaxBlockState-1 {
 			continue
 		}
+
 		if rl.CheckCollisionBoxes(
-			common.GetBoundingBoxFromPositionSizeV(blocks[i].Pos, blocks[i].Size),
+			common.GetBoundingBoxFromPositionSizeV(xBlocks[i].Position, xBlocks[i].Size),
 			xPlayer.BoundingBox,
 		) {
 			// FIND OUT WHERE PLAYER TOUCHED THE BOX
@@ -319,17 +411,9 @@ func Update() {
 			player.RevertPlayerAndCameraPositions(&xPlayer, oldPlayer, &camera, oldCam)
 
 			// Trigger once while mining
-			if (rl.IsKeyDown(rl.KeySpace) && framesCounter%16 == 0) ||
-				(rl.IsMouseButtonDown(rl.MouseLeftButton) && framesCounter%16 == 0) {
-				// Play player weapon sounds
-				if true {
-					v := rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "drawKnife3.ogg"))
-					rl.SetSoundPan(v, 0.5+float32(rl.GetRandomValue(-10, 10)/(2*10)))
-					rl.SetSoundVolume(v, 0.1)
-					rl.PlaySound(v)
-				}
+			if rl.IsKeyDown(rl.KeySpace) && framesCounter%16 == 0 {
 				// Play mining impacts with variations (s1:kick + s2:snare + s3:hollow-thock)
-				state := blocks[i].State
+				state := xBlocks[i].State
 				if state == block.DirtBlockState { // First state
 					soundName := "handleSmallLeather"
 					if rl.GetRandomValue(0, 1) == 0 {
@@ -368,11 +452,12 @@ func Update() {
 				hitCount++
 
 				const finalState = (block.MaxBlockState - 1)
+				const cargoCapacityUnitPerIncrement = 2
 				canIncrementScore := state == finalState-1
 
 				if canIncrementScore {
-					hitScore++
-					xPlayer.CargoCapacity = min(xPlayer.MaxCargoCapacity, xPlayer.CargoCapacity+1)
+					hitScore += cargoCapacityUnitPerIncrement
+					xPlayer.CargoCapacity = min(xPlayer.MaxCargoCapacity, xPlayer.CargoCapacity+cargoCapacityUnitPerIncrement)
 
 					// FIXME: Record.. hitCount and hitScore to save game.. and load and update directly
 					if hitCount/hitScore != int32(finalState) {
@@ -385,12 +470,11 @@ func Update() {
 					}
 				}
 				// Increment state on successful mining action
-				blocks[i].NextState()
+				xBlocks[i].NextState()
 			}
 		}
 	}
 
-	// Update player─block collision+breaking/mining
 	{
 		origin := xFloor.Position
 		bb1 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(3, 2, 3)) // player is inside
@@ -438,8 +522,7 @@ func Update() {
 		// - (drillroom) what decides
 		// - Are we drilling asteroids in space?
 		//	- Draw a protection barrier over the scene (like a firmament)
-		if canSwitchToDrillRoom {
-			// Play entry sounds
+		if canSwitchToDrillRoom { // Play entry sounds
 			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("footstep0%d.ogg", rl.GetRandomValue(0, 9))))) // 05
 			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "metalClick.ogg")))                                        // metalClick
 			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("creak%d.ogg", rl.GetRandomValue(1, 3)))))     // 3
@@ -494,136 +577,52 @@ func Draw() {
 
 	rl.ClearBackground(rl.Black)
 
-	if false { // ‥ Draw pseudo-infinite(ish) floor backdrop
-		rl.DrawModel(checkedModel, rl.NewVector3(0., -.05, 0.), 1., rl.RayWhite)
-	}
-
 	xFloor.Draw()
-
 	wall.DrawBatch(common.OpenWorldRoom, xFloor.Position, xFloor.Size, common.Vector3One)
-
-	{
-		type BlockResourceType uint8
-		const (
-			DefaultBlockResource BlockResourceType = iota
-			CopperBlockResource
-			SilverBlockResource
-			GoldBlockResource
-		)
-		drawSpecialBlock := func(block block.Block, typ BlockResourceType) {
-			var col color.RGBA
-			switch typ {
-			case CopperBlockResource:
-				col = rl.DarkPurple
-			case SilverBlockResource:
-				col = rl.Maroon
-			case GoldBlockResource:
-				col = rl.Orange
-			default:
-				panic(fmt.Sprintf("unexpected gameplay.BlockResourceType: %#v", typ))
-			}
-			if true {
-				rl.DrawSphereWires(block.Pos, -.0625+common.InvPhi*rl.Vector3Length(block.Size)/math.Pi, 8, 8, rl.Fade(col, .35))
-			} else {
-				rl.DrawCapsuleWires(
-					rl.Vector3Add(block.Pos, rl.NewVector3(.0625, block.Size.Y/2, .0625)),
-					rl.Vector3Subtract(block.Pos, rl.NewVector3(.0625, block.Size.Y/4, .0625)),
-					-.0625+common.InvPhi*rl.Vector3Length(block.Size)/math.Pi,
-					2, 2, rl.Fade(col, .1))
-			}
+	drawOuterDrillroom()
+	for i := range xBlocks {
+		xBlocks[i].Draw()
+		if false { // DEBUG
+			rl.DrawBoundingBox(xBlocks[i].GetBlockBoundingBox(), rl.Pink)
 		}
-
-		rl.BeginBlendMode(rl.BlendAlphaPremultiply) // For special block
-
-		for i := range blocks {
-			blocks[i].Draw()
-
-			if false {
-				if i%11 == 0 && blocks[i].IsActive && blocks[i].State != block.MaxBlockState-1 {
-					drawSpecialBlock(blocks[i], CopperBlockResource)
-				} else if i%13 == 0 && blocks[i].IsActive && blocks[i].State != block.MaxBlockState-1 {
-					drawSpecialBlock(blocks[i], SilverBlockResource)
-				} else if i%23 == 0 && blocks[i].IsActive && blocks[i].State != block.MaxBlockState-1 {
-					drawSpecialBlock(blocks[i], GoldBlockResource)
-				}
-			}
-		}
-
-		rl.EndBlendMode()
 	}
-
 	xPlayer.Draw()
-	if false { // ‥ Draw player to camera forward projected direction ray & area blob/blurb
-		const maxRays = float32(8. * 2)
-		const rayGapFactor = 16 * maxRays
-		rayCol := rl.Fade(rl.Yellow, .3)
-		startPos := xPlayer.Position // NOTE: startPos.Y and endPos.Y may fluctuate
-		endPos := rl.Vector3Add(
-			xPlayer.Position,
-			rl.Vector3Multiply(
-				rl.GetCameraForward(&camera),
-				rl.NewVector3(9., .125/2., 9.),
-			),
-		)
-		rl.DrawLine3D(startPos, endPos, rayCol) // Draw middle ray
-		rayCol = rl.Fade(rayCol, .1)
-		for i := -maxRays; i < maxRays; i++ { // Draw spread-out rays
-			rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(i/rayGapFactor, .0, .0)), rayCol)
-			rl.DrawLine3D(startPos, rl.Vector3Add(endPos, rl.NewVector3(.0, .0, i/rayGapFactor)), rayCol)
-		}
-		rl.DrawCapsule(startPos, endPos, 2, 7, 7, rl.Fade(rl.Gray, .125/2)) // Draw forward movement lookahead area
+	DrawProjectiles()
+
+	// ‥ Draw player to camera forward projected direction ray & area blob/blurb
+	// TEMPORARY EXAMPLE TO SHOW RAY COLLISIONS
+	rayTargetBoundingBox := common.GetBoundingBoxFromPositionSizeV(rl.NewVector3(0, 0, 0), rl.NewVector3(5, 5, 5)) // TEMPORARY
+	gPlayerRayCollision = rl.GetRayCollisionBox(gPlayerRay, rayTargetBoundingBox)                                  // Update
+	if gPlayerRayCollision.Hit {
+		rl.DrawRay(gPlayerRay, rl.Fade(rl.White, .1)) // infinite ray
+		rl.DrawLine3D(rl.Vector3{X: gPlayerRay.Position.X, Y: gPlayerRay.Position.Y + xPlayer.Size.Y/4, Z: gPlayerRay.Position.Z}, gPlayerRayCollision.Point, rl.Orange)
 	}
 
-	{ // ‥ Draw drillroom entry
-		const maxIndex = 2
-		wallScale := rl.NewVector3(1., 1., 1.)
-		for i := float32(-maxIndex + 1); i < maxIndex; i++ {
-			var model rl.Model
-			var y float32
-			model = common.ModelDungeonKit.OBJ.Column
-			y = 0.
-			rl.DrawModelEx(model, rl.NewVector3(i, y, maxIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
-			rl.DrawModelEx(model, rl.NewVector3(i, y, -maxIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
-			rl.DrawModelEx(model, rl.NewVector3(maxIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
-			rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
-			model = common.ModelDungeonKit.OBJ.Wall
-			y = 1. + .125*.5
-			rl.DrawModelEx(model, rl.NewVector3(i, y, maxIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
-			rl.DrawModelEx(model, rl.NewVector3(i, y, -maxIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
-			rl.DrawModelEx(model, rl.NewVector3(maxIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
-			rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
-			model = common.ModelDungeonKit.OBJ.Column
-			y = 2. + .125*.5
-			rl.DrawModelEx(model, rl.NewVector3(i, y, maxIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
-			rl.DrawModelEx(model, rl.NewVector3(i, y, -maxIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
-			rl.DrawModelEx(model, rl.NewVector3(maxIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
-			rl.DrawModelEx(model, rl.NewVector3(-maxIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
-		}
-
-		if false { // ‥ DEBUG: Draw drill door gate entry logic before changing scene to drill base
-			origin := common.Vector3Zero
-			origin = xFloor.Position
-			bb1 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(3, 2, 3)) // player is inside
-			bb2 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(5, 2, 5)) // player is entering
-			bb3 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(7, 2, 7)) // bot barrier
-			rl.DrawBoundingBox(bb1, rl.Red)
-			rl.DrawBoundingBox(bb2, rl.Green)
-			rl.DrawBoundingBox(bb3, rl.Blue)
-		}
-	}
-
-	if false { // ‥ Draw banners at floor corners
-		floorBBMin := xFloor.BoundingBox.Min
-		floorBBMax := xFloor.BoundingBox.Max
-		rl.DrawModelEx(common.ModelDungeonKit.OBJ.Banner, rl.NewVector3(floorBBMin.X+1, 0, floorBBMin.Z+1), common.YAxis, 45, common.Vector3One, rl.White)  // leftback
-		rl.DrawModelEx(common.ModelDungeonKit.OBJ.Banner, rl.NewVector3(floorBBMax.X-1, 0, floorBBMin.Z+1), common.YAxis, -45, common.Vector3One, rl.White) // rightback
-		rl.DrawModelEx(common.ModelDungeonKit.OBJ.Banner, rl.NewVector3(floorBBMax.X, 0, floorBBMax.Z), common.YAxis, 45, common.Vector3One, rl.White)      // rightfront
-		rl.DrawModelEx(common.ModelDungeonKit.OBJ.Banner, rl.NewVector3(floorBBMin.X, 0, floorBBMax.Z), common.YAxis, -45, common.Vector3One, rl.White)     // leftfront
+	if false {
+		rl.DrawBoundingBox(rayTargetBoundingBox, rl.Blue)
+		rl.DrawModel(common.ModelDungeonKit.OBJ.Dirt, xFloor.Position, 1., rl.White)
+		rl.DrawBoundingBox(rayTargetBoundingBox, rl.Blue)
 	}
 
 	rl.EndMode3D()
 
+	// =======================================================================
 	// 2D World
+
+	// Draw ray reticle on any 2D open space
+	if gPlayerRayCollision.Hit {
+		rl.DrawCircleV(rl.GetWorldToScreen(gPlayerRayCollision.Point, camera), 4, rl.Fade(rl.Gold, .3))
+	} else {
+		pos := rl.GetWorldToScreen(playerForwardAimEndPos, camera) // Draw a diamond
+		rl.DrawRectanglePro(rl.NewRectangle(pos.X, pos.Y, 8, 8), rl.NewVector2(0, 0), 45, rl.Fade(rl.White, .1))
+	}
+
+	// Draw ray reticle on block
+	if closestBlockIndex := GetClosestMiningBlockIndexOnRayCollision(); closestBlockIndex > -1 && closestBlockIndex < len(xBlocks) {
+		collision := rl.GetRayCollisionBox(gPlayerRay, xBlocks[closestBlockIndex].GetBlockBoundingBox())
+		pos := rl.GetWorldToScreen(collision.Point, camera) // Draw a diamond
+		rl.DrawRectanglePro(rl.NewRectangle(pos.X, pos.Y, 5, 5), rl.NewVector2(0, 0), 45, rl.Fade(rl.Orange, .3))
+	}
 
 	// Draw depth meter
 	{
@@ -641,7 +640,7 @@ func Draw() {
 			x := screenW - gapX
 			y := gapY/2 + i*gapY
 			rl.DrawLine(x, y, x-gapX/2, y, rl.Gray)
-			radius := float32(4)
+			radius := float32(6)
 			if (i + 1) == levelID {
 				col := rl.Orange
 				if isShowText {
@@ -705,17 +704,114 @@ func Draw() {
 		), fontSize*2./4., 1, rl.Gray)
 	}
 
-	if false {
-		// Perf
+	if false { // Perf
 		rl.DrawFPS(10, screenH-35)
 		rl.DrawTextEx(common.Font.Primary, fmt.Sprintf("%.6f", rl.GetFrameTime()), rl.NewVector2(10, float32(screenH)-35-20*1), fontSize*2./3., 1, rl.Lime)
 		rl.DrawTextEx(common.Font.Primary, fmt.Sprintf("%.3d", framesCounter), rl.NewVector2(10, float32(screenH)-35-20*2), fontSize*2./3., 1, rl.Lime)
-
-		// Debug Score
-		text := fmt.Sprintf("hitScore: %.3d\nhitCount: %.3d\n", hitScore, hitCount)
+	}
+	if true { // Debug logic stats
+		text := fmt.Sprintf("money: %.3d\nexperience: %.3d\n", money, experience)
 		rl.DrawText(text, (screenW-10)-rl.MeasureText(text, 10), screenH-40, 10, rl.Green)
 	}
+}
 
+func DrawProjectiles() {
+	for i := range projectile.MaxProjectiles {
+		if !projectiles.IsActive[i] {
+			continue
+		}
+
+		const maxTrailLength = 3. // Projectile trail
+		const maxTrailThick = .04 // Radius
+
+		rl.DrawSphere(projectiles.Position[i], maxTrailThick+.005, rl.Fade(rl.Orange, .6)) // Projectile Head
+		rl.DrawSphereWires(projectiles.Position[i], maxTrailThick+.005, 16, 16, rl.Gold)   // Projectile Head
+
+		timeFactor := (projectiles.TimeLeft[i] / projectile.MaxTimeLeft)
+		radius := float32(maxTrailThick * timeFactor)
+		angle := projectiles.AngleXZPlaneDegree[i] * rl.Deg2rad
+		trailLength := float32(maxTrailLength)
+
+		// Avoid passing projectile trail through the player body itself when animation just started
+		if d := rl.Vector3Distance(xPlayer.Position, projectiles.Position[i]); d < maxTrailLength {
+			trailLength = d
+		}
+
+		currPos := projectiles.Position[i]
+		prevPos := rl.Vector3{
+			X: projectiles.Position[i].X - mathutil.CosF(angle)*trailLength,
+			Y: 0,
+			Z: projectiles.Position[i].Z - mathutil.SinF(angle)*trailLength,
+		}
+
+		// rl.DrawCapsule(prevPos, currPos, radius, 16, 16, rl.Fade(rl.Orange, .35))
+		rl.DrawCylinderEx(prevPos, currPos, (radius/5)/timeFactor, radius, 16, rl.Fade(rl.Orange, .35))
+	}
+}
+
+// Update and Set ray each frame
+//
+//	intersection using the slab method
+//	https://tavianator.com/2011/ray_box.html#:~:text=The%20fastest%20method%20for%20performing,remains%2C%20it%20intersected%20the%20box.
+//
+//	bool RayIntersectRect(Rectangle rect, Vector2 origin, Vector2 direction, Vector2* point) {}
+//	bool CheckCollisionRay2dCircle(Ray2d ray, Vector2 center, float radius, Vector2* intersection) {}
+//
+// See https://github.com/raylib-extras/examples-c/blob/6ed2ac244d961239b1695d0b6a729f6fd7bc209b/ray2d_rect_intersection/ray2d_rect_intersection.c
+func UpdatePlayerRay() {
+	cameraForward := rl.GetCameraForward(&camera)
+	playerForwardEstimateMagnitude := rl.Vector3{X: 5., Y: .125 / 2., Z: 5.} // HACK: Projection
+	playerReticlePosition := rl.Vector3Multiply(cameraForward, playerForwardEstimateMagnitude)
+	gPlayerRay = rl.NewRay(rl.Vector3{X: xPlayer.Position.X, Y: xPlayer.Position.Y /* + xPlayer.Size.Y/4 */, Z: xPlayer.Position.Z}, playerReticlePosition)
+	playerForwardAimEndPos = rl.Vector3Add(xPlayer.Position, playerReticlePosition)
+}
+
+func GetClosestMiningBlockIndexOnRayCollision() int {
+	var (
+		index           = -1
+		minimumDistance = float32(math.MaxFloat32)
+	)
+	for i := range xBlocks {
+		if !xBlocks[i].IsActive || xBlocks[i].State >= (block.MaxBlockState-1) { // for max==4 -> where last is 3 , only allow 0,1,2
+			continue
+		}
+		if rc := rl.GetRayCollisionBox(gPlayerRay, xBlocks[i].GetBlockBoundingBox()); rc.Hit {
+			temp := minimumDistance
+			minimumDistance = min(rc.Distance, minimumDistance)
+
+			if minimumDistance < temp {
+				index = i
+			}
+		}
+	}
+	return index
+}
+
+func drawOuterDrillroom() {
+	const maxDrillWallIndex = 2
+	wallScale := rl.NewVector3(1., 1., 1.)
+	for i := float32(-maxDrillWallIndex + 1); i < maxDrillWallIndex; i++ {
+		var model rl.Model
+		var y float32
+		model = common.ModelDungeonKit.OBJ.Column
+		y = 0.
+		rl.DrawModelEx(model, rl.NewVector3(i, y, maxDrillWallIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
+		rl.DrawModelEx(model, rl.NewVector3(i, y, -maxDrillWallIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
+		rl.DrawModelEx(model, rl.NewVector3(maxDrillWallIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
+		rl.DrawModelEx(model, rl.NewVector3(-maxDrillWallIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
+		model = common.ModelDungeonKit.OBJ.Wall
+		y = 1. + .125*.5
+		rl.DrawModelEx(model, rl.NewVector3(i, y, maxDrillWallIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
+		rl.DrawModelEx(model, rl.NewVector3(i, y, -maxDrillWallIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
+		rl.DrawModelEx(model, rl.NewVector3(maxDrillWallIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
+		rl.DrawModelEx(model, rl.NewVector3(-maxDrillWallIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
+		model = common.ModelDungeonKit.OBJ.Column
+		y = 2. + .125*.5
+		rl.DrawModelEx(model, rl.NewVector3(i, y, maxDrillWallIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
+		rl.DrawModelEx(model, rl.NewVector3(i, y, -maxDrillWallIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
+		rl.DrawModelEx(model, rl.NewVector3(maxDrillWallIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
+		rl.DrawModelEx(model, rl.NewVector3(-maxDrillWallIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
+	}
 }
 
 func Unload() {
@@ -869,7 +965,7 @@ func saveGameEntityData() {
 func saveGameAdditionalData() {
 	const suffix = additionalGameDataVersionSuffix
 	input := GameAdditionalData{
-		Blocks: blocks,
+		Blocks: xBlocks,
 	}
 	var b []byte
 	bb := bytes.NewBuffer(b)
@@ -1000,3 +1096,55 @@ func loadAdditionalGameData() (*GameAdditionalData, error) {
 //			TEMPORARY
 //		TEMPORARY
 // TEMPORARY
+
+// LOGIC
+
+// Conversion rate
+func logicGameCurrencyConversionPrototype() {
+	// Copied from block.go
+	// ========================================================================
+	type BlockResourceType uint8
+
+	const (
+		DefaultBlockResource BlockResourceType = iota
+		CopperBlockResource
+		SilverBlockResource
+		GoldBlockResource
+	)
+	// ------------------------------------------------------------------------
+
+	// - copper to iron => 25:1
+	// - copper to bronze => 25:1
+	// - copper to silver => 30:1
+	// - copper to ruby => 35:1
+	// - copper to gold => 40:1
+	// - copper to diamond => 80:1
+	// - copper to sapphire => 80:1
+
+	// https://en.wikipedia.org/wiki/Hierarchy_of_precious_substances
+	type Currency int32
+
+	const (
+		Copper   Currency = 1
+		Pearl    Currency = 25 // or Iron
+		Bronze   Currency = 25
+		Silver   Currency = 30
+		Ruby     Currency = 35
+		Gold     Currency = 40
+		Diamond  Currency = 80
+		Sapphire Currency = 80 // Yellow/Blue
+		// Platinum
+	)
+
+	// Traditional manifestations
+	// Jubilees have a hierarchy of years:
+	//
+	// Years	Precious Material	Example
+	// 25	Silver	Silver Jubilee
+	// 40	Ruby	Ruby Jubilee
+	// 50	Gold	Golden Jubilee
+	// 60	Diamond	Diamond Jubilee
+	// 65	Sapphire	Sapphire Jubilee
+	// 70	Platinum	Platinum Jubilee
+
+}
