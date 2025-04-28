@@ -510,7 +510,7 @@ func Draw() {
 	// 3D World
 	rl.BeginMode3D(camera)
 
-	rl.ClearBackground(rl.Black)
+	rl.ClearBackground(rl.RayWhite)
 
 	xFloor.Draw()
 	wall.DrawBatch(common.OpenWorldRoom, xFloor.Position, xFloor.Size, common.Vector3One)
@@ -552,32 +552,39 @@ func Draw() {
 		rl.DrawRectanglePro(rl.NewRectangle(pos.X, pos.Y, 8, 8), rl.NewVector2(0, 0), 45, rl.Fade(rl.White, .1))
 	}
 
-	// Draw ray reticle on block
+	// Draw shooting/aiming ray reticle on block
 	if closestBlockIndex := GetClosestMiningBlockIndexOnRayCollision(); closestBlockIndex > -1 && closestBlockIndex < len(xBlocks) {
 		collision := rl.GetRayCollisionBox(gPlayerRay, xBlocks[closestBlockIndex].GetBlockBoundingBox())
 		pos := rl.GetWorldToScreen(collision.Point, camera) // Draw a diamond
-		rl.DrawRectanglePro(rl.NewRectangle(pos.X, pos.Y, 5, 5), rl.NewVector2(0, 0), 45, rl.Fade(rl.Orange, .3))
+		rl.DrawRectanglePro(rl.NewRectangle(pos.X, pos.Y, 3, 3), rl.NewVector2(0, 0), 45, rl.Fade(rl.Green, .3))
 	}
 
 	// Draw depth meter
 	{
 		const gapX = 10
-		totalLevels := len(common.SavedgameSlotData.AllLevelIDS)
+
 		var (
-			isShowText bool
+			totalLevels = len(common.SavedgameSlotData.AllLevelIDS)
+			isShowText  bool
 		)
+
 		if rl.IsKeyDown(rl.KeyApostrophe) {
 			isShowText = true
 		}
+
 		gapY := int32(mathutil.CeilF(float32(screenH) / float32(totalLevels))) // parts
 		rl.DrawLine(screenW-gapX, gapY/2, screenW-gapX, screenH-gapY/2, rl.Gray)
+
 		for i := range int32(totalLevels) {
 			x := screenW - gapX
 			y := gapY/2 + i*gapY
 			rl.DrawLine(x, y, x-gapX/2, y, rl.Gray)
+
 			radius := float32(6)
+
 			if (i + 1) == levelID {
 				col := rl.Orange
+
 				if isShowText {
 					col = rl.Red
 				}
@@ -738,31 +745,36 @@ func DrawProjectiles() {
 			continue
 		}
 
-		const maxTrailLength = 3. // Projectile trail
-		const maxTrailThick = .04 // Radius
+		col := rl.White
+		col = rl.Fade(col, .3)
 
-		rl.DrawSphere(projectiles.Position[i], maxTrailThick+.005, rl.Fade(rl.Orange, .6)) // Projectile Head
-		rl.DrawSphereWires(projectiles.Position[i], maxTrailThick+.005, 16, 16, rl.Gold)   // Projectile Head
+		const maxTrailLength = 3. // Projectile trail
+		const maxTrailThick = .05 // Radius
+		const radius0 = maxTrailThick * common.InvPhi
+
+		rl.DrawSphere(projectiles.Position[i], radius0, col) // Projectile Head
+		rl.DrawSphereWires(projectiles.Position[i], radius0, 16, 16, col)
 
 		timeFactor := (projectiles.TimeLeft[i] / projectile.MaxTimeLeft)
-		radius := float32(maxTrailThick * timeFactor)
+
 		angle := projectiles.AngleXZPlaneDegree[i] * rl.Deg2rad
+		dist := rl.Vector3Distance(xPlayer.Position, projectiles.Position[i])
+		radius1 := float32(maxTrailThick * timeFactor)
 		trailLength := float32(maxTrailLength)
 
-		// Avoid passing projectile trail through the player body itself when animation just started
-		if d := rl.Vector3Distance(xPlayer.Position, projectiles.Position[i]); d < maxTrailLength {
-			trailLength = d
+		// Avoid passing projectile trail through the player body
+		// itself when animation just started
+		if dist < maxTrailLength {
+			trailLength = dist
 		}
 
 		currPos := projectiles.Position[i]
 		prevPos := rl.Vector3{
 			X: projectiles.Position[i].X - mathutil.CosF(angle)*trailLength,
 			Y: 0,
-			Z: projectiles.Position[i].Z - mathutil.SinF(angle)*trailLength,
-		}
+			Z: projectiles.Position[i].Z - mathutil.SinF(angle)*trailLength}
 
-		// rl.DrawCapsule(prevPos, currPos, radius, 16, 16, rl.Fade(rl.Orange, .35))
-		rl.DrawCylinderEx(prevPos, currPos, (radius/5)/timeFactor, radius, 16, rl.Fade(rl.Orange, .35))
+		rl.DrawCylinderEx(prevPos, currPos, (radius1/5)/timeFactor, radius1, 16, col)
 	}
 }
 
