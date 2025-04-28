@@ -129,6 +129,7 @@ func SetupPlayerModel() {
 		rl.LoadModel(filepath.Join("res", "model", "gltf", "greenman_sword.glb")),  // Index for the sword model is the same as BONE_SOCKET_HAND_R
 		rl.LoadModel(filepath.Join("res", "model", "gltf", "greenman_shield.glb")), // Index for the shield model is the same as BONE_SOCKET_HAND_L
 	}
+
 	isShowEquippedModels = [MaxBoneSockets]bool{true, true, true}
 
 	// Load gltf model animations
@@ -141,44 +142,39 @@ func SetupPlayerModel() {
 	boneSocketsIndex = [MaxBoneSockets]int{-1, -1, -1}
 
 	// See https://stackoverflow.com/questions/28848187/how-to-convert-int8-to-string
-	B2S := func(bs []int8) string {
+	byteToString := func(bs []int8) string {
 		b := make([]byte, len(bs))
 		for i, v := range bs {
 			b[i] = byte(v)
 		}
-		var sb strings.Builder
-		sb.Write(b)
-		return sb.String()
+		return string(b)
 	}
 
 	// Search bones for sockets in -> [root,body_low,body_up,socket_hat,hand_L,hand_R,hip_L,leg_L,hip_R,leg_R,socket_hand_L,socket_hand_R]
 	for i := range characterModel.BoneCount {
 		var buf [32]int8 = characterModel.GetBones()[i].Name
-		var name string = B2S(buf[:])
+		var name string = byteToString(buf[:])
 
 		// FIXME: String comparison not work with == operator
 		if bytes.Equal([]byte(name), []byte("socket_hat")) ||
-			(!strings.EqualFold(name, "socket_hat") &&
-				(strings.Contains(name, "socket") && strings.Contains(name, "hat"))) {
+			(!strings.EqualFold(name, "socket_hat") && (strings.Contains(name, "socket") && strings.Contains(name, "hat"))) {
 			boneSocketsIndex[BoneSocketHat] = int(i)
 			continue
 		}
 		if bytes.Equal([]byte(name), []byte("socket_hand_R")) ||
-			(!strings.EqualFold(name, "socket_hand_R") &&
-				(strings.Contains(name, "socket") && strings.Contains(name, "hand") && strings.Contains(name, "R"))) {
+			(!strings.EqualFold(name, "socket_hand_R") && (strings.Contains(name, "socket") && strings.Contains(name, "hand") && strings.Contains(name, "R"))) {
 			boneSocketsIndex[BoneSocketHandR] = int(i)
 			continue
 		}
 		if bytes.Equal([]byte(name), []byte("socket_hand_L")) ||
-			(!strings.EqualFold(name, "socket_hand_L") &&
-				(strings.Contains(name, "socket") && strings.Contains(name, "hand") && strings.Contains(name, "L"))) {
+			(!strings.EqualFold(name, "socket_hand_L") && (strings.Contains(name, "socket") && strings.Contains(name, "hand") && strings.Contains(name, "L"))) {
 			boneSocketsIndex[BoneSocketHandL] = int(i)
 			continue
 		}
 	}
 
-	// boneSocketIndex => initial [-1,-1,-1] => want [3,11,10]
 	if got, want := boneSocketsIndex[:], [3]int{3, 11, 10}; !slices.Equal(got[:], want[:]) {
+		// boneSocketIndex => initial [-1,-1,-1] => want [3,11,10]
 		panic(fmt.Sprintln("NewPlayer: boneSocketIndex", "got", got, "want", want))
 	}
 }

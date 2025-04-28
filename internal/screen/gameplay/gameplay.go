@@ -144,8 +144,8 @@ func Init() {
 	// Core resources
 	floor.SetupFloorModel()
 	wall.SetupWallModel(common.OpenWorldRoom)
-	player.SetupPlayerModel()                                                    // FIXME: in this func, use package common for models
-	player.ToggleEquippedModels([player.MaxBoneSockets]bool{false, true, false}) // Unequip hat sword shield
+	player.SetupPlayerModel()                                                     // FIXME: in this func, use package common for models
+	player.ToggleEquippedModels([player.MaxBoneSockets]bool{false, false, false}) // Unequip hat sword shield
 
 	// Core data
 	if !isNewGame {
