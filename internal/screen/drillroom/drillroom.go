@@ -97,6 +97,7 @@ func Init() {
 
 	// Core resources
 	player.SetupPlayerModel()
+	player.ToggleEquippedModels([player.MaxBoneSockets]bool{false, false, false}) // Unequip hat sword shield
 	floor.SetupFloorModel()
 	wall.SetupWallModel(common.DrillRoom)
 
@@ -107,19 +108,7 @@ func Init() {
 	// Layout copied from https://annekatran.itch.io/dig-and-delve
 	triggerSize := rl.NewVector3(.5, .5, .5)
 	triggerPosY := triggerSize.Y / 2.
-	// triggerPositions = []rl.Vector3{
-	// 	// Corners
-	// 	rl.NewVector3(-2, triggerPosY, -2),
-	// 	rl.NewVector3(+2, triggerPosY, -2),
-	// 	rl.NewVector3(-2, triggerPosY, +2),
-	// 	rl.NewVector3(+2, triggerPosY, +2),
-	//
-	// 	// Sides
-	// 	rl.NewVector3(-2, triggerPosY, +0),
-	// 	rl.NewVector3(+2, triggerPosY, +0),
-	// 	rl.NewVector3(+0, triggerPosY, -2),
-	// 	rl.NewVector3(+0, triggerPosY, +2),
-	// }
+
 	kx := (xFloor.Size.X / (1. * math.Pi)) - 1.
 	kz := (xFloor.Size.Z / (1. * math.Pi)) - 2.
 
@@ -182,7 +171,7 @@ func Init() {
 	}
 
 	// TEMPORARY
-	if __IS_TEMPORARY__ := true; __IS_TEMPORARY__ {
+	if __IS_TEMPORARY__ := false; __IS_TEMPORARY__ {
 		for i := range MaxTriggerCount {
 			isTriggerActive[i] = false
 		}
@@ -268,7 +257,7 @@ func Update() {
 		}
 
 		// Disable everything apart from "Start drill" trigger for now
-		if __IS_TEMPORARY__ := true; __IS_TEMPORARY__ {
+		if __IS_TEMPORARY__ := false; __IS_TEMPORARY__ {
 			if !isTriggerActive[i] {
 				continue
 			}
@@ -282,7 +271,7 @@ func Update() {
 		if rl.IsKeyPressed(rl.KeyF) {
 			var canDrill bool
 			// TEMPORARY
-			if __IS_TEMPORARY__ := true; __IS_TEMPORARY__ {
+			if __IS_TEMPORARY__ := false; __IS_TEMPORARY__ {
 				// Force success
 				if isSuccess := true; isSuccess {
 					canDrill = hitCount == 0

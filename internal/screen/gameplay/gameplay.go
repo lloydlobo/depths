@@ -350,7 +350,7 @@ func Update() {
 				}
 				if common.GetCollisionPointBox(projectiles.Position[i], xBlocks[closestIndex].GetBlockBoundingBox()) {
 					if xBlocks[closestIndex].State < block.MaxBlockState-1 {
-						xBlocks[closestIndex].NextState()
+						handleBlockOnMining(&xBlocks[closestIndex])
 						projectiles.IsActive[i] = false
 						break NextProjectile
 					}
@@ -362,114 +362,49 @@ func Update() {
 	// Play player weapon sounds
 	if rl.IsKeyDown(rl.KeySpace) && framesCounter%16 == 0 {
 		v := rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "drawKnife3.ogg"))
+
 		rl.SetSoundPan(v, 0.5+float32(rl.GetRandomValue(-10, 10)/(2*10)))
 		rl.SetSoundVolume(v, 0.7)
+
 		rl.PlaySound(v)
 	}
 
 	// Update block and player interaction/mining
 	for i := range xBlocks {
+
 		// Skip final broken/mined block residue
 		if xBlocks[i].State == block.MaxBlockState-1 {
 			continue
 		}
 
-		if rl.CheckCollisionBoxes(
-			common.GetBoundingBoxFromPositionSizeV(xBlocks[i].Position, xBlocks[i].Size),
-			xPlayer.BoundingBox,
-		) {
-			// FIND OUT WHERE PLAYER TOUCHED THE BOX
-			// HACK
-			//		HACK
-			//			HACK
-			xPlayer.Collisions.Z = 1
+		// TODO: find out where player touched the box
+		// WARN: Remember to clear out player collision
+		if rl.CheckCollisionBoxes(xBlocks[i].GetBlockBoundingBox(), xPlayer.BoundingBox) {
 			dx := oldPlayer.Position.X - xPlayer.Position.X
-			if dx < 0.0 { // new <- old
-				xPlayer.Collisions.X = 1
-			} else if dx > 0.0 { // new -> old
-				xPlayer.Collisions.X = -1
-			} else {
-				if xPlayer.Collisions.X != 0 { // Placeholder (do not overwrite previous)
-					xPlayer.Collisions.X = 0
-				}
-			}
 			dz := oldPlayer.Position.Z - xPlayer.Position.Z
-			if dz < 0.0 { // new <- old
-				xPlayer.Collisions.Z = 1
-			} else if dz > 0.0 { // new -> old
-				xPlayer.Collisions.Z = -1
-			} else {
-				if xPlayer.Collisions.Z != 0 { // Placeholder (do not overwrite previous)
-					xPlayer.Collisions.Z = 0
-				}
+
+			if dx < 0. {
+				xPlayer.Collisions.X = 1
+			} else if dx > 0. {
+				xPlayer.Collisions.X = -1
+			} else if xPlayer.Collisions.X != 0 {
+				xPlayer.Collisions.X = 0
 			}
-			//			HACK
-			//		HACK
-			// HACK
+
+			if dz < 0. {
+				xPlayer.Collisions.Z = 1
+			} else if dz > 0. {
+				xPlayer.Collisions.Z = -1
+			} else if xPlayer.Collisions.Z != 0 {
+				xPlayer.Collisions.Z = 0
+			}
 
 			player.RevertPlayerAndCameraPositions(&xPlayer, oldPlayer, &camera, oldCam)
 
-			// Trigger once while mining
-			if rl.IsKeyDown(rl.KeySpace) && framesCounter%16 == 0 {
-				// Play mining impacts with variations (s1:kick + s2:snare + s3:hollow-thock)
-				state := xBlocks[i].State
-				if state == block.DirtBlockState { // First state
-					soundName := "handleSmallLeather"
-					if rl.GetRandomValue(0, 1) == 0 {
-						soundName += "2"
-					}
-					v := rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", soundName+".ogg"))
-					rl.SetSoundPan(v, 0.5+float32(rl.GetRandomValue(-10, 10))/40.0)
-					rl.SetSoundVolume(v, 0.5)
-					rl.PlaySound(v)
-				}
-				if true {
-					v := rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("cloth%d.ogg", min(block.MaxBlockState-1, max(1, state+1)))))
-					rl.SetSoundPan(v, 0.5+float32(rl.GetRandomValue(-10, 10)/(2*10)))
-					rl.SetSoundVolume(v, 0.0625)
-					rl.PlaySound(v)
-				}
-				if framesCounter%int32(state+1) == 0 { // Higher states are small items.. So no need for bass
-					s1 := common.FXS.ImpactsSoftMedium[rl.GetRandomValue(int32(state), int32(len(common.FXS.ImpactsSoftMedium)-1))]
-					s2 := common.FXS.ImpactsGenericLight[rl.GetRandomValue(int32(state), int32(len(common.FXS.ImpactsGenericLight)-1))]
-					s3 := common.FXS.ImpactsSoftHeavy[rl.GetRandomValue(int32(state), int32(len(common.FXS.ImpactsSoftHeavy)-1))]
-					rl.SetSoundVolume(s1, float32(rl.GetRandomValue(7, 10))/10.)
-					rl.SetSoundVolume(s2, float32(rl.GetRandomValue(4, 8))/10.)
-					rl.SetSoundVolume(s3, float32(rl.GetRandomValue(1, 4))/10.)
-					rl.PlaySound(s1)
-					rl.PlaySound(s2)
-					rl.PlaySound(s3)
-				}
-				if rl.GetRandomValue(0, 1) == 0 && state > block.DirtBlockState {
-					v := rl.LoadSound(filepath.Join("res", "fx", "kenney_impact-sounds", "Audio", fmt.Sprintf("impactMining_00%d.ogg", min(block.MaxBlockState-1, state))))
-					rl.SetSoundPan(v, 0.5+float32(rl.GetRandomValue(-10, 10)/(2*10)))
-					rl.SetSoundVolume(v, 2.00)
-					rl.PlaySound(v)
-				}
+			isDebounceTrigger := framesCounter%16 == 0
 
-				// Update stats
-				hitCount++
-
-				const finalState = (block.MaxBlockState - 1)
-				const cargoCapacityUnitPerIncrement = 2
-				canIncrementScore := state == finalState-1
-
-				if canIncrementScore {
-					hitScore += cargoCapacityUnitPerIncrement
-					xPlayer.CargoCapacity = min(xPlayer.MaxCargoCapacity, xPlayer.CargoCapacity+cargoCapacityUnitPerIncrement)
-
-					// FIXME: Record.. hitCount and hitScore to save game.. and load and update directly
-					if hitCount/hitScore != int32(finalState) {
-						msg := fmt.Sprintf("expect for %d hits, score to incrementby 1. (except if counter started from an already semi-mined block)", finalState)
-						if isEnablePerfectionist := false; isEnablePerfectionist {
-							panic(msg)
-						} else {
-							slog.Warn(msg)
-						}
-					}
-				}
-				// Increment state on successful mining action
-				xBlocks[i].NextState()
+			if rl.IsKeyDown(rl.KeySpace) && isDebounceTrigger {
+				handleBlockOnMining(&xBlocks[i])
 			}
 		}
 	}
@@ -508,19 +443,20 @@ func Update() {
 
 		// Do not allow entry till cargo capacity is full.. This is temporary.. to quickly develop a simple gameloop.
 		// Later we add transactions and resource conversions
-		if __IS_TEMPORARY__ := true; __IS_TEMPORARY__ {
+		if __IS_TEMPORARY__ := false; __IS_TEMPORARY__ {
 			if canSwitchToDrillRoom {
 				slog.Warn("OVERIDING ENTRY TO DRILL ROOM. (TEMPORARY)")
 				canSwitchToDrillRoom = hitScore >= xPlayer.MaxCargoCapacity
 			}
 		}
 
-		// - (gameplay ) saveScore?
-		// - (common   )   how much resource is required to drill to next level
-		// - (drillroom) how will you handle modifying currentLevelID in gamesave/slot/1.json?
-		// - (drillroom) what decides
-		// - Are we drilling asteroids in space?
-		//	- Draw a protection barrier over the scene (like a firmament)
+		// NOTES:
+		//	 - (gameplay ) saveScore?
+		//	 - (common   )   how much resource is required to drill to next level
+		//	 - (drillroom) how will you handle modifying currentLevelID in gamesave/slot/1.json?
+		//	 - (drillroom) what decides
+		//	 - Are we drilling asteroids in space?
+		//		- Draw a protection barrier over the scene (like a firmament)
 		if canSwitchToDrillRoom { // Play entry sounds
 			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("footstep0%d.ogg", rl.GetRandomValue(0, 9))))) // 05
 			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "metalClick.ogg")))                                        // metalClick
@@ -714,6 +650,88 @@ func Draw() {
 	}
 }
 
+func Unload() {
+	// TODO: Unload gameplay screen variables here!
+	if rl.IsCursorHidden() {
+		rl.EnableCursor() // without 3d ThirdPersonPerspective
+	}
+
+	// Commented out as it hinders switching to drill room or menu/ending (on pause/restart)
+	// rl.UnloadMusicStream(music)
+}
+
+// Gameplay screen should finish?
+// NOTE: This is called each frame in main game loop
+func Finish() int {
+	return finishScreen
+}
+
+// Set next block state
+// Update score
+// Play mining impacts with variations (s1:kick + s2:snare + s3:hollow-thock)
+func handleBlockOnMining(b *block.Block) {
+	if b.State == block.DirtBlockState { // First state
+		soundName := "handleSmallLeather"
+		if rl.GetRandomValue(0, 1) == 0 {
+			soundName += "2"
+		}
+		v := rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", soundName+".ogg"))
+		rl.SetSoundPan(v, 0.5+float32(rl.GetRandomValue(-10, 10))/40.0)
+		rl.SetSoundVolume(v, 0.5)
+		rl.PlaySound(v)
+	}
+	if b.State > block.DirtBlockState {
+		v := rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("cloth%d.ogg", min(block.MaxBlockState-1, max(1, b.State+1)))))
+		rl.SetSoundPan(v, 0.5+float32(rl.GetRandomValue(-10, 10)/(2*10)))
+		rl.SetSoundVolume(v, 0.0625)
+		rl.PlaySound(v)
+	}
+	if rl.GetRandomValue(0, 1) == 0 && b.State > block.DirtBlockState {
+		v := rl.LoadSound(filepath.Join("res", "fx", "kenney_impact-sounds", "Audio", fmt.Sprintf("impactMining_00%d.ogg", min(block.MaxBlockState-1, b.State))))
+		rl.SetSoundPan(v, 0.5+float32(rl.GetRandomValue(-10, 10)/(2*10)))
+		rl.SetSoundVolume(v, 2.00)
+		rl.PlaySound(v)
+	}
+	if b.State < block.MaxBlockState-1 /* framesCounter%int32(state+1) == 0 */ { // Higher states are small items.. So no need for bass
+		s1 := common.FXS.ImpactsSoftMedium[rl.GetRandomValue(int32(b.State), int32(len(common.FXS.ImpactsSoftMedium)-1))]
+		s2 := common.FXS.ImpactsGenericLight[rl.GetRandomValue(int32(b.State), int32(len(common.FXS.ImpactsGenericLight)-1))]
+		s3 := common.FXS.ImpactsSoftHeavy[rl.GetRandomValue(int32(b.State), int32(len(common.FXS.ImpactsSoftHeavy)-1))]
+		rl.SetSoundVolume(s1, float32(rl.GetRandomValue(7, 10))/10.)
+		rl.SetSoundVolume(s2, float32(rl.GetRandomValue(4, 8))/10.)
+		rl.SetSoundVolume(s3, float32(rl.GetRandomValue(1, 4))/10.)
+		rl.PlaySound(s1)
+		rl.PlaySound(s2)
+		rl.PlaySound(s3)
+	}
+
+	// Update stats
+	hitCount++
+
+	{
+		const finalState = (block.MaxBlockState - 1)
+		const cargoCapacityUnitPerIncrement = 2
+
+		canIncrementScore := b.State == finalState-1
+
+		if canIncrementScore {
+			hitScore += cargoCapacityUnitPerIncrement
+			xPlayer.CargoCapacity = min(xPlayer.MaxCargoCapacity, xPlayer.CargoCapacity+cargoCapacityUnitPerIncrement)
+		}
+		if canIncrementScore { // FIXME: Record.. hitCount and hitScore to save game.. and load and update directly
+			if hitCount/hitScore != int32(finalState) {
+				msg := fmt.Sprintf("expect for %d hits, score to incrementby 1. (except if counter started from an already semi-mined block)", finalState)
+				if isEnablePerfectionist := false; isEnablePerfectionist {
+					panic(msg)
+				}
+				slog.Warn(msg)
+			}
+		}
+	}
+
+	// Increment state on successful mining action
+	b.NextState()
+}
+
 func DrawProjectiles() {
 	for i := range projectile.MaxProjectiles {
 		if !projectiles.IsActive[i] {
@@ -812,70 +830,6 @@ func drawOuterDrillroom() {
 		rl.DrawModelEx(model, rl.NewVector3(-maxDrillWallIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
 	}
 }
-
-func Unload() {
-	// TODO: Unload gameplay screen variables here!
-	if rl.IsCursorHidden() {
-		rl.EnableCursor() // without 3d ThirdPersonPerspective
-	}
-
-	// Commented out as it hinders switching to drill room or menu/ending (on pause/restart)
-	// rl.UnloadMusicStream(music)
-}
-
-// Gameplay screen should finish?
-// NOTE: This is called each frame in main game loop
-func Finish() int {
-	return finishScreen
-}
-
-// TEMPORARY
-//		TEMPORARY
-//			TEMPORARY
-//				TEMPORARY
-//					TEMPORARY
-//						TEMPORARY
-//							TEMPORARY
-//								TEMPORARY
-//									TEMPORARY
-//										TEMPORARY
-//											TEMPORARY
-//												TEMPORARY
-//													TEMPORARY
-//														TEMPORARY
-
-// // Migration/Reference/Example
-// // Refactors huge blocks data state from main game data state
-// var GameAdditionalLevelDataVersions = map[string]map[string]any{
-// 	"0.0.0-blocks": {
-// 		"version": "0.0.0-blocks",
-// 		"levelID": levelID,
-// 		"data": map[string]any{
-// 			"blockArray": []block.Block{},
-// 		},
-// 	},
-// 	"0.0.1": {},
-// 	"0.0.2": {},
-// }
-//
-// // Migration/Reference/Example
-// var GameCoreLevelDataVersions = map[string]map[string]any{
-// 	"0.0.0": {
-// 		"version": "0.0.0",
-// 		"levelID": levelID,
-// 		"data": map[string]any{
-// 			"camera":                 rl.Camera3D{},
-// 			"finishScreen":           int(0),
-// 			"framesCounter":          int32(0),
-// 			"gameFloor":              floor.Floor{},
-// 			"gamePlayer":             player.Player{},
-// 			"hasPlayerLeftDrillBase": false,
-// 		},
-// 	},
-// 	"0.0.1": {},
-// 	"0.0.2": {},
-// }
-//
 
 type GameEntityData struct {
 	LevelID int32 `json:"levelID"`
@@ -1080,21 +1034,6 @@ func loadAdditionalGameData() (*GameAdditionalData, error) {
 		return nil, fmt.Errorf("invalid game %s data version %q", suffix, version)
 	}
 }
-
-//														TEMPORARY
-//													TEMPORARY
-//												TEMPORARY
-//											TEMPORARY
-//										TEMPORARY
-//									TEMPORARY
-//								TEMPORARY
-//							TEMPORARY
-//						TEMPORARY
-//					TEMPORARY
-//				TEMPORARY
-//			TEMPORARY
-//		TEMPORARY
-// TEMPORARY
 
 // LOGIC
 

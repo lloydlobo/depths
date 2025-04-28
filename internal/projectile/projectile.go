@@ -7,9 +7,9 @@ import (
 )
 
 const (
-	MaxProjectiles                  = int32(32)
-	MaxTimeLeft                     = float32(1.0) // 1 second in 60fps. Should decrement time to compare with by dt (i.e. rl.GetFrameTime())
-	MaxProjectileFireRateTimerLimit = float32(0.5) // Reduce this to increase fire rate.
+	MaxProjectiles                  = int32(16)     // Cyclic buffer capacity
+	MaxTimeLeft                     = float32(1.0)  // 1 second in 60fps. Should decrement time to compare with by dt (i.e. rl.GetFrameTime())
+	MaxProjectileFireRateTimerLimit = float32(0.32) // Reduce this to increase fire rate.
 )
 
 type ProjectileSOA struct { // size=1352 (0x548)
