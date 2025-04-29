@@ -361,7 +361,7 @@ func Update() {
 
 	// Update block and player interaction/mining
 	// TODO: Find out where player touched the box
-	// WARN: Remember to clear out player collision
+	// WARN: Should we clear out player collision
 	for i := range xBlocks {
 		if xBlocks[i].IsActive &&
 			xBlocks[i].State < block.MaxBlockState-1 &&
@@ -370,33 +370,15 @@ func Update() {
 				xPlayer.BoundingBox,
 			) {
 
-			dx := oldPlayer.Position.X - xPlayer.Position.X
-			if dx < 0. {
-				xPlayer.Collisions.X = 1
-			} else if dx > 0. {
-				xPlayer.Collisions.X = -1
-			} else if xPlayer.Collisions.X != 0 {
-				xPlayer.Collisions.X = 0
-			}
-
-			dz := oldPlayer.Position.Z - xPlayer.Position.Z
-			if dz < 0. {
-				xPlayer.Collisions.Z = 1
-			} else if dz > 0. {
-				xPlayer.Collisions.Z = -1
-			} else if xPlayer.Collisions.Z != 0 {
-				xPlayer.Collisions.Z = 0
-			}
-
-			player.RevertPlayerAndCameraPositions(
-				&xPlayer, oldPlayer,
-				&camera, oldCam,
-			)
+			xPlayer.Collisions.X = -mathutil.AbsF(oldPlayer.Position.X - xPlayer.Position.X)
+			xPlayer.Collisions.Z = -mathutil.SignF(oldPlayer.Position.Z - xPlayer.Position.Z)
+			player.RevertPlayerAndCameraPositions(&xPlayer, oldPlayer, &camera, oldCam)
 
 			if rl.IsKeyDown(rl.KeySpace) {
-				debounceFrameIntervals := []int32{60, 52, 48, 40, 32, 24, 20, 16, 8}[3]
-				isDebounce := framesCounter%debounceFrameIntervals != 0
-
+				mineFasterIndex := 3 // Higher index ~= Faster mining
+				mineFasterFrames := []int32{60, 52, 48, 40, 32, 24, 20, 16, 8}
+				debounceRate := mineFasterFrames[mineFasterIndex]
+				isDebounce := framesCounter%debounceRate != 0
 				if !isDebounce {
 					handleBlockOnMining(&xBlocks[i])
 				}
