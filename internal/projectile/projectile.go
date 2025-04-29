@@ -12,11 +12,11 @@ const (
 	MaxProjectileFireRateTimerLimit = float32(0.5) // Reduce this to increase fire rate.
 )
 
-type ProjectileSOA struct { // size=1352 (0x548)
-	Position           [MaxProjectiles]rl.Vector3
-	AngleXZPlaneDegree [MaxProjectiles]float32 // Direction [MaxProjectiles]rl.Vector3
-	TimeLeft           [MaxProjectiles]float32
-	IsActive           [MaxProjectiles]bool
+type ProjectileSOA struct { // size=344 (0x158)
+	Position [MaxProjectiles]rl.Vector3
+	Rotation [MaxProjectiles]float32 // (degrees) XZ plane
+	TimeLeft [MaxProjectiles]float32
+	IsActive [MaxProjectiles]bool
 
 	CircularBufIndex int32
 	FireRateTimer    float32 // Wait for MaxProjectileFireRateTimerLimit cooldown wait time before next emit. Update -= dt each frame
@@ -26,7 +26,7 @@ type ProjectileSOA struct { // size=1352 (0x548)
 func (ps *ProjectileSOA) Reset() {
 	for i := range MaxProjectiles {
 		ps.Position[i] = rl.Vector3{}
-		ps.AngleXZPlaneDegree[i] = 0
+		ps.Rotation[i] = 0
 		ps.TimeLeft[i] = 0.
 		ps.IsActive[i] = false
 	}
@@ -37,10 +37,10 @@ func (ps *ProjectileSOA) Reset() {
 // See https://github.com/lloydlobo/tinycreatures/blob/210c4a44ed62fbb08b5f003872e046c99e288bb9/src/main.lua#L341C1-L356C4
 func (ps *ProjectileSOA) Emit(position rl.Vector3, rotationDegree float32) {
 	ps.Position[ps.CircularBufIndex] = position
-	ps.Position[ps.CircularBufIndex] = position
+	ps.Rotation[ps.CircularBufIndex] = rotationDegree
+
 	ps.TimeLeft[ps.CircularBufIndex] = MaxTimeLeft
 	ps.IsActive[ps.CircularBufIndex] = true
-	ps.AngleXZPlaneDegree[ps.CircularBufIndex] = rotationDegree
 
 	// Increment index: (ring like data structure / circular reusable buffer)
 	ps.CircularBufIndex = (ps.CircularBufIndex + 1) % MaxProjectiles

@@ -46,9 +46,64 @@ var (
 var (
 	gPlayerRay             rl.Ray
 	gPlayerRayCollision    rl.RayCollision
-	projectiles            projectile.ProjectileSOA
 	playerForwardAimEndPos rl.Vector3 // Aim start is player position
+	xProjectileSOA         projectile.ProjectileSOA
 )
+
+const projectileRadiusSphere = .05 // Duplicated.. but maybe wrong values
+const projectileGuardDamage = (1.0 / 3.0) + .01
+
+const (
+	MaxGuards = int32(16)
+)
+
+var (
+	xGuardSOA GuardSOA
+)
+
+type GuardSOA struct { // size=1268 (0x4f4)
+	Position    [MaxGuards]rl.Vector3
+	Size        [MaxGuards]rl.Vector3
+	BoundingBox [MaxGuards]rl.BoundingBox
+	Collisions  [MaxGuards]rl.Quaternion
+
+	Color           [MaxGuards]color.RGBA
+	Rotation        [MaxGuards]float32 // (degrees) XZ plane
+	Health          [MaxGuards]float32 // [0..1]
+	IsActive        [MaxGuards]bool
+	IsWallCollision [MaxGuards]bool
+	IsWalk          [MaxGuards]bool
+
+	CircularBufferIndex int32
+}
+
+func (gs *GuardSOA) Reset() {
+	for i := range MaxGuards {
+		gs.Position[i] = rl.Vector3{}
+		gs.Size[i] = rl.Vector3{}
+		gs.IsActive[i] = false
+	}
+	gs.CircularBufferIndex = 0
+}
+
+func (gs *GuardSOA) Emit(position, size rl.Vector3, rotationDegree float32) {
+	gs.Position[gs.CircularBufferIndex] = position
+	gs.Size[gs.CircularBufferIndex] = size
+
+	gs.BoundingBox[gs.CircularBufferIndex] = common.GetBoundingBoxPositionSizeV(position, size)
+
+	gs.Collisions[gs.CircularBufferIndex] = rl.Quaternion{}
+
+	gs.Color[gs.CircularBufferIndex] = rl.White
+	gs.Rotation[gs.CircularBufferIndex] = rotationDegree
+	gs.Health[gs.CircularBufferIndex] = 1. // [0..1]
+	gs.IsActive[gs.CircularBufferIndex] = true
+	gs.IsWallCollision[gs.CircularBufferIndex] = false
+	gs.IsWalk[gs.CircularBufferIndex] = true // IDK (should add timer)
+
+	// Increment index: (ring like data structure / circular reusable buffer)
+	gs.CircularBufferIndex = (gs.CircularBufferIndex + 1) % MaxGuards
+}
 
 var (
 	// NOTE: AVOID using common.SavedgameSlotData.CurrentLevelID as reference
@@ -75,8 +130,8 @@ func Init() {
 	framesCounter = 0
 	finishScreen = 0
 
-	projectiles.Reset()
-	fmt.Printf("playerProjectiles: %v\n", projectiles)
+	xProjectileSOA.Reset()
+	fmt.Printf("playerProjectiles: %v\n", xProjectileSOA)
 
 	levelID = int32(common.SavedgameSlotData.CurrentLevelID)
 	if levelID == 0 {
@@ -141,6 +196,20 @@ func Init() {
 	}
 
 	const isNewGame = false
+
+	/* xGuards = GuardSOA{
+		Position:        [MaxGuards]rl.Vector3{},
+		Size:            [MaxGuards]rl.Vector3{},
+		BoundingBox:     [MaxGuards]rl.BoundingBox{},
+		Collisions:      [MaxGuards]rl.Quaternion{},
+		Rotation:        [MaxGuards]float32{},
+		Health:          [MaxGuards]float32{},
+		Color:           [MaxGuards]color.RGBA{},
+		IsActive:        [MaxGuards]bool{},
+		IsWallCollision: [MaxGuards]bool{},
+		IsWalk:          [MaxGuards]bool{},
+	} */
+	xGuardSOA.Reset()
 
 	// Core resources
 	floor.SetupFloorModel()
@@ -260,55 +329,36 @@ func Init() {
 func Update() {
 	rl.UpdateMusicStream(currentMusic)
 
-	// Simulate firing OR implement keyspace firing
-	if rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
-		playerForwardEstimateMagnitude := rl.Vector3{X: 5., Y: .125 / 2., Z: 5.} // HACK: Projection
-		playerReticlePosition := rl.Vector3Multiply(rl.GetCameraForward(&camera), playerForwardEstimateMagnitude)
-
-		gPlayerRay = rl.NewRay(rl.Vector3{X: xPlayer.Position.X, Y: xPlayer.Position.Y + xPlayer.Size.Y/4, Z: xPlayer.Position.Z}, playerReticlePosition)
-
-		didFire := projectile.FireEntityProjectile(&projectiles, xPlayer.Position, xPlayer.Size, float32(xPlayer.Rotation+90))
-		if didFire {
-			if n := int32(len(common.FXS.SciFiLaserSmall)); n > 0 {
-				rl.PlaySound(common.FXS.SciFiLaserSmall[rl.GetRandomValue(0, n-1)])
-			}
-		} else {
-			if n := int32(len(common.FXS.InterfaceClick)); n > 0 {
-				rl.PlaySound(common.FXS.InterfaceClick[rl.GetRandomValue(0, n-1)])
-			}
-		}
-	}
-
 	// See https://github.com/lloydlobo/tinycreatures/blob/210c4a44ed62fbb08b5f003872e046c99e288bb9/src/main.lua#L624
 	for i := range projectile.MaxProjectiles {
-		if !projectiles.IsActive[i] {
+		if !xProjectileSOA.IsActive[i] {
 			continue
 		}
 
-		isKillAnim := projectiles.TimeLeft[i] <= 0
+		isKillAnim := xProjectileSOA.TimeLeft[i] <= 0
 
 		if isKillAnim {
-			projectiles.IsActive[i] = false
+			xProjectileSOA.IsActive[i] = false
 		} else {
 			playerProjectileSpeed := 10 * rl.GetFrameTime()
 
-			angleRad := projectiles.AngleXZPlaneDegree[i] * rl.Deg2rad
+			angleRad := xProjectileSOA.Rotation[i] * rl.Deg2rad
 
 			displacement := rl.NewVector3(mathutil.CosF(angleRad)*playerProjectileSpeed, 0, mathutil.SinF(angleRad)*playerProjectileSpeed)
 
-			projectiles.Position[i] = rl.Vector3Add(projectiles.Position[i], displacement)
+			xProjectileSOA.Position[i] = rl.Vector3Add(xProjectileSOA.Position[i], displacement)
 
-			pos := projectiles.Position[i]
+			pos := xProjectileSOA.Position[i]
 
 			isOOBX := pos.X < xFloor.BoundingBox.Min.X || pos.X > xFloor.BoundingBox.Max.X
 			isOOBZ := pos.Z < xFloor.BoundingBox.Min.Z || pos.Z > xFloor.BoundingBox.Max.Z
 
 			if isOOBX || isOOBZ {
-				projectiles.IsActive[i] = false
+				xProjectileSOA.IsActive[i] = false
 			}
 		}
 	}
-	projectiles.FireRateTimer -= rl.GetFrameTime()
+	xProjectileSOA.FireRateTimer -= rl.GetFrameTime()
 
 	// Save variables this frame
 	oldCam := camera
@@ -341,37 +391,50 @@ func Update() {
 
 		rl.PlaySound(v)
 	}
+	// Simulate firing OR implement keyspace firing
+	if rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
+		playerForwardEstimateMagnitude := rl.Vector3{X: 5., Y: .125 / 2., Z: 5.} // HACK: Projection
+		playerReticlePosition := rl.Vector3Multiply(rl.GetCameraForward(&camera), playerForwardEstimateMagnitude)
 
-	for i := range projectile.MaxProjectiles {
-		if projectiles.IsActive[i] {
-			for j := range xBlocks {
-				if xBlocks[j].IsActive &&
-					xBlocks[j].State < block.MaxBlockState-1 &&
-					common.GetCollisionPointBox(
-						projectiles.Position[i],
-						xBlocks[j].GetBlockBoundingBox(),
-					) {
-					handleBlockOnMining(&xBlocks[j])
-					projectiles.IsActive[i] = false
-					break
-				}
+		gPlayerRay = rl.NewRay(
+			rl.Vector3{
+				X: xPlayer.Position.X,
+				Y: xPlayer.Position.Y + xPlayer.Size.Y/4,
+				Z: xPlayer.Position.Z,
+			},
+			playerReticlePosition,
+		)
+
+		didFire := projectile.FireEntityProjectile(
+			&xProjectileSOA,
+			xPlayer.Position,
+			xPlayer.Size,
+			float32(xPlayer.Rotation+90),
+		)
+
+		if didFire {
+			if n := int32(len(common.FXS.SciFiLaserSmall)); n > 0 {
+				rl.PlaySound(common.FXS.SciFiLaserSmall[rl.GetRandomValue(0, n-1)])
+			}
+		} else {
+			if n := int32(len(common.FXS.InterfaceClick)); n > 0 {
+				rl.PlaySound(common.FXS.InterfaceClick[rl.GetRandomValue(0, n-1)])
 			}
 		}
 	}
-
 	// Update block and player interaction/mining
 	// TODO: Find out where player touched the box
 	// WARN: Should we clear out player collision
 	for i := range xBlocks {
 		if xBlocks[i].IsActive &&
 			xBlocks[i].State < block.MaxBlockState-1 &&
-			rl.CheckCollisionBoxes(
-				xBlocks[i].GetBlockBoundingBox(),
-				xPlayer.BoundingBox,
-			) {
+			rl.CheckCollisionBoxes(xBlocks[i].GetBlockBoundingBox(), xPlayer.BoundingBox) {
 
 			xPlayer.Collisions.X = -mathutil.AbsF(oldPlayer.Position.X - xPlayer.Position.X)
 			xPlayer.Collisions.Z = -mathutil.SignF(oldPlayer.Position.Z - xPlayer.Position.Z)
+
+			// NOTE: It is important that player touches the block first before mining
+
 			player.RevertPlayerAndCameraPositions(&xPlayer, oldPlayer, &camera, oldCam)
 
 			if rl.IsKeyDown(rl.KeySpace) {
@@ -386,11 +449,80 @@ func Update() {
 		}
 	}
 
+	for i := range projectile.MaxProjectiles {
+		if xProjectileSOA.IsActive[i] {
+
+			for j := range xBlocks {
+				if xBlocks[j].IsActive &&
+					xBlocks[j].State < block.MaxBlockState-1 &&
+					common.CheckCollisionPointBox(
+						xProjectileSOA.Position[i],
+						xBlocks[j].GetBlockBoundingBox(),
+					) {
+					handleBlockOnMining(&xBlocks[j])
+
+					xProjectileSOA.IsActive[i] = false
+
+					{
+						// 1 out of 4 chances => 1/4 or 25% to spawn a guard
+						if rl.GetRandomValue(1, 4) == 1 {
+							var pos rl.Vector3
+							rotn := float32(xPlayer.Rotation)
+							size := xBlocks[j].Size
+							size = rl.Vector3Scale(size, .95)
+							// Since position is on the floor. and model grows upwards.. this is to keep bounding box logic consistent
+							if isPatchedXBlocksOriginAndBounds := false; isPatchedXBlocksOriginAndBounds {
+								pos = xBlocks[j].Position
+							} else {
+								pos = xBlocks[j].Position
+								pos.Y += size.Y / 2
+							}
+							xGuardSOA.Emit(pos, size, rotn)
+						}
+					}
+					break
+				}
+			}
+		}
+	}
+
+	// Update guard bounds
+	for i := range MaxGuards {
+		if framesCounter%4 == 0 {
+			xGuardSOA.Position[i].X += rl.GetFrameTime() * float32(rl.GetRandomValue(-1, 1))
+			xGuardSOA.Position[i].Z += rl.GetFrameTime() * float32(rl.GetRandomValue(-1, 1))
+		}
+		xGuardSOA.BoundingBox[i] = common.GetBoundingBoxPositionSizeV(xGuardSOA.Position[i], xGuardSOA.Size[i])
+	}
+
+	for i := range projectile.MaxProjectiles {
+		if xProjectileSOA.IsActive[i] {
+			for j := range MaxGuards {
+				if xGuardSOA.IsActive[j] {
+					if rl.CheckCollisionBoxSphere(
+						xGuardSOA.BoundingBox[j],
+						xProjectileSOA.Position[i],
+						projectileRadiusSphere,
+					) {
+						xProjectileSOA.IsActive[i] = false
+						xGuardSOA.Health[j] -= projectileGuardDamage
+						if xGuardSOA.Health[j] <= 0. {
+							xGuardSOA.Health[j] = 0.
+							xGuardSOA.IsActive[j] = false
+						}
+					}
+				}
+			}
+		}
+	}
+
 	{
 		origin := xFloor.Position
-		bb1 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(3, 2, 3)) // player is inside
-		bb2 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(5, 2, 5)) // player is entering
-		bb3 := common.GetBoundingBoxFromPositionSizeV(origin, rl.NewVector3(7, 2, 7)) // bot barrier
+
+		bb1 := common.GetBoundingBoxPositionSizeV(origin, rl.NewVector3(3, 2, 3)) // player is inside
+		bb2 := common.GetBoundingBoxPositionSizeV(origin, rl.NewVector3(5, 2, 5)) // player is entering
+		bb3 := common.GetBoundingBoxPositionSizeV(origin, rl.NewVector3(7, 2, 7)) // bot barrier
+
 		isPlayerInsideBase := rl.CheckCollisionBoxes(xPlayer.BoundingBox, bb1)
 		isPlayerEnteringBase := rl.CheckCollisionBoxes(xPlayer.BoundingBox, bb2)
 		isPlayerInsideBotBarrier := rl.CheckCollisionBoxes(xPlayer.BoundingBox, bb3)
@@ -410,6 +542,7 @@ func Update() {
 			player.SetColor(rl.Red)
 		} else { // => is outside bounds check
 			player.SetColor(rl.RayWhite) // How to check non-binary logic.. more options.. unlike drill room
+
 			// - RESET FLAG as soon as player leaves bounds check
 			// - This is useful when player spawns near the drill room.
 			// - This avoids re-entering drill base Immediately.
@@ -450,7 +583,7 @@ func Update() {
 	}
 
 	// Press enter or tap to change to ending game screen
-	if rl.IsKeyDown(rl.KeyF10) || rl.IsGestureDetected(rl.GesturePinchOut) {
+	if rl.IsKeyDown(rl.KeyF10) /* || rl.IsGestureDetected(rl.GesturePinchOut) */ {
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "rollover3.ogg")))
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_ui-audio", "Audio", "switch33.ogg")))
 		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", "confirmation_001.ogg")))
@@ -508,8 +641,8 @@ func Draw() {
 
 	// ‥ Draw player to camera forward projected direction ray & area blob/blurb
 	// TEMPORARY EXAMPLE TO SHOW RAY COLLISIONS
-	rayTargetBoundingBox := common.GetBoundingBoxFromPositionSizeV(rl.NewVector3(0, 0, 0), rl.NewVector3(5, 5, 5)) // TEMPORARY
-	gPlayerRayCollision = rl.GetRayCollisionBox(gPlayerRay, rayTargetBoundingBox)                                  // Update
+	rayTargetBoundingBox := common.GetBoundingBoxPositionSizeV(rl.NewVector3(0, 0, 0), rl.NewVector3(5, 5, 5)) // TEMPORARY
+	gPlayerRayCollision = rl.GetRayCollisionBox(gPlayerRay, rayTargetBoundingBox)                              // Update
 	if gPlayerRayCollision.Hit {
 		startPos := rl.Vector3{X: gPlayerRay.Position.X, Y: gPlayerRay.Position.Y + xPlayer.Size.Y/4, Z: gPlayerRay.Position.Z}
 		endPos := gPlayerRayCollision.Point
@@ -517,6 +650,53 @@ func Draw() {
 	}
 	if true {
 		rl.DrawBoundingBox(rayTargetBoundingBox, rl.Blue)
+	}
+
+	for i := range MaxGuards {
+		const radius = .25
+		if xGuardSOA.IsActive[i] {
+			startPos := rl.Vector3Add(xGuardSOA.Position[i], rl.NewVector3(0., -xGuardSOA.Size[i].Y/2, 0.)) // bottom
+			endPos := rl.Vector3Add(xGuardSOA.Position[i], rl.NewVector3(0., xGuardSOA.Size[i].Y/2, 0.))    // top
+
+			common.DrawXYZOrbitV(startPos, .1)              // bottom
+			common.DrawXYZOrbitV(xGuardSOA.Position[i], .2) // center
+			common.DrawXYZOrbitV(endPos, .1)                // top
+
+			startPos.Y += radius
+			endPos.Y -= radius
+
+			if false {
+				rl.DrawCubeV(xGuardSOA.Position[i], xGuardSOA.Size[i], rl.Fade(xGuardSOA.Color[i], .1))
+			} else if false {
+				if false {
+					rl.DrawCapsule(startPos, endPos, radius, 16, 16, rl.Fade(xGuardSOA.Color[i], .1))
+				} else if false {
+					rl.DrawLine3D(startPos, endPos, rl.Yellow)
+					rl.DrawSphereWires(xGuardSOA.Position[i], radius, 16, 16, rl.Violet)
+					rl.DrawSphere(xGuardSOA.Position[i], radius, rl.Fade(rl.Purple, .8))
+				}
+			} else if true {
+				model := common.ModelDungeonKit.OBJ.Barrel
+				// rl.SetMatrixModelview()
+				relativeModelPosition := xGuardSOA.Position[i]
+				relativeModelPosition.Y -= xGuardSOA.Size[i].Y / 2
+				const modelFloatInAirOffsetY = .0625
+				relativeModelPosition.Y += modelFloatInAirOffsetY
+
+				rl.DrawModelEx(model, relativeModelPosition, common.YAxis, 0, common.Vector3One, rl.Green)
+				rl.DrawBoundingBox(xGuardSOA.BoundingBox[i], rl.Fade(xGuardSOA.Color[i], .3))
+			}
+
+			if false {
+				rings := int32(4)
+				slices := int32(4)
+				if framesCounter%4 == 0 {
+					rings = int32(rl.Lerp(float32(rings), float32(rl.GetRandomValue(rings+1, 24)), .1))
+					slices = int32(rl.Lerp(float32(slices), float32(rl.GetRandomValue(slices+1, 24)), .1))
+				}
+				rl.DrawSphereWires(xGuardSOA.Position[i], radius, rings, slices, rl.Red)
+			}
+		}
 	}
 
 	rl.EndMode3D()
@@ -721,7 +901,7 @@ func handleBlockOnMining(b *block.Block) {
 
 func DrawProjectiles() {
 	for i := range projectile.MaxProjectiles {
-		if !projectiles.IsActive[i] {
+		if !xProjectileSOA.IsActive[i] {
 			continue
 		}
 
@@ -733,12 +913,12 @@ func DrawProjectiles() {
 		const radius0 = maxTrailThick * common.InvPhi
 
 		// rl.DrawSphere(projectiles.Position[i], radius0, col) // Projectile Head
-		rl.DrawSphereWires(projectiles.Position[i], radius0, 16, 16, rl.Fade(col, .1))
+		rl.DrawSphereWires(xProjectileSOA.Position[i], radius0, 16, 16, rl.Fade(col, .1))
 
-		timeFactor := (projectiles.TimeLeft[i] / projectile.MaxTimeLeft)
+		timeFactor := (xProjectileSOA.TimeLeft[i] / projectile.MaxTimeLeft)
 
-		angle := projectiles.AngleXZPlaneDegree[i] * rl.Deg2rad
-		dist := rl.Vector3Distance(xPlayer.Position, projectiles.Position[i])
+		angle := xProjectileSOA.Rotation[i] * rl.Deg2rad
+		dist := rl.Vector3Distance(xPlayer.Position, xProjectileSOA.Position[i])
 		radius1 := float32(maxTrailThick * timeFactor)
 		trailLength := float32(maxTrailLength)
 
@@ -748,11 +928,11 @@ func DrawProjectiles() {
 			trailLength = dist
 		}
 
-		currPos := projectiles.Position[i]
+		currPos := xProjectileSOA.Position[i]
 		prevPos := rl.Vector3{
-			X: projectiles.Position[i].X - mathutil.CosF(angle)*trailLength,
+			X: xProjectileSOA.Position[i].X - mathutil.CosF(angle)*trailLength,
 			Y: 0,
-			Z: projectiles.Position[i].Z - mathutil.SinF(angle)*trailLength}
+			Z: xProjectileSOA.Position[i].Z - mathutil.SinF(angle)*trailLength}
 
 		rl.DrawCylinderEx(prevPos, currPos, (radius1/4)/timeFactor, radius1, 16, col)
 	}

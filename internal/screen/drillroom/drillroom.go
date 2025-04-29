@@ -142,10 +142,10 @@ func Init() {
 				v.Position.Y+text3DOffsetY, v.Position.Z), camera)
 
 		triggerBoundingBoxes[i] =
-			common.GetBoundingBoxFromPositionSizeV(v.Position, triggerSize)
+			common.GetBoundingBoxPositionSizeV(v.Position, triggerSize)
 
 		triggerSensorBoundingBoxes[i] =
-			common.GetBoundingBoxFromPositionSizeV(v.Position,
+			common.GetBoundingBoxPositionSizeV(v.Position,
 				rl.Vector3Scale(triggerSize, 2))
 
 		isPlayerNearTriggerSensors[i] = false
@@ -179,7 +179,7 @@ func Init() {
 	}
 
 	// Compute once
-	drillroomExitBoundingBox = common.GetBoundingBoxFromPositionSizeV(
+	drillroomExitBoundingBox = common.GetBoundingBoxPositionSizeV(
 		xFloor.Position,
 		rl.Vector3Subtract(xFloor.Size, rl.NewVector3(1+xPlayer.Size.X/2, -xPlayer.Size.Y*2, 1+xPlayer.Size.Z/2)),
 	)

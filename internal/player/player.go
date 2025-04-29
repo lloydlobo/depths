@@ -38,7 +38,7 @@ func NewPlayer(camera rl.Camera3D) Player {
 		Collisions: rl.NewQuaternion(0, 0, 0, 0),
 	}
 
-	player.BoundingBox = common.GetBoundingBoxFromPositionSizeV(camera.Target, player.Size)
+	player.BoundingBox = common.GetBoundingBoxPositionSizeV(camera.Target, player.Size)
 
 	currId := int(common.SavedgameSlotData.CurrentLevelID) // [1..]
 	player.MaxCargoCapacity = []int32{80, 86, 92, 96, 108, 116, 128, 136, 146, 156, 186, 206, 216, 236, 266, 296, 306}[currId-1]
@@ -256,7 +256,7 @@ func (p *Player) Update(camera rl.Camera3D, flr floor.Floor) {
 
 	// Project the player as the camera target
 	p.Position = camera.Target
-	p.BoundingBox = common.GetBoundingBoxFromPositionSizeV(p.Position, p.Size)
+	p.BoundingBox = common.GetBoundingBoxPositionSizeV(p.Position, p.Size)
 
 	// Update rotation based on camera forward projection
 	startPos := p.Position
@@ -412,7 +412,7 @@ func RevertPlayerAndCameraPositions(
 	srcCamera rl.Camera3D,
 ) {
 	dstPlayer.Position = srcPlayer.Position
-	dstPlayer.BoundingBox = common.GetBoundingBoxFromPositionSizeV(dstPlayer.Position, dstPlayer.Size)
+	dstPlayer.BoundingBox = common.GetBoundingBoxPositionSizeV(dstPlayer.Position, dstPlayer.Size)
 	dstCamera.Target = srcCamera.Target
 	dstCamera.Position = srcCamera.Position
 }

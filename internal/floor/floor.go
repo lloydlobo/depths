@@ -22,7 +22,7 @@ func NewFloor(pos, size rl.Vector3) Floor {
 	return Floor{
 		Position:    pos,
 		Size:        size,
-		BoundingBox: common.GetBoundingBoxFromPositionSizeV(pos, size),
+		BoundingBox: common.GetBoundingBoxPositionSizeV(pos, size),
 	}
 }
 
