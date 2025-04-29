@@ -1,7 +1,6 @@
 package mathutil
 
 import (
-	"cmp"
 	"math"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -28,12 +27,17 @@ func SqrtF[T NumberType](x T) float32      { return float32(math.Sqrt(float64(x)
 func CosF[T NumberType](x T) float32       { return float32(math.Cos(float64(x))) }
 func SinF[T NumberType](x T) float32       { return float32(math.Sin(float64(x))) }
 func Atan2F[T NumberType](x, y T) float32  { return float32(math.Atan2(float64(x), float64(y))) }
-func SignF[T NumberType](x T) float32      { return cmp.Or(float32(math.Abs(float64(x))/float64(x)), 0) }
 func FloorF[T NumberType](x T) float32     { return float32(math.Floor(float64(x))) }
 func CeilF[T NumberType](x T) float32      { return float32(math.Ceil(float64(x))) }
 func RoundI[T NumberType](x T) int32       { return int32(math.Round(float64(x))) }
 func RoundF[T NumberType](x T) float32     { return float32(math.Round(float64(x))) }
 func RoundEvenF[T NumberType](x T) float32 { return float32(math.RoundToEven(float64(x))) }
+func SignF[T NumberType](x T) float32 {
+	if x == 0 {
+		return 0
+	}
+	return float32(math.Abs(float64(x)) / float64(x))
+}
 
 func MaxF[T NumberType](x T, y T) float32 { return float32(max(float64(x), float64(y))) }
 func MinF[T NumberType](x T, y T) float32 { return float32(min(float64(x), float64(y))) }
