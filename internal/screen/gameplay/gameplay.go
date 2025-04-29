@@ -682,33 +682,49 @@ func Draw() {
 	for i := range MaxGuards {
 		if xGuardSOA.IsActive[i] {
 			// Meander around
-			if framesCounter%4 == 0 {
+			if framesCounter%8 == 0 {
 				xGuardSOA.Position[i].X = xGuardSOA.Position[i].X * rl.Lerp(1., 1.+xGuardSOA.Size[i].X*rl.GetFrameTime()*float32(rl.GetRandomValue(-1, 1)), .35)
 				xGuardSOA.Position[i].Z = xGuardSOA.Position[i].Z * rl.Lerp(1., 1.+xGuardSOA.Size[i].Z*rl.GetFrameTime()*float32(rl.GetRandomValue(-1, 1)), .35)
 			}
 			xGuardSOA.BoundingBox[i] = common.GetBoundingBoxPositionSizeV(xGuardSOA.Position[i], xGuardSOA.Size[i])
 
-			const lookahead = float32(20.)
+			const lookahead = float32(12.)
 			lookaheadSize := rl.Vector3Multiply(xGuardSOA.Size[i], rl.NewVector3(lookahead, 1, lookahead)) // Maintain y position
 			lookaheadBounds := common.GetBoundingBoxPositionSizeV(xGuardSOA.Position[i], lookaheadSize)
 
 			// Guard must dart towards player
 			if rl.CheckCollisionBoxes(xPlayer.BoundingBox, lookaheadBounds) {
 				alpha := rl.GetFrameTime()
-				const distThreshold = lookahead / 5 // Rush player once this is crossed
-				if dist := rl.Vector3Distance(xGuardSOA.Position[i], xPlayer.Position); dist <= distThreshold {
-					f := dist / (lookahead / 2)
-					alpha += mathutil.SqrtF(f) / 8 // Jump scare
+
+				distThreshold := float32(cmp.Or(lookahead/3., mathutil.SqrtF(lookahead*common.InvPhi))) // Rush player once this is crossed
+				dist := rl.Vector3Distance(xGuardSOA.Position[i], xPlayer.Position)
+
+				// DEBUG - [1]
+				distCol := rl.Fade(rl.White, .1)
+				distThresholdCol := rl.Fade(rl.Beige, .1)
+
+				if dist <= distThreshold {
+					f := dist / (lookahead / 2.)
+					alpha += mathutil.SqrtF(f) / 8. // Jump scare
+					distCol = rl.Fade(rl.Red, .1)
+					distThresholdCol = rl.Fade(rl.Gold, .1)
 				}
+
 				if isDebugTweening := true; isDebugTweening {
 					pos := xGuardSOA.Position[i]
-					pos.Y += 1. + 2*4*alpha // 3D info
+					pos.Y += 1. + 2.*4.*alpha // 3D info
 					rl.DrawSphereWires(pos, .5+2*alpha, 16, 16, rl.Red)
+
+					// DEBUG - [1]
+					rl.DrawSphereWires(xGuardSOA.Position[i], dist, 8, 8, distCol)
+					rl.DrawSphereWires(xGuardSOA.Position[i], distThreshold, 8, 8, distThresholdCol)
 				}
+
 				// TODO: Avoid other guards from colliding with each other
 				xGuardSOA.Position[i].X = rl.Lerp(xGuardSOA.Position[i].X, xPlayer.Position.X, alpha)
 				xGuardSOA.Position[i].Z = rl.Lerp(xGuardSOA.Position[i].Z, xPlayer.Position.Z, alpha)
 			}
+
 			rl.DrawBoundingBox(lookaheadBounds, rl.SkyBlue)
 			rl.DrawBoundingBox(lookaheadBounds, rl.Blue)
 		}
