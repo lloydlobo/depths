@@ -84,8 +84,8 @@ func Run() {
 	common.Music.OpenWorld001 = rl.LoadMusicStream(filepath.Join("res", "music", "just-relax-11157.mp3"))
 	common.Music.OpenWorld000.Looping = true
 	common.Music.OpenWorld001.Looping = true
-	rl.SetMusicVolume(common.Music.OpenWorld000, 1.0)
-	rl.SetMusicVolume(common.Music.OpenWorld001, 1.0)
+	rl.SetMusicVolume(common.Music.OpenWorld000, 0.7)
+	rl.SetMusicVolume(common.Music.OpenWorld001, 0.7)
 	rl.PauseMusicStream(common.Music.OpenWorld000)
 	rl.PauseMusicStream(common.Music.OpenWorld001)
 
@@ -93,8 +93,8 @@ func Run() {
 	common.Music.DrillRoom001 = rl.LoadMusicStream(filepath.Join("res", "music", "sinnesloschen-beam-117362.mp3"))
 	common.Music.DrillRoom000.Looping = true
 	common.Music.DrillRoom001.Looping = true
-	rl.SetMusicVolume(common.Music.DrillRoom000, 1.0)
-	rl.SetMusicVolume(common.Music.DrillRoom001, 1.0)
+	rl.SetMusicVolume(common.Music.DrillRoom000, 0.7)
+	rl.SetMusicVolume(common.Music.DrillRoom001, 0.7)
 	rl.PauseMusicStream(common.Music.DrillRoom000)
 	rl.PauseMusicStream(common.Music.DrillRoom001)
 
@@ -105,36 +105,72 @@ func Run() {
 	rl.SetSoundVolume(common.FX.Coin, 0.3)
 
 	{
-		var fxAudioDir = filepath.Join("res", "fx", "kenney_impact-sounds", "Audio")
-		common.FXS.FootStepsConcrete = []rl.Sound{
-			rl.LoadSound(filepath.Join(fxAudioDir, "footstep_concrete_000.ogg")),
-			rl.LoadSound(filepath.Join(fxAudioDir, "footstep_concrete_001.ogg")),
-			rl.LoadSound(filepath.Join(fxAudioDir, "footstep_concrete_002.ogg")),
-			rl.LoadSound(filepath.Join(fxAudioDir, "footstep_concrete_003.ogg")),
-			rl.LoadSound(filepath.Join(fxAudioDir, "footstep_concrete_004.ogg")),
+		var dir = filepath.Join("res", "fx", "kenney_impact-sounds", "Audio")
+		common.FXS.ImpactFootStepsConcrete = []rl.Sound{
+			rl.LoadSound(filepath.Join(dir, "footstep_concrete_000.ogg")),
+			rl.LoadSound(filepath.Join(dir, "footstep_concrete_001.ogg")),
+			rl.LoadSound(filepath.Join(dir, "footstep_concrete_002.ogg")),
+			rl.LoadSound(filepath.Join(dir, "footstep_concrete_003.ogg")),
+			rl.LoadSound(filepath.Join(dir, "footstep_concrete_004.ogg")),
 		}
 		common.FXS.ImpactsSoftHeavy = []rl.Sound{
-			rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_heavy_000.ogg")),
-			rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_heavy_001.ogg")),
-			rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_heavy_002.ogg")),
-			rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_heavy_003.ogg")),
-			rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_heavy_004.ogg")),
+			rl.LoadSound(filepath.Join(dir, "impactSoft_heavy_000.ogg")),
+			rl.LoadSound(filepath.Join(dir, "impactSoft_heavy_001.ogg")),
+			rl.LoadSound(filepath.Join(dir, "impactSoft_heavy_002.ogg")),
+			rl.LoadSound(filepath.Join(dir, "impactSoft_heavy_003.ogg")),
+			rl.LoadSound(filepath.Join(dir, "impactSoft_heavy_004.ogg")),
 		}
 		common.FXS.ImpactsSoftMedium = []rl.Sound{
-			rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_medium_000.ogg")),
-			rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_medium_001.ogg")),
-			rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_medium_002.ogg")),
-			rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_medium_003.ogg")),
-			rl.LoadSound(filepath.Join(fxAudioDir, "impactSoft_medium_004.ogg")),
+			rl.LoadSound(filepath.Join(dir, "impactSoft_medium_000.ogg")),
+			rl.LoadSound(filepath.Join(dir, "impactSoft_medium_001.ogg")),
+			rl.LoadSound(filepath.Join(dir, "impactSoft_medium_002.ogg")),
+			rl.LoadSound(filepath.Join(dir, "impactSoft_medium_003.ogg")),
+			rl.LoadSound(filepath.Join(dir, "impactSoft_medium_004.ogg")),
 		}
 		common.FXS.ImpactsGenericLight = []rl.Sound{
-			rl.LoadSound(filepath.Join(fxAudioDir, "impactGeneric_light_000.ogg")),
-			rl.LoadSound(filepath.Join(fxAudioDir, "impactGeneric_light_001.ogg")),
-			rl.LoadSound(filepath.Join(fxAudioDir, "impactGeneric_light_002.ogg")),
-			rl.LoadSound(filepath.Join(fxAudioDir, "impactGeneric_light_003.ogg")),
-			rl.LoadSound(filepath.Join(fxAudioDir, "impactGeneric_light_004.ogg")),
+			rl.LoadSound(filepath.Join(dir, "impactGeneric_light_000.ogg")),
+			rl.LoadSound(filepath.Join(dir, "impactGeneric_light_001.ogg")),
+			rl.LoadSound(filepath.Join(dir, "impactGeneric_light_002.ogg")),
+			rl.LoadSound(filepath.Join(dir, "impactGeneric_light_003.ogg")),
+			rl.LoadSound(filepath.Join(dir, "impactGeneric_light_004.ogg")),
 		}
 	}
+
+	{
+		var dir = filepath.Join("res", "fx", "kenney_rpg-audio", "Audio")
+		common.FXS.RPGDrawKnife = []rl.Sound{
+			rl.LoadSound(filepath.Join(dir, "drawKnife1.ogg")),
+			rl.LoadSound(filepath.Join(dir, "drawKnife2.ogg")),
+			rl.LoadSound(filepath.Join(dir, "drawKnife3.ogg")),
+		}
+		common.FXS.RPGCloth = []rl.Sound{
+			rl.LoadSound(filepath.Join(dir, "cloth1.ogg")),
+			rl.LoadSound(filepath.Join(dir, "cloth2.ogg")),
+			rl.LoadSound(filepath.Join(dir, "cloth3.ogg")),
+			rl.LoadSound(filepath.Join(dir, "cloth4.ogg")),
+		}
+	}
+
+	{
+		var dir = filepath.Join("res", "fx", "kenney_sci-fi-sounds", "Audio")
+		common.FXS.SciFiLaserLarge = []rl.Sound{
+			rl.LoadSound(filepath.Join(dir, "laserLarge_000.ogg")),
+			rl.LoadSound(filepath.Join(dir, "laserLarge_001.ogg")),
+		}
+		common.FXS.SciFiLaserSmall = []rl.Sound{
+			rl.LoadSound(filepath.Join(dir, "laserSmall_000.ogg")),
+			rl.LoadSound(filepath.Join(dir, "laserSmall_003.ogg")),
+		}
+	}
+	{
+		var dir = filepath.Join("res", "fx", "kenney_interface-sounds", "Audio")
+		common.FXS.InterfaceClick = []rl.Sound{
+			rl.LoadSound(filepath.Join(dir, "click_002.ogg")),
+			rl.LoadSound(filepath.Join(dir, "click_003.ogg")),
+		}
+	}
+
+	// rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", fmt.Sprintf("glitch_00%d.ogg", rl.GetRandomValue(0, 4)))))
 
 	common.ModelDungeonKit.OBJ = model.LoadAssetModelOBJ()
 
@@ -198,7 +234,7 @@ func Run() {
 	currentScreen = logoGameScreen
 	logo.Init()
 
-	if true {
+	if false {
 		slog.Warn("rl.SetMasterVolume(.2)")
 		rl.SetMasterVolume(.2)
 	}

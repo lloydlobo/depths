@@ -384,7 +384,7 @@ func Update() {
 			if !rl.Vector3Equals(oldPlayer.Position, xPlayer.Position) &&
 				rl.Vector3Distance(oldCam.Position, xPlayer.Position) > 1.0 &&
 				(xPlayer.Collisions.X == 0 && xPlayer.Collisions.Z == 0) {
-				rl.PlaySound(common.FXS.FootStepsConcrete[int(framesCounter)%len(common.FXS.FootStepsConcrete)])
+				rl.PlaySound(common.FXS.ImpactFootStepsConcrete[int(framesCounter)%len(common.FXS.ImpactFootStepsConcrete)])
 			}
 		}
 	}

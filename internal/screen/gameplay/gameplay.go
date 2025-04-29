@@ -5,6 +5,7 @@ import (
 	"cmp"
 	"encoding/json"
 	"fmt"
+	"image/color"
 	"log"
 	"log/slog"
 	"math"
@@ -246,8 +247,9 @@ func Init() {
 			rl.PlayMusicStream(currentMusic) // Finally play the same music
 		}
 	}
+
 	// TEMPORARY
-	if true {
+	if false {
 		slog.Warn("rl.PauseMusicStream(currentMusic)")
 		rl.PauseMusicStream(currentMusic)
 	}
@@ -267,11 +269,13 @@ func Update() {
 
 		didFire := projectile.FireEntityProjectile(&projectiles, xPlayer.Position, xPlayer.Size, float32(xPlayer.Rotation+90))
 		if didFire {
-			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("drawKnife%d.ogg", rl.GetRandomValue(1, 3)))))
-			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("cloth%d.ogg", rl.GetRandomValue(1, 4)))))
-			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_sci-fi-sounds", "Audio", fmt.Sprintf("laserSmall_00%d.ogg", rl.GetRandomValue(0, 4)))))
+			if n := int32(len(common.FXS.SciFiLaserSmall)); n > 0 {
+				rl.PlaySound(common.FXS.SciFiLaserSmall[rl.GetRandomValue(0, n-1)])
+			}
 		} else {
-			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", fmt.Sprintf("glitch_00%d.ogg", rl.GetRandomValue(0, 4)))))
+			if n := int32(len(common.FXS.InterfaceClick)); n > 0 {
+				rl.PlaySound(common.FXS.InterfaceClick[rl.GetRandomValue(0, n-1)])
+			}
 		}
 	}
 
@@ -324,39 +328,8 @@ func Update() {
 
 	xPlayer.Update(camera, xFloor)
 	UpdatePlayerRay()
-
 	if xPlayer.IsPlayerWallCollision {
 		player.RevertPlayerAndCameraPositions(&xPlayer, oldPlayer, &camera, oldCam)
-	}
-
-	// Update player─block collision+breaking/mining
-	{
-		closestIndex := GetClosestMiningBlockIndexOnRayCollision()
-
-		if closestIndex > -1 && closestIndex < len(xBlocks) {
-			blBB := xBlocks[closestIndex].GetBlockBoundingBox()
-			collision := rl.GetRayCollisionBox(gPlayerRay, blBB)
-			_ = collision
-		}
-		if closestIndex > -1 && closestIndex < len(xBlocks) {
-		NextProjectile:
-
-			for i := range projectile.MaxProjectiles {
-				if !projectiles.IsActive[i] {
-					continue NextProjectile
-				}
-				if !xBlocks[closestIndex].IsActive {
-					slog.Warn("Unreachable: !blocks[closestIndex].IsActive", "closestIndex", closestIndex)
-				}
-				if common.GetCollisionPointBox(projectiles.Position[i], xBlocks[closestIndex].GetBlockBoundingBox()) {
-					if xBlocks[closestIndex].State < block.MaxBlockState-1 {
-						handleBlockOnMining(&xBlocks[closestIndex])
-						projectiles.IsActive[i] = false
-						break NextProjectile
-					}
-				}
-			}
-		}
 	}
 
 	// Play player weapon sounds
@@ -369,20 +342,35 @@ func Update() {
 		rl.PlaySound(v)
 	}
 
-	// Update block and player interaction/mining
-	for i := range xBlocks {
-
-		// Skip final broken/mined block residue
-		if xBlocks[i].State == block.MaxBlockState-1 {
-			continue
+	for i := range projectile.MaxProjectiles {
+		if projectiles.IsActive[i] {
+			for j := range xBlocks {
+				if xBlocks[j].IsActive &&
+					xBlocks[j].State < block.MaxBlockState-1 &&
+					common.GetCollisionPointBox(
+						projectiles.Position[i],
+						xBlocks[j].GetBlockBoundingBox(),
+					) {
+					handleBlockOnMining(&xBlocks[j])
+					projectiles.IsActive[i] = false
+					break
+				}
+			}
 		}
+	}
 
-		// TODO: find out where player touched the box
-		// WARN: Remember to clear out player collision
-		if rl.CheckCollisionBoxes(xBlocks[i].GetBlockBoundingBox(), xPlayer.BoundingBox) {
+	// Update block and player interaction/mining
+	// TODO: Find out where player touched the box
+	// WARN: Remember to clear out player collision
+	for i := range xBlocks {
+		if xBlocks[i].IsActive &&
+			xBlocks[i].State < block.MaxBlockState-1 &&
+			rl.CheckCollisionBoxes(
+				xBlocks[i].GetBlockBoundingBox(),
+				xPlayer.BoundingBox,
+			) {
+
 			dx := oldPlayer.Position.X - xPlayer.Position.X
-			dz := oldPlayer.Position.Z - xPlayer.Position.Z
-
 			if dx < 0. {
 				xPlayer.Collisions.X = 1
 			} else if dx > 0. {
@@ -391,6 +379,7 @@ func Update() {
 				xPlayer.Collisions.X = 0
 			}
 
+			dz := oldPlayer.Position.Z - xPlayer.Position.Z
 			if dz < 0. {
 				xPlayer.Collisions.Z = 1
 			} else if dz > 0. {
@@ -399,12 +388,18 @@ func Update() {
 				xPlayer.Collisions.Z = 0
 			}
 
-			player.RevertPlayerAndCameraPositions(&xPlayer, oldPlayer, &camera, oldCam)
+			player.RevertPlayerAndCameraPositions(
+				&xPlayer, oldPlayer,
+				&camera, oldCam,
+			)
 
-			isDebounceTrigger := framesCounter%16 == 0
+			if rl.IsKeyDown(rl.KeySpace) {
+				debounceFrameIntervals := []int32{60, 52, 48, 40, 32, 24, 20, 16, 8}[3]
+				isDebounce := framesCounter%debounceFrameIntervals != 0
 
-			if rl.IsKeyDown(rl.KeySpace) && isDebounceTrigger {
-				handleBlockOnMining(&xBlocks[i])
+				if !isDebounce {
+					handleBlockOnMining(&xBlocks[i])
+				}
 			}
 		}
 	}
@@ -489,12 +484,12 @@ func Update() {
 	// TODO: Move this in package player (if possible)
 	if rl.IsKeyDown(rl.KeyW) || rl.IsKeyDown(rl.KeyA) || rl.IsKeyDown(rl.KeyS) || rl.IsKeyDown(rl.KeyD) {
 		const fps = 60.0
-		const framesInterval = fps / 2.5
+		const framesInterval = fps / 2.
 		if framesCounter%int32(framesInterval) == 0 {
 			if !rl.Vector3Equals(oldPlayer.Position, xPlayer.Position) &&
 				rl.Vector3Distance(oldCam.Position, xPlayer.Position) > 1.0 &&
 				(xPlayer.Collisions.X == 0 && xPlayer.Collisions.Z == 0) {
-				rl.PlaySound(common.FXS.FootStepsConcrete[int(framesCounter)%len(common.FXS.FootStepsConcrete)])
+				rl.PlaySound(common.FXS.ImpactFootStepsConcrete[int(framesCounter)%len(common.FXS.ImpactFootStepsConcrete)])
 			}
 		}
 	}
@@ -510,15 +505,20 @@ func Draw() {
 	// 3D World
 	rl.BeginMode3D(camera)
 
-	rl.ClearBackground(rl.RayWhite)
+	BabyBlue := color.RGBA{R: 137, G: 207, B: 240, A: 255}
+	rl.ClearBackground(rl.ColorBrightness(BabyBlue, -.85))
 
 	xFloor.Draw()
+
 	wall.DrawBatch(common.OpenWorldRoom, xFloor.Position, xFloor.Size, common.Vector3One)
+
 	drawOuterDrillroom()
+
 	for i := range xBlocks {
 		xBlocks[i].Draw()
+
 		if false { // DEBUG
-			rl.DrawBoundingBox(xBlocks[i].GetBlockBoundingBox(), rl.Pink)
+			rl.DrawBoundingBox(xBlocks[i].GetBlockBoundingBox(), rl.Fade(rl.Gold, .3))
 		}
 	}
 	xPlayer.Draw()
@@ -529,13 +529,11 @@ func Draw() {
 	rayTargetBoundingBox := common.GetBoundingBoxFromPositionSizeV(rl.NewVector3(0, 0, 0), rl.NewVector3(5, 5, 5)) // TEMPORARY
 	gPlayerRayCollision = rl.GetRayCollisionBox(gPlayerRay, rayTargetBoundingBox)                                  // Update
 	if gPlayerRayCollision.Hit {
-		rl.DrawRay(gPlayerRay, rl.Fade(rl.White, .1)) // infinite ray
-		rl.DrawLine3D(rl.Vector3{X: gPlayerRay.Position.X, Y: gPlayerRay.Position.Y + xPlayer.Size.Y/4, Z: gPlayerRay.Position.Z}, gPlayerRayCollision.Point, rl.Orange)
+		startPos := rl.Vector3{X: gPlayerRay.Position.X, Y: gPlayerRay.Position.Y + xPlayer.Size.Y/4, Z: gPlayerRay.Position.Z}
+		endPos := gPlayerRayCollision.Point
+		rl.DrawLine3D(startPos, endPos, rl.SkyBlue)
 	}
-
-	if false {
-		rl.DrawBoundingBox(rayTargetBoundingBox, rl.Blue)
-		rl.DrawModel(common.ModelDungeonKit.OBJ.Dirt, xFloor.Position, 1., rl.White)
+	if true {
 		rl.DrawBoundingBox(rayTargetBoundingBox, rl.Blue)
 	}
 
@@ -746,14 +744,14 @@ func DrawProjectiles() {
 		}
 
 		col := rl.White
-		col = rl.Fade(col, .3)
+		col = rl.Fade(col, .2)
 
 		const maxTrailLength = 3. // Projectile trail
-		const maxTrailThick = .05 // Radius
+		const maxTrailThick = .08 // Radius
 		const radius0 = maxTrailThick * common.InvPhi
 
-		rl.DrawSphere(projectiles.Position[i], radius0, col) // Projectile Head
-		rl.DrawSphereWires(projectiles.Position[i], radius0, 16, 16, col)
+		// rl.DrawSphere(projectiles.Position[i], radius0, col) // Projectile Head
+		rl.DrawSphereWires(projectiles.Position[i], radius0, 16, 16, rl.Fade(col, .1))
 
 		timeFactor := (projectiles.TimeLeft[i] / projectile.MaxTimeLeft)
 
@@ -774,7 +772,7 @@ func DrawProjectiles() {
 			Y: 0,
 			Z: projectiles.Position[i].Z - mathutil.SinF(angle)*trailLength}
 
-		rl.DrawCylinderEx(prevPos, currPos, (radius1/5)/timeFactor, radius1, 16, col)
+		rl.DrawCylinderEx(prevPos, currPos, (radius1/4)/timeFactor, radius1, 16, col)
 	}
 }
 

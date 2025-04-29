@@ -38,10 +38,16 @@ var (
 		Ambient000 rl.Music
 	}
 
-	FX  struct{ Coin rl.Sound }
+	FX struct{ Coin rl.Sound }
+
 	FXS struct {
-		ImpactsSoftHeavy, ImpactsSoftMedium, ImpactsGenericLight,
-		FootStepsConcrete []rl.Sound
+		ImpactsSoftHeavy, ImpactsSoftMedium, ImpactsGenericLight, ImpactFootStepsConcrete []rl.Sound
+
+		RPGDrawKnife, RPGCloth []rl.Sound
+
+		SciFiLaserLarge, SciFiLaserSmall []rl.Sound
+
+		InterfaceClick []rl.Sound
 	}
 
 	// Models Resource

@@ -83,13 +83,13 @@ func InitBlocks(dst *[]Block, positions []rl.Vector3) {
 		size := rl.Vector3Multiply(
 			rl.NewVector3(1, 1, 1),
 			rl.NewVector3(
-				float32(rl.GetRandomValue(88, 94))/100.,
-				float32(rl.GetRandomValue(100, 100))/100.,
-				float32(rl.GetRandomValue(88, 94))/100.,
+				float32(rl.GetRandomValue(92, 98))/100.,
+				float32(rl.GetRandomValue(100/1.25, 100*1.5))/100.,
+				float32(rl.GetRandomValue(92, 98))/100.,
 			),
 		)
 		obj := NewBlock(positions[i], size)
-		obj.Rotation = cmp.Or(float32(rl.GetRandomValue(-40, 40)/10.), 0.)
+		obj.Rotation = cmp.Or(float32(rl.GetRandomValue(-80, 80)/10.), 0.)
 		*dst = append(*dst, obj)
 	}
 }
@@ -119,7 +119,10 @@ func SetupBlockModels() {
 
 func (b Block) Draw() {
 	if b.IsActive {
-		rl.DrawModelEx(blockModels[b.State], b.Position, common.YAxis, b.Rotation, b.Size, rl.White)
+		rotationAxis := common.YAxis
+		rotationAxis = rl.Vector3Normalize(b.Position)
+		rotationAxis = rl.Vector3Lerp(rotationAxis, common.YAxis, .5)
+		rl.DrawModelEx(blockModels[b.State], b.Position, rotationAxis, b.Rotation, b.Size, rl.White)
 	}
 }
 
@@ -136,6 +139,7 @@ func GenerateRandomBlockPositions(gameFloor floor.Floor) []rl.Vector3 {
 		offZ = float32(3)
 	)
 	y = gameFloor.Position.Y // gameFloor is a plane
+
 	var (
 		maxGridCells            = gameFloor.Size.X * gameFloor.Size.Z // just-in-case
 		maxSkipLoopPositionOdds = int32(2)                            // if 2 -> 0,1,2 -> 1/3 odds
