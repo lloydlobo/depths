@@ -59,7 +59,7 @@ var (
 func Run() {
 	// Initialize
 
-	rl.SetConfigFlags(rl.FlagMsaa4xHint)
+	rl.SetConfigFlags(rl.FlagMsaa4xHint) // Enable Multi Sampling Anti Aliasing 4x (if available)
 	rl.InitWindow(int32(rl.GetScreenWidth()), int32(rl.GetScreenHeight()), "tiny game ─ depths")
 
 	rl.InitAudioDevice()
@@ -174,6 +174,15 @@ func Run() {
 
 	common.ModelDungeonKit.OBJ = model.LoadAssetModelOBJ()
 
+	{
+		common.Model.Dwarf = rl.LoadModel(filepath.Join("res", "model", "obj", "dwarf.obj"))
+		common.Texture.DwarfDiffuse = rl.LoadTexture(filepath.Join("res", "texture", "dwarf_diffuse.png"))
+		shaderDir := filepath.Join("res", "shader")
+		common.Shader.Grayscale = rl.LoadShader(filepath.Join(shaderDir, "glsl330_"+"base.vs"), filepath.Join(shaderDir, "glsl330_"+"grayscale.fs"))
+		rl.SetMaterialTexture(common.Model.Dwarf.Materials, rl.MapDiffuse, common.Texture.DwarfDiffuse)
+		common.Model.Dwarf.Materials.Shader = common.Shader.Grayscale
+	}
+
 	if shouldBeArchived := true; !shouldBeArchived {
 		common.Texture.CubicmapAtlas = rl.LoadTexture(filepath.Join("res", "texture", "cubicmap_atlas.png"))
 		/* Load PBR shader and setup all required locations */
@@ -234,9 +243,9 @@ func Run() {
 	currentScreen = logoGameScreen
 	logo.Init()
 
-	if false {
-		slog.Warn("rl.SetMasterVolume(.2)")
-		rl.SetMasterVolume(.2)
+	if true {
+		slog.Warn("rl.SetMasterVolume(.1)")
+		rl.SetMasterVolume(.1)
 	}
 
 	if _, ok := os.LookupEnv("PLATFORM_WEB"); ok {

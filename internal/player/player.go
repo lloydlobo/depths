@@ -124,6 +124,7 @@ func SetupPlayerModel() {
 	// See https://www.raylib.com/examples/models/loader.html?name=models_bone_socket
 	// See https://github.com/raysan5/raylib/tree/master/examples/models/resources/models/gltf
 	characterModel = rl.LoadModel(filepath.Join("res", "model", "gltf", "greenman.glb"))
+
 	equippedModels = [MaxBoneSockets]rl.Model{
 		rl.LoadModel(filepath.Join("res", "model", "gltf", "greenman_hat.glb")),    // Index for the hat model is the same as BONE_SOCKET_HAT
 		rl.LoadModel(filepath.Join("res", "model", "gltf", "greenman_sword.glb")),  // Index for the sword model is the same as BONE_SOCKET_HAND_R

@@ -52,9 +52,19 @@ var (
 
 	// Models Resource
 
-	Shader struct{ PBR rl.Shader }
+	Shader struct {
+		PBR,
+		Grayscale rl.Shader
+	}
 
-	Texture struct{ CubicmapAtlas rl.Texture2D }
+	Model struct {
+		Dwarf rl.Model
+	}
+
+	Texture struct {
+		DwarfDiffuse,
+		CubicmapAtlas rl.Texture2D
+	}
 
 	ModelDungeonKit struct {
 		OBJ model.ModelsOBJ
