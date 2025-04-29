@@ -377,42 +377,28 @@ func Update() {
 	}
 
 	xPlayer.Update(camera, xFloor)
+
 	UpdatePlayerRay()
+
 	if xPlayer.IsPlayerWallCollision {
 		player.RevertPlayerAndCameraPositions(&xPlayer, oldPlayer, &camera, oldCam)
 	}
 
 	// Play player weapon sounds
-	if rl.IsKeyDown(rl.KeySpace) && framesCounter%16 == 0 {
-		v := rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "drawKnife3.ogg"))
-
-		rl.SetSoundPan(v, 0.5+float32(rl.GetRandomValue(-10, 10)/(2*10)))
-		rl.SetSoundVolume(v, 0.7)
-
-		rl.PlaySound(v)
-	}
-	// Simulate firing OR implement keyspace firing
 	if rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
-		playerForwardEstimateMagnitude := rl.Vector3{X: 5., Y: .125 / 2., Z: 5.} // HACK: Projection
-		playerReticlePosition := rl.Vector3Multiply(rl.GetCameraForward(&camera), playerForwardEstimateMagnitude)
-
 		gPlayerRay = rl.NewRay(
 			rl.Vector3{
 				X: xPlayer.Position.X,
 				Y: xPlayer.Position.Y + xPlayer.Size.Y/4,
 				Z: xPlayer.Position.Z,
 			},
-			playerReticlePosition,
+			rl.Vector3Multiply(
+				rl.GetCameraForward(&camera),
+				rl.Vector3{X: 5., Y: .125 / 2., Z: 5.}, /* playerForwardEstimateMagnitude */
+			),
 		)
 
-		didFire := projectile.FireEntityProjectile(
-			&xProjectileSOA,
-			xPlayer.Position,
-			xPlayer.Size,
-			float32(xPlayer.Rotation+90),
-		)
-
-		if didFire {
+		if projectile.FireEntityProjectile(&xProjectileSOA, xPlayer.Position, xPlayer.Size, float32(xPlayer.Rotation+90)) {
 			if n := int32(len(common.FXS.SciFiLaserSmall)); n > 0 {
 				rl.PlaySound(common.FXS.SciFiLaserSmall[rl.GetRandomValue(0, n-1)])
 			}
@@ -422,6 +408,7 @@ func Update() {
 			}
 		}
 	}
+
 	// Update block and player interaction/mining
 	// TODO: Find out where player touched the box
 	// WARN: Should we clear out player collision
@@ -429,12 +416,9 @@ func Update() {
 		if xBlocks[i].IsActive &&
 			xBlocks[i].State < block.MaxBlockState-1 &&
 			rl.CheckCollisionBoxes(xBlocks[i].GetBlockBoundingBox(), xPlayer.BoundingBox) {
-
 			xPlayer.Collisions.X = -mathutil.AbsF(oldPlayer.Position.X - xPlayer.Position.X)
 			xPlayer.Collisions.Z = -mathutil.SignF(oldPlayer.Position.Z - xPlayer.Position.Z)
-
 			// NOTE: It is important that player touches the block first before mining
-
 			player.RevertPlayerAndCameraPositions(&xPlayer, oldPlayer, &camera, oldCam)
 
 			if rl.IsKeyDown(rl.KeySpace) {
@@ -451,34 +435,29 @@ func Update() {
 
 	for i := range projectile.MaxProjectiles {
 		if xProjectileSOA.IsActive[i] {
-
 			for j := range xBlocks {
 				if xBlocks[j].IsActive &&
 					xBlocks[j].State < block.MaxBlockState-1 &&
-					common.CheckCollisionPointBox(
-						xProjectileSOA.Position[i],
-						xBlocks[j].GetBlockBoundingBox(),
-					) {
-					handleBlockOnMining(&xBlocks[j])
-
+					common.CheckCollisionPointBox(xProjectileSOA.Position[i], xBlocks[j].GetBlockBoundingBox()) {
 					xProjectileSOA.IsActive[i] = false
 
-					{
-						// 1 out of 4 chances => 1/4 or 25% to spawn a guard
-						if rl.GetRandomValue(1, 4) == 1 {
-							var pos rl.Vector3
-							rotn := float32(xPlayer.Rotation)
-							size := xBlocks[j].Size
-							size = rl.Vector3Scale(size, .95)
-							// Since position is on the floor. and model grows upwards.. this is to keep bounding box logic consistent
-							if isPatchedXBlocksOriginAndBounds := false; isPatchedXBlocksOriginAndBounds {
-								pos = xBlocks[j].Position
-							} else {
-								pos = xBlocks[j].Position
-								pos.Y += size.Y / 2
-							}
-							xGuardSOA.Emit(pos, size, rotn)
+					handleBlockOnMining(&xBlocks[j])
+
+					// Spawn a guard: 1 out of 4 chances => 1/4 or 25% to
+					if rl.GetRandomValue(1, 4) == 1 {
+						rotn := float32(xPlayer.Rotation)
+						size := xBlocks[j].Size
+						size = rl.Vector3Scale(size, .95)
+						// Since position is on the floor. and model grows
+						// upwards.. this is to keep bounding box logic consistent
+						var pos rl.Vector3
+						if isPatchedXBlocksOriginAndBounds := false; isPatchedXBlocksOriginAndBounds {
+							pos = xBlocks[j].Position
+						} else {
+							pos = xBlocks[j].Position
+							pos.Y += size.Y / 2
 						}
+						xGuardSOA.Emit(pos, size, rotn)
 					}
 					break
 				}
@@ -486,13 +465,14 @@ func Update() {
 		}
 	}
 
-	// Update guard bounds
-	for i := range MaxGuards {
-		if framesCounter%4 == 0 {
-			xGuardSOA.Position[i].X += rl.GetFrameTime() * float32(rl.GetRandomValue(-1, 1))
-			xGuardSOA.Position[i].Z += rl.GetFrameTime() * float32(rl.GetRandomValue(-1, 1))
+	if false { // PLACEHOLDER PROTOTYPE IN Draw() for now
+		for i := range MaxGuards {
+			if framesCounter%4 == 0 {
+				xGuardSOA.Position[i].X += rl.GetFrameTime() * float32(rl.GetRandomValue(-1, 1))
+				xGuardSOA.Position[i].Z += rl.GetFrameTime() * float32(rl.GetRandomValue(-1, 1))
+			}
+			xGuardSOA.BoundingBox[i] = common.GetBoundingBoxPositionSizeV(xGuardSOA.Position[i], xGuardSOA.Size[i])
 		}
-		xGuardSOA.BoundingBox[i] = common.GetBoundingBoxPositionSizeV(xGuardSOA.Position[i], xGuardSOA.Size[i])
 	}
 
 	for i := range projectile.MaxProjectiles {
@@ -696,6 +676,41 @@ func Draw() {
 				}
 				rl.DrawSphereWires(xGuardSOA.Position[i], radius, rings, slices, rl.Red)
 			}
+		}
+	}
+
+	for i := range MaxGuards {
+		if xGuardSOA.IsActive[i] {
+			// Meander around
+			if framesCounter%4 == 0 {
+				xGuardSOA.Position[i].X = xGuardSOA.Position[i].X * rl.Lerp(1., 1.+xGuardSOA.Size[i].X*rl.GetFrameTime()*float32(rl.GetRandomValue(-1, 1)), .35)
+				xGuardSOA.Position[i].Z = xGuardSOA.Position[i].Z * rl.Lerp(1., 1.+xGuardSOA.Size[i].Z*rl.GetFrameTime()*float32(rl.GetRandomValue(-1, 1)), .35)
+			}
+			xGuardSOA.BoundingBox[i] = common.GetBoundingBoxPositionSizeV(xGuardSOA.Position[i], xGuardSOA.Size[i])
+
+			const lookahead = float32(20.)
+			lookaheadSize := rl.Vector3Multiply(xGuardSOA.Size[i], rl.NewVector3(lookahead, 1, lookahead)) // Maintain y position
+			lookaheadBounds := common.GetBoundingBoxPositionSizeV(xGuardSOA.Position[i], lookaheadSize)
+
+			// Guard must dart towards player
+			if rl.CheckCollisionBoxes(xPlayer.BoundingBox, lookaheadBounds) {
+				alpha := rl.GetFrameTime()
+				const distThreshold = lookahead / 5 // Rush player once this is crossed
+				if dist := rl.Vector3Distance(xGuardSOA.Position[i], xPlayer.Position); dist <= distThreshold {
+					f := dist / (lookahead / 2)
+					alpha += mathutil.SqrtF(f) / 8 // Jump scare
+				}
+				if isDebugTweening := true; isDebugTweening {
+					pos := xGuardSOA.Position[i]
+					pos.Y += 1. + 2*4*alpha // 3D info
+					rl.DrawSphereWires(pos, .5+2*alpha, 16, 16, rl.Red)
+				}
+				// TODO: Avoid other guards from colliding with each other
+				xGuardSOA.Position[i].X = rl.Lerp(xGuardSOA.Position[i].X, xPlayer.Position.X, alpha)
+				xGuardSOA.Position[i].Z = rl.Lerp(xGuardSOA.Position[i].Z, xPlayer.Position.Z, alpha)
+			}
+			rl.DrawBoundingBox(lookaheadBounds, rl.SkyBlue)
+			rl.DrawBoundingBox(lookaheadBounds, rl.Blue)
 		}
 	}
 
