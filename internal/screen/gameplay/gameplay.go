@@ -754,7 +754,7 @@ func Draw() {
 			}
 
 			// Approach player
-			// TODO: Avoid other guards from colliding with each other
+			// DONE: Avoid other guards from colliding with each other
 			// TODO: Avoid guards from colliding with blocks/drillroom/etc..
 			xGuardSOA.Position[i].X = rl.Lerp(xGuardSOA.Position[i].X, xPlayer.Position.X, alpha)
 			xGuardSOA.Position[i].Z = rl.Lerp(xGuardSOA.Position[i].Z, xPlayer.Position.Z, alpha)
@@ -823,57 +823,10 @@ func Draw() {
 		}
 	}
 
-	fontSize := float32(common.Font.Primary.BaseSize) * 3.0
+	DrawHUD()
 
-	// Player stats: health / money / experience
-	{
-		const marginX = 20
-		const marginY = 10
-		if false { // UNIMPLEMENTED HEATLH
-			rl.DrawTextEx(common.Font.Primary, fmt.Sprintf("%.0f",
-				100*xPlayer.Health), rl.NewVector2(marginX, marginY+20*1),
-				fontSize*2./3., 1, rl.Red)
-		}
-		const radius = 20
-		const marginLeft = marginX * 2 / 3
-		cargoRatio := (float32(xPlayer.CargoCapacity) / float32(xPlayer.MaxCargoCapacity))
-		circlePos := rl.NewVector2(marginLeft+radius, marginY+20*3+radius)
-		if cargoRatio >= 1. {
-			rl.DrawCircleGradient(int32(circlePos.X), int32(circlePos.Y), radius+3, rl.White, rl.Fade(rl.White, .1))
-		}
-		circleCutoutRec := rl.NewRectangle(marginLeft+radius/2., marginY+20*3+radius/2., radius, radius)
-		rl.DrawRectangleRoundedLinesEx(circleCutoutRec, 1., 16, 0.5+radius/2., rl.DarkGray)
-		rl.DrawCircleSector(circlePos, radius, -90, -90+360*cargoRatio, 16, rl.Gold)
-		rl.DrawCircleV(circlePos, radius/2, rl.Fade(rl.Gold, cargoRatio))
-		// Glass Half-Empty
-		rl.DrawCircleV(circlePos, radius*max(.5, (1-cargoRatio)), rl.Fade(rl.Gold, 1.-cargoRatio))
-		rl.DrawCircleV(circlePos, radius*max(.5, (1-cargoRatio)), rl.DarkGray)
-		// Glass Half-Full
-		if cargoRatio >= 0.5 {
-			rl.DrawCircleV(circlePos, radius*cargoRatio, rl.Fade(rl.Gold, 1.0))
-		}
-
-		capacityText := fmt.Sprintf("%d", xPlayer.CargoCapacity)
-		capacityStrLenX := rl.MeasureText(capacityText, int32(fontSize*2./3.))
-		rl.DrawTextEx(common.Font.Primary, capacityText, rl.NewVector2(
-			marginLeft+radius*2+float32(capacityStrLenX/2),
-			marginY+radius/2+20*3-10/2,
-		), fontSize*2./3., 1, rl.White)
-
-		divideText := fmt.Sprintf("%s", strings.Repeat("-", len(capacityText)))
-		divideStrLenX := rl.MeasureText(divideText, int32(fontSize)*2./4.)
-		rl.DrawTextEx(common.Font.Primary, divideText, rl.NewVector2(
-			marginLeft+radius*2+float32(capacityStrLenX)/2+float32(divideStrLenX)/2,
-			marginY+radius/2+20*4-(2*10)/1.5,
-		), fontSize*2./4., 0.0625, rl.Gray)
-
-		rl.DrawTextEx(common.Font.Primary, fmt.Sprintf(" %d", xPlayer.MaxCargoCapacity), rl.NewVector2(
-			marginLeft+radius*2+10,
-			marginY+radius/2+20*4-10/2,
-		), fontSize*2./4., 1, rl.Gray)
-	}
-
-	if false { // Perf
+	if true { // Perf
+		fontSize := float32(common.Font.Primary.BaseSize) * 3.0
 		rl.DrawFPS(10, screenH-35)
 		rl.DrawTextEx(common.Font.Primary, fmt.Sprintf("%.6f", rl.GetFrameTime()), rl.NewVector2(10, float32(screenH)-35-20*1), fontSize*2./3., 1, rl.Lime)
 		rl.DrawTextEx(common.Font.Primary, fmt.Sprintf("%.3d", framesCounter), rl.NewVector2(10, float32(screenH)-35-20*2), fontSize*2./3., 1, rl.Lime)
@@ -882,6 +835,166 @@ func Draw() {
 		text := fmt.Sprintf("money: %.3d\nexperience: %.3d\n", money, experience)
 		rl.DrawText(text, (screenW-10)-rl.MeasureText(text, 10), screenH-40, 10, rl.Green)
 	}
+
+}
+
+type CurrencyType int32
+
+const (
+	Copper CurrencyType = iota
+	Pearl               // or Iron
+	Bronze
+	Silver
+	Ruby
+	Gold
+	Diamond
+	Sapphire // Yellow/Blue
+	// Platinum
+
+	MaxCurrencyTypes
+)
+
+var currencyColorMap = map[CurrencyType]color.RGBA{
+	Copper:   rl.Beige,
+	Pearl:    rl.Gray,
+	Bronze:   rl.Orange,
+	Silver:   rl.Gray,
+	Ruby:     rl.Maroon,
+	Gold:     rl.Gold,
+	Diamond:  rl.SkyBlue,
+	Sapphire: rl.Yellow,
+}
+
+// currencyConversionMap maps Currency in Copper units.
+var currencyConversionMap = map[CurrencyType]int32{
+	Copper:   1,
+	Pearl:    25,
+	Bronze:   25,
+	Silver:   30,
+	Ruby:     35,
+	Gold:     40,
+	Diamond:  80,
+	Sapphire: 80,
+}
+
+// DrawHUD draws the Heads-Up-Display on 2D screen.
+func DrawHUD() {
+	fontSize := float32(common.Font.Primary.BaseSize) * 3.0
+	// Player stats: health / money / experience
+	const (
+		marginX    = 20
+		marginY    = 20
+		radius     = float32(20)
+		marginLeft = float32(marginX * 2. / 3.)
+	)
+	var (
+		cargoRatio = float32(xPlayer.CargoCapacity) / float32(xPlayer.MaxCargoCapacity)
+	)
+	// Set the transform matrix to where the HUD Stats are
+	rl.PushMatrix()
+	rl.Translatef(marginLeft, marginY, 0)
+	// Draw Health
+	radius0 := float32(15.)
+	circlePos := rl.NewVector2(radius, 20*1)
+	for i := range int32(rl.Clamp((xPlayer.Health*10.)/2., 0, 5)) {
+		DrawHeart(rl.Vector2Add(circlePos, rl.NewVector2(2*radius0*float32(i), 0)), radius0)
+	}
+	if isEnableText := false; isEnableText {
+		text := fmt.Sprintf("%.0f", 100*xPlayer.Health)
+		stringSize := rl.MeasureTextEx(common.Font.Primary, text, fontSize*2./3., 1.)
+		textPos := rl.NewVector2(circlePos.X+radius0*2-stringSize.X/2, 20*1+radius0/2.-stringSize.Y)
+		rl.DrawTextEx(common.Font.Primary, text, textPos, fontSize*2./3., 1, rl.Red)
+	}
+	rl.PopMatrix()
+
+	rl.PushMatrix()
+	rl.Translatef(marginLeft, marginY+20*3-radius/2, 0)
+	// Draw Cargo Capacity - [1] circle sector meter
+	circlePos = rl.NewVector2(radius, radius)
+	if cargoRatio >= 1. {
+		rl.DrawCircleGradient(int32(circlePos.X), int32(circlePos.Y), radius+3, rl.White, rl.Fade(rl.White, .1))
+	}
+	circleCutoutRec := rl.NewRectangle(radius/2., radius/2., radius, radius)
+	rl.DrawRectangleRoundedLinesEx(circleCutoutRec, 1., 16, 0.5+radius/2., rl.DarkGray)
+	rl.DrawCircleSector(circlePos, radius, -90, -90+360*cargoRatio, 16, cmp.Or(rl.White, rl.Gold))
+	rl.DrawCircleV(circlePos, radius/2, rl.Fade(rl.Gold, cargoRatio))
+	// Glass Half-Empty
+	rl.DrawCircleV(circlePos, radius*max(.75, (1-cargoRatio)), rl.Fade(rl.Gold, 1.-cargoRatio))
+	rl.DrawCircleV(circlePos, radius*max(.75, (1-cargoRatio)), rl.DarkGray)
+	rl.DrawCircleV(circlePos, 8+8, rl.Gold)
+	rl.DrawCircleV(circlePos, 8+4, rl.DarkGray)
+	rl.DrawCircleV(circlePos, 8, rl.Gold)
+	if false && cargoRatio >= 0.5 { // Glass Half-Full
+		rl.DrawCircleV(circlePos, radius*cargoRatio, rl.Fade(rl.Gold, 1.0))
+	}
+	rl.PopMatrix()
+
+	rl.PushMatrix()
+	rl.Translatef(marginLeft+radius*2.25, marginY+20*3+radius, 0)
+	// Draw Cargo Capacity - [2] meter text
+	font := common.Font.Primary
+	capText := fmt.Sprintf("%d", xPlayer.CargoCapacity)
+	capStrLenX := rl.MeasureText(capText, int32(fontSize*2./3.))
+	divideText := fmt.Sprintf("%s", strings.Repeat("-", len(capText)))
+	divideStrLenX := rl.MeasureText(divideText, int32(fontSize)/2.)
+	maxCapText := fmt.Sprintf(" %d", xPlayer.MaxCargoCapacity)
+	rl.DrawTextEx(font, capText,
+		rl.NewVector2(float32(capStrLenX)/2, -20-10/2), fontSize*2./3., 1, rl.White)
+	rl.DrawTextEx(font, divideText,
+		rl.NewVector2(float32(capStrLenX)/2+float32(divideStrLenX)/2, -(2*10)/1.5), fontSize/2., 0.0625, rl.Gray)
+	rl.DrawTextEx(font, maxCapText,
+		rl.NewVector2(0, -10/2), fontSize/2., 1, rl.Gray)
+	rl.PopMatrix()
+
+	rl.PushMatrix()
+	rl.Translatef(marginLeft*.5, marginY+20*4+radius+20*.25, 0)
+	type CurrencyItem struct {
+		CurrencyType   CurrencyType
+		OnHandCount    int
+		CollectedCount int
+	}
+
+	// Hard-coded slice
+	currencyInventories := [MaxCurrencyTypes]CurrencyItem{
+		Copper:   {CurrencyType: Copper, OnHandCount: 0, CollectedCount: 0},
+		Pearl:    {CurrencyType: Pearl, OnHandCount: 0, CollectedCount: 0},
+		Bronze:   {CurrencyType: Bronze, OnHandCount: 0, CollectedCount: 0},
+		Silver:   {CurrencyType: Silver, OnHandCount: 0, CollectedCount: 0},
+		Ruby:     {CurrencyType: Ruby, OnHandCount: 0, CollectedCount: 0},
+		Gold:     {CurrencyType: Gold, OnHandCount: 0, CollectedCount: 0},
+		Diamond:  {CurrencyType: Diamond, OnHandCount: 0, CollectedCount: 0},
+		Sapphire: {CurrencyType: Sapphire, OnHandCount: 0, CollectedCount: 0},
+	}
+
+	currencyInventories[Copper].OnHandCount = int(hitScore)
+
+	for i := range MaxCurrencyTypes {
+		item := currencyInventories[i]
+
+		const offset = (radius * 3)
+		gapY := offset * float32(i)
+		fontSize := (fontSize * 2. / 3.) - 2
+
+		position := rl.NewVector2(circlePos.X, circlePos.Y+gapY)
+		rl.DrawCircleV(position, min(fontSize/2, (radius*common.OneMinusInvPhi)), currencyColorMap[item.CurrencyType])
+
+		{
+			text := fmt.Sprintf("%d", item.CollectedCount)
+			textStringSize := rl.MeasureTextEx(font, text, fontSize, 1)
+			pos := rl.Vector2Add(position, rl.NewVector2(-textStringSize.X/2, textStringSize.Y*.8))
+			rl.DrawTextEx(font, text, pos, fontSize, 1., rl.White)
+		}
+
+		if item.OnHandCount > 0 {
+			text := fmt.Sprintf("+%d", item.OnHandCount)
+			textStringSize := rl.MeasureTextEx(font, text, fontSize, 1)
+			fontSize := fontSize - 2
+			pos := rl.Vector2Add(position, rl.NewVector2(-textStringSize.X/2, textStringSize.Y*.8))
+			pos = rl.Vector2Add(pos, rl.NewVector2(fontSize*1.5, -fontSize/1.5))
+			rl.DrawTextEx(font, text, pos, fontSize, 1., rl.LightGray)
+		}
+	}
+	rl.PopMatrix()
 }
 
 func Unload() {
@@ -1321,4 +1434,25 @@ func logicGameCurrencyConversionPrototype() {
 	// 65	Sapphire	Sapphire Jubilee
 	// 70	Platinum	Platinum Jubilee
 
+}
+
+func DrawHeart(position rl.Vector2, radius float32) {
+	if isDrawBackdropCircle := false; isDrawBackdropCircle {
+		rl.DrawCircleV(position, radius, rl.Fade(rl.Red, .1))
+	}
+	offsetX := radius / math.Pi
+	l := rl.NewVector2(position.X-offsetX, position.Y-radius/2.)
+	r := rl.NewVector2(position.X+offsetX, position.Y-radius/2.)
+	ll := rl.NewVector2(l.X-offsetX*math.Pi/2, l.Y+radius/(math.Pi*2))
+	rr := rl.NewVector2(r.X+offsetX*math.Pi/2, r.Y+radius/(math.Pi*2))
+	bot := rl.NewVector2(position.X, position.Y+radius/(math.Pi/2))
+	if isShowLines := false; isShowLines {
+		rl.DrawTriangleLines(bot, rr, ll, rl.Red)
+		rl.DrawCircleLinesV(l, radius/2., rl.Red)
+		rl.DrawCircleLinesV(r, radius/2., rl.Red)
+	} else {
+		rl.DrawTriangle(bot, rr, ll, rl.Red)
+		rl.DrawCircleV(l, radius/2., rl.Red)
+		rl.DrawCircleV(r, radius/2., rl.Red)
+	}
 }
