@@ -88,8 +88,13 @@ func InitBlocks(dst *[]Block, positions []rl.Vector3) {
 				float32(rl.GetRandomValue(92, 98))/100.,
 			),
 		)
+		if true {
+			size = common.Vector3One
+		}
 		obj := NewBlock(positions[i], size)
-		obj.Rotation = cmp.Or(float32(rl.GetRandomValue(-80, 80)/10.), 0.)
+		if false {
+			obj.Rotation = cmp.Or(float32(rl.GetRandomValue(-80, 80)/10.), 0.)
+		}
 		*dst = append(*dst, obj)
 	}
 }

@@ -1,5 +1,7 @@
 package gameplay
 
+// See fog shader: https://github.com/mohsengreen1388/raylib-go-utility/blob/main/utility/fog.go
+
 import (
 	"bytes"
 	"cmp"
@@ -57,6 +59,7 @@ const (
 	MaxGuards = int32(16)
 )
 
+// NPC
 var (
 	xGuardSOA GuardSOA
 )
@@ -131,7 +134,6 @@ func Init() {
 	finishScreen = 0
 
 	xProjectileSOA.Reset()
-	fmt.Printf("playerProjectiles: %v\n", xProjectileSOA)
 
 	levelID = int32(common.SavedgameSlotData.CurrentLevelID)
 	if levelID == 0 {
@@ -271,7 +273,6 @@ func Init() {
 			experience = data.Experience
 			hitCount = data.HitCount
 			hitScore = data.HitScore
-			fmt.Printf("data: %v\n", data)
 			saveGameLogicData() // Save ASAP
 		} else { // ERR
 			slog.Warn(err.Error())
@@ -385,7 +386,7 @@ func Update() {
 	}
 
 	// Play player weapon sounds
-	if rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
+	if rl.IsMouseButtonPressed(rl.MouseButtonLeft) || rl.IsMouseButtonDown(rl.MouseButtonLeft) {
 		gPlayerRay = rl.NewRay(
 			rl.Vector3{
 				X: xPlayer.Position.X,
@@ -403,8 +404,10 @@ func Update() {
 				rl.PlaySound(common.FXS.SciFiLaserSmall[rl.GetRandomValue(0, n-1)])
 			}
 		} else {
-			if n := int32(len(common.FXS.InterfaceClick)); n > 0 {
-				rl.PlaySound(common.FXS.InterfaceClick[rl.GetRandomValue(0, n-1)])
+			if false {
+				if n := int32(len(common.FXS.InterfaceClick)); n > 0 {
+					rl.PlaySound(common.FXS.InterfaceClick[rl.GetRandomValue(0, n-1)])
+				}
 			}
 		}
 	}
@@ -759,6 +762,21 @@ func Draw() {
 			xGuardSOA.Position[i].X = rl.Lerp(xGuardSOA.Position[i].X, xPlayer.Position.X, alpha)
 			xGuardSOA.Position[i].Z = rl.Lerp(xGuardSOA.Position[i].Z, xPlayer.Position.Z, alpha)
 		}
+		if rl.CheckCollisionBoxes(xPlayer.BoundingBox, xGuardSOA.BoundingBox[i]) {
+			if true {
+				guardOnPlayerDamage := rl.GetFrameTime() * 0.25
+				xPlayer.Health = max(0.0, xPlayer.Health-guardOnPlayerDamage)
+			} else {
+				// See: DrawHeart references
+				//   - 1.0 == 5 hearts
+				//   - 0.0 == 0 hearts
+				framesBeforeTakeDamage := int32(common.FPS * 2)
+				if framesCounter%framesBeforeTakeDamage == 0 {
+					guardOnPlayerDamage := float32(1.0 / 5.0)
+					xPlayer.Health -= guardOnPlayerDamage
+				}
+			}
+		}
 
 		if false {
 			rl.DrawBoundingBox(lookaheadBounds, rl.SkyBlue)
@@ -891,20 +909,48 @@ func DrawHUD() {
 		cargoRatio = float32(xPlayer.CargoCapacity) / float32(xPlayer.MaxCargoCapacity)
 	)
 	// Set the transform matrix to where the HUD Stats are
+
+	// Draw Health
+	//   - 1.0 == 5 hearts
+	//   - 0.0 == 0 hearts
 	rl.PushMatrix()
 	rl.Translatef(marginLeft, marginY, 0)
-	// Draw Health
 	radius0 := float32(15.)
 	circlePos := rl.NewVector2(radius, 20*1)
-	for i := range int32(rl.Clamp((xPlayer.Health*10.)/2., 0, 5)) {
+	healthPartsCount := int32(rl.Clamp((xPlayer.Health*10.)/2., 0, 5))
+	if healthPartsCount <= 1 { // FIXME: Use a better transition effect.. circle zoom out
+		radius1 := radius0 * common.InvPhi
+		f := rl.Clamp(xPlayer.Health, 0.00025, 1.0)
+		healthCirclePos := rl.Vector2Subtract(circlePos, rl.NewVector2(0, radius0/4))
+		outerCol := rl.Fade(rl.Maroon, 3*xPlayer.Health)
+		innerCol := rl.Fade(rl.Red, 2*xPlayer.Health)
+		if f <= 0.00025 {
+			radius1 /= f
+			f = max(0.1, mathutil.SqrtF(f)) // Black+Red splattered screen
+			outerCol = rl.Fade(rl.ColorLerp(rl.Black, outerCol, f), max(0.1, 1000*f))
+			innerCol = rl.Fade(rl.ColorLerp(rl.Black, innerCol, f), max(0.1, 1000*f))
+			healthCirclePos = rl.Vector2Lerp(rl.NewVector2(float32(rl.GetScreenWidth())/2, float32(rl.GetScreenHeight())/2), healthCirclePos, f*f)
+		}
+		rl.DrawCircleV(healthCirclePos, radius1, outerCol)
+		rl.DrawCircleSector(healthCirclePos, radius1, -90, -90+xPlayer.Health*360, cmp.Or(16, (healthPartsCount-1)*2), innerCol)
+	}
+	for i := range healthPartsCount {
 		DrawHeart(rl.Vector2Add(circlePos, rl.NewVector2(2*radius0*float32(i), 0)), radius0)
 	}
-	if isEnableText := false; isEnableText {
-		text := fmt.Sprintf("%.0f", 100*xPlayer.Health)
-		stringSize := rl.MeasureTextEx(common.Font.Primary, text, fontSize*2./3., 1.)
-		textPos := rl.NewVector2(circlePos.X+radius0*2-stringSize.X/2, 20*1+radius0/2.-stringSize.Y)
-		rl.DrawTextEx(common.Font.Primary, text, textPos, fontSize*2./3., 1, rl.Red)
-	}
+	// text := fmt.Sprintln(healthPartsCount)
+	// textStrSize := rl.MeasureTextEx(common.Font.Primary, text, 10, 1.0)
+	// playerScreenPosition := rl.GetWorldToScreen(rl.NewVector3(xPlayer.Position.X, xPlayer.Position.Y+0.5, xPlayer.Position.Z), camera)
+	// if false {
+	// 	rl.DrawCircleV(playerScreenPosition, radius0/2.0, rl.Fade(rl.Gray, 1.0+xPlayer.Health))
+	// 	rl.DrawCircleSector(playerScreenPosition, radius0/2.0, -90, -90+xPlayer.Health*360, cmp.Or(16, (healthPartsCount-1)*2), rl.Fade(rl.LightGray, xPlayer.Health))
+	// 	rl.DrawTextEx(common.Font.Primary, text, rl.NewVector2(playerScreenPosition.X-textStrSize.X/2.0, playerScreenPosition.Y-textStrSize.Y/3.0), 10, 1.0, rl.White)
+	// }
+	// if isEnableText := false; isEnableText {
+	// 	text := fmt.Sprintf("%.0f", 100*xPlayer.Health)
+	// 	stringSize := rl.MeasureTextEx(common.Font.Primary, text, fontSize*2./3., 1.)
+	// 	textPos := rl.NewVector2(circlePos.X+radius0*2-stringSize.X/2, 20*1+radius0/2.-stringSize.Y)
+	// 	rl.DrawTextEx(common.Font.Primary, text, textPos, fontSize*2./3., 1, rl.Red)
+	// }
 	rl.PopMatrix()
 
 	rl.PushMatrix()
@@ -955,6 +1001,10 @@ func DrawHUD() {
 	}
 
 	// Hard-coded slice
+	// FEATURES:
+	//	- If player enters drillroom:
+	//		- increment CollectedCount with OnHandCount
+	//		- reset OnHandCount to 0
 	currencyInventories := [MaxCurrencyTypes]CurrencyItem{
 		Copper:   {CurrencyType: Copper, OnHandCount: 0, CollectedCount: 0},
 		Pearl:    {CurrencyType: Pearl, OnHandCount: 0, CollectedCount: 0},

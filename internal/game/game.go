@@ -252,7 +252,7 @@ func Run() {
 		// emscripten_set_main_loop(UpdateDrawFrame, 60, 1)
 		log.Printf("env: %v\n", "PLATFORM_WEB")
 	} else {
-		rl.SetTargetFPS(60)
+		rl.SetTargetFPS(common.FPS)
 
 		//
 		//
