@@ -521,7 +521,17 @@ func Draw() {
 		switch TriggerType(i) {
 		case TriggerCarryMore:
 		case TriggerChangeResource:
-			pseudoAmount := int32(80)                                      // co base currency::Copper
+		case TriggerDigBigger:
+		case TriggerDigFaster:
+		case TriggerDigHarder:
+		case TriggerDigMoveFaster:
+		case TriggerGetTougher:
+		case TriggerMakeResource:
+			// TEMPORARY
+			var availableCopperQuantity int32 // co base currency::Copper
+			{                                 // TEMPORARY
+				availableCopperQuantity = int32(30)
+			}
 			if triggerChangeResourceCurrencyTypeState == currency.Copper { // Skip over base currency copper
 				panic(fmt.Sprintf("expected drillroom.TriggerType %d to be skipped", triggerChangeResourceCurrencyTypeState))
 			}
@@ -530,32 +540,39 @@ func Draw() {
 				col                  = currency.CurrencyColorMap[currencyID]
 				currencyString       = currency.CurrencyStringMap[currencyID]
 				currencyToCopperUnit = currency.CurrencyConversionRateMap[currencyID]
-				convertedAmount      = pseudoAmount / currencyToCopperUnit
+				convertedAmount      = availableCopperQuantity / currencyToCopperUnit
 				debugText            = fmt.Sprintf("%s::%d %dco=>%d", currencyString, currencyID, currencyToCopperUnit, convertedAmount)
 				actualText           = fmt.Sprintln(currencyToCopperUnit) // This much is required for 1 of currency to change into
-				fontSize, spacing    = float32(20.0), float32(1.0)
+				fontSize, spacing    = float32(20.0), float32(1.5)
 				debugStrSize         = rl.MeasureTextEx(common.Font.Primary, debugText, fontSize, spacing)
 				actualStrSize        = rl.MeasureTextEx(common.Font.Primary, actualText, fontSize, spacing)
 				debugPosition        = rl.NewVector2(0-debugStrSize.X/2, 0-fontSize*2-debugStrSize.Y/2)
 				pixelSize            = float32(screenW) / float32(screenH)
 				actualPosition       = rl.NewVector2(0+0*pixelSize*5-actualStrSize.X/2, 0-actualStrSize.Y/4)
+				iconLargePosition    = rl.NewVector2(actualPosition.X+actualStrSize.X/2, actualPosition.Y-8*2)
 				iconPosition         = rl.NewVector2(actualPosition.X+actualStrSize.X+8*common.Phi, 0*actualPosition.Y)
+				iconLargeRadius      = float32(8 + 8/2)
+				iconSmallRadius      = float32(8)
+				segmentsRingBuffer   = []int32{3, 4, 5, 6}
+				segments             = segmentsRingBuffer[int(currencyID)%len(segmentsRingBuffer)]
+				startAngle           = float32(currencyID)*15 + float32(segments)*15
 			)
-			if false {
+			if false { // DEBUG
 				rl.DrawTextEx(common.Font.Primary, debugText, debugPosition, fontSize, spacing, map[bool]color.RGBA{true: col, false: rl.Fade(col, 0.2)}[false])
 			}
 			// Create unique shapes for each currency
-			segmentsRingBuffer := []int32{3, 4, 5, 6}
-			segments := segmentsRingBuffer[int(currencyID)%len(segmentsRingBuffer)]
-			startAngle := float32(currencyID)*15 + float32(segments)*15
-			rl.DrawRing(iconPosition, 5, 8, startAngle, 360+startAngle, segments, col)
-			rl.DrawTextEx(common.Font.Primary, actualText, actualPosition, fontSize, spacing, rl.White)
-		case TriggerDigBigger:
-		case TriggerDigFaster:
-		case TriggerDigHarder:
-		case TriggerDigMoveFaster:
-		case TriggerGetTougher:
-		case TriggerMakeResource:
+			rl.DrawRing(iconLargePosition, 0, iconLargeRadius, startAngle, 360+startAngle, segments, rl.Fade(col, 0.7)) // Other
+			// Draw Copper Quantity required for switched resource type and draw copper icon next to it
+			rl.DrawRing(iconPosition, 0, iconSmallRadius, 0, 360, 6, rl.Fade(currency.CurrencyColorMap[currency.Copper], 0.7))
+			availableCol := func() color.RGBA { // # exactly one branch will be evaluated
+				if convertedAmount < 1 {
+					return rl.Purple
+				} else {
+					return rl.White
+				}
+			}()
+			rl.DrawTextEx(common.Font.Primary, actualText, actualPosition, fontSize, spacing, rl.Fade(availableCol, 0.8))
+
 		case TriggerRefuelDrill:
 		case TriggerStartDrill:
 		default:

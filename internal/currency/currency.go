@@ -24,9 +24,9 @@ const (
 
 var CurrencyColorMap = map[CurrencyType]color.RGBA{
 	Copper:   rl.Beige,
-	Pearl:    rl.ColorBrightness(rl.Black, 0.05),
+	Pearl:    rl.ColorBrightness(rl.DarkGray, 0.05),
 	Bronze:   rl.Orange,
-	Silver:   rl.ColorBrightness(rl.Black, 0.2),
+	Silver:   rl.ColorBrightness(rl.DarkGray, 0.15),
 	Ruby:     rl.Maroon,
 	Gold:     rl.Gold,
 	Diamond:  rl.SkyBlue,
