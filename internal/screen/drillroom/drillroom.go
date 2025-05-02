@@ -72,6 +72,7 @@ const (
 	MaxTriggerCount
 )
 
+// File Struct
 var (
 	triggerBoundingBoxes       [MaxTriggerCount]rl.BoundingBox
 	triggerSensorBoundingBoxes [MaxTriggerCount]rl.BoundingBox
@@ -95,6 +96,8 @@ func Init() {
 		Projection: rl.CameraPerspective,
 	} // See also https://github.com/raylib-extras/extras-c/blob/main/cameras/rlTPCamera/rlTPCamera.h
 	hasPlayerLeftDrillBase = false
+
+	levelID = int32(common.SavedgameSlotData.CurrentLevelID)
 
 	if !rl.IsMusicStreamPlaying(common.Music.DrillRoom000) {
 		rl.PlayMusicStream(common.Music.DrillRoom000)
@@ -273,95 +276,8 @@ func Update() {
 	}
 
 	for i := range MaxTriggerCount {
-		switch TriggerType(i) {
-		case TriggerCarryMore:
-		case TriggerChangeResource:
-			if isPlayerNearTriggerSensors[i] && rl.IsKeyPressed(rl.KeyF) {
-				triggerChangeResourceCurrencyTypeState = triggerChangeResourceCurrencyTypeState.Next()
-				if triggerChangeResourceCurrencyTypeState == currency.Copper { // Skip over base currency copper
-					triggerChangeResourceCurrencyTypeState++
-				}
-			}
-		case TriggerDigBigger:
-		case TriggerDigFaster:
-		case TriggerDigHarder:
-		case TriggerDigMoveFaster:
-		case TriggerGetTougher:
-		case TriggerMakeResource:
-		case TriggerRefuelDrill:
-		case TriggerStartDrill:
-		default:
-			panic("unexpected drillroom.TriggerType")
-		}
-	}
-
-	// Should just use maps or enumerations.. this seems kinda hacky
-	if isPlayerNearTriggerSensors[TriggerStartDrill] {
-		if rl.IsKeyPressed(rl.KeyF) {
-			var canDrill bool
-			// TEMPORARY
-			if __IS_TEMPORARY__ := false; __IS_TEMPORARY__ {
-				// Force success
-				if isSuccess := true; isSuccess {
-					canDrill = hitCount == 0
-				} else {
-					canDrill = hitCount == xPlayer.MaxCargoCapacity
-				}
-			}
-			if !canDrill {
-				// rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("footstep0%d.ogg", rl.GetRandomValue(0, 9)))))
-				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "metalClick.ogg")))
-
-				// Play unsuccessful attempt sound
-				if rl.GetRandomValue(0, 1) == 0 {
-					rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", "click_001.ogg"))) // Switch did not move
-				} else {
-					rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", "click_004.ogg"))) // Switch did not move
-				}
-				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", fmt.Sprintf("error_00%d.ogg", rl.GetRandomValue(5, 6))))) // Switch did not move
-
-			} else {
-				// TODO: SAVE STATE HERE AND PLAY TRANSITION SOUNDS
-				// - Extend transition time (so drilling seems to take a few more seconds)
-				// - Affect global value of levelID -> via file IO -> savegame/slot/1.json
-				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "metalClick.ogg")))
-
-				// Play successful attempt sound
-				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", fmt.Sprintf("click_00%d.ogg", rl.GetRandomValue(2, 3))))) // Switch moved
-				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", fmt.Sprintf("confirmation_00%d.ogg", rl.GetRandomValue(0, 4)))))
-
-				// Play drill room sound
-				rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_sci-fi-sounds", "Audio", "lowFrequency_explosion_001.ogg")))
-				if true {
-					sound := rl.LoadSound(filepath.Join("res", "fx", "kenney_sci-fi-sounds", "Audio", "engineCircular_000.ogg"))
-					rl.SetSoundVolume(sound, .3)
-					rl.PlaySound(sound)
-					rl.StopSound(sound)
-				}
-				if true {
-					sound := rl.LoadSound(filepath.Join("res", "fx", "kenney_sci-fi-sounds", "Audio", "explosionCrunch_002.ogg"))
-					rl.SetSoundVolume(sound, .3)
-					rl.PlaySound(sound)
-				}
-				if true {
-					sound := rl.LoadSound(filepath.Join("res", "fx", "kenney_sci-fi-sounds", "Audio", "spaceEngine_001.ogg"))
-					rl.SetSoundVolume(sound, .5)
-					rl.PlaySound(sound) // Bassy drone
-				}
-
-				// Transition to next level/screen
-				// Why does this feel so hacky? ^_^
-				// NOTE: IDs are non-zero (unsigned) integers
-				currLevelID := common.SavedgameSlotData.CurrentLevelID
-				finalLevelID := uint8(len(common.SavedgameSlotData.AllLevelIDS))
-				common.SavedgameSlotData.CurrentLevelID = min(finalLevelID, currLevelID+1)
-				if currLevelID >= finalLevelID {
-					finishScreen = 1 // => ending (gameover)
-				} else {
-					common.SavedgameSlotData.UnlockedLevelIDS = append(common.SavedgameSlotData.UnlockedLevelIDS, common.SavedgameSlotData.CurrentLevelID)
-					finishScreen = 2 // => gameplay (next-level)
-				}
-			}
+		if isPlayerNearTriggerSensors[i] && rl.IsKeyPressed(rl.KeyF) {
+			HandleTriggerOnPlayerPressF(TriggerType(i))
 		}
 	}
 
@@ -465,6 +381,7 @@ func Draw() {
 		rl.Translatef(triggerPositions[i].X, triggerPositions[i].Y, triggerPositions[i].Z)
 		switch TriggerType(i) {
 		case TriggerCarryMore:
+
 		case TriggerChangeResource:
 			const resourceRadius = 0.22 / 2 // Hologram
 			const padInlineStart = 0.32
@@ -472,14 +389,35 @@ func Draw() {
 			if false {
 				rl.DrawSphereEx(rl.NewVector3(padInlineStart, 1, 0), resourceRadius, 6, 6, col)
 			}
+
 		case TriggerDigBigger:
 		case TriggerDigFaster:
 		case TriggerDigHarder:
 		case TriggerDigMoveFaster:
 		case TriggerGetTougher:
 		case TriggerMakeResource:
+
 		case TriggerRefuelDrill:
+			if isPlayerNearTriggerSensors[i] {
+				rl.Scalef(1.25, 1.25, 1.25)
+			}
+
+			const y1 = 0.25 / 2
+			const h1 = 0.25 * common.Phi
+			const y2 = y1 + h1
+			const h2 = 0.0625
+
+			// NOTE: Maintain the draw order to avoid top part of the cylinder
+			// adding with bottom part of frustum like cover
+			rl.DrawCylinderEx(rl.NewVector3(0.0, y2, 0.0), rl.NewVector3(0.0, y2+h2, 0.0), 0.25, 0.20, 32, rl.Fade(rl.DarkGray, 0.2)) // Frustum Top-cover
+			rl.DrawCylinder(rl.NewVector3(0.0, y1, 0.0), 0.25, 0.25, h1, 16, rl.Fade(rl.DarkGray, 0.2))                               // Cylindric Sides
+
+			if isPlayerNearTriggerSensors[i] {
+				rl.Scalef(1.0, 1.0, 1.0)
+			}
+
 		case TriggerStartDrill:
+
 		default:
 			panic("unexpected drillroom.TriggerType")
 		}
@@ -527,53 +465,142 @@ func Draw() {
 		case TriggerDigMoveFaster:
 		case TriggerGetTougher:
 		case TriggerMakeResource:
-			// TEMPORARY
 			var availableCopperQuantity int32 // co base currency::Copper
-			{                                 // TEMPORARY
-				availableCopperQuantity = int32(30)
-			}
+			// TEMPORARY
+			availableCopperQuantity = int32(30)
+
 			if triggerChangeResourceCurrencyTypeState == currency.Copper { // Skip over base currency copper
 				panic(fmt.Sprintf("expected drillroom.TriggerType %d to be skipped", triggerChangeResourceCurrencyTypeState))
 			}
+
 			var (
+				pixelSize = float32(screenW) / float32(screenH)
+				fontSize  = float32(20.0)
+				spacing   = float32(1.5)
+
 				currencyID           = triggerChangeResourceCurrencyTypeState
-				col                  = currency.CurrencyColorMap[currencyID]
+				currencyCol          = currency.CurrencyColorMap[currencyID]
 				currencyString       = currency.CurrencyStringMap[currencyID]
 				currencyToCopperUnit = currency.CurrencyConversionRateMap[currencyID]
 				convertedAmount      = availableCopperQuantity / currencyToCopperUnit
-				debugText            = fmt.Sprintf("%s::%d %dco=>%d", currencyString, currencyID, currencyToCopperUnit, convertedAmount)
-				actualText           = fmt.Sprintln(currencyToCopperUnit) // This much is required for 1 of currency to change into
-				fontSize, spacing    = float32(20.0), float32(1.5)
-				debugStrSize         = rl.MeasureTextEx(common.Font.Primary, debugText, fontSize, spacing)
-				actualStrSize        = rl.MeasureTextEx(common.Font.Primary, actualText, fontSize, spacing)
-				debugPosition        = rl.NewVector2(0-debugStrSize.X/2, 0-fontSize*2-debugStrSize.Y/2)
-				pixelSize            = float32(screenW) / float32(screenH)
-				actualPosition       = rl.NewVector2(0+0*pixelSize*5-actualStrSize.X/2, 0-actualStrSize.Y/4)
-				iconLargePosition    = rl.NewVector2(actualPosition.X+actualStrSize.X/2, actualPosition.Y-8*2)
-				iconPosition         = rl.NewVector2(actualPosition.X+actualStrSize.X+8*common.Phi, 0*actualPosition.Y)
-				iconLargeRadius      = float32(8 + 8/2)
-				iconSmallRadius      = float32(8)
-				segmentsRingBuffer   = []int32{3, 4, 5, 6}
-				segments             = segmentsRingBuffer[int(currencyID)%len(segmentsRingBuffer)]
-				startAngle           = float32(currencyID)*15 + float32(segments)*15
+
+				debugText     = fmt.Sprintf("%s::%d %dco=>%d", currencyString, currencyID, currencyToCopperUnit, convertedAmount)
+				debugStrSize  = rl.MeasureTextEx(common.Font.Primary, debugText, fontSize, spacing)
+				debugPosition = rl.NewVector2(0-debugStrSize.X/2, 0-fontSize*2-debugStrSize.Y/2)
+				_             = debugPosition
+
+				actualText     = fmt.Sprintln(currencyToCopperUnit) // This much is required for 1 of currency to change into
+				actualStrSize  = rl.MeasureTextEx(common.Font.Primary, actualText, fontSize, spacing)
+				actualPosition = rl.NewVector2(0+0*pixelSize*5-actualStrSize.X/2, 0-actualStrSize.Y/4)
+
+				iconLargePosition  = rl.NewVector2(actualPosition.X+actualStrSize.X/2, actualPosition.Y-8*2)
+				iconPosition       = rl.NewVector2(actualPosition.X+actualStrSize.X+8*common.Phi, 0*actualPosition.Y)
+				iconLargeRadius    = float32(8 + 8/2)
+				iconSmallRadius    = float32(8)
+				segmentsRingBuffer = []int32{3, 4, 5, 6}
+				segments           = segmentsRingBuffer[int(currencyID)%len(segmentsRingBuffer)]
+				startAngle         = float32(currencyID)*15 + float32(segments)*15
 			)
-			if false { // DEBUG
-				rl.DrawTextEx(common.Font.Primary, debugText, debugPosition, fontSize, spacing, map[bool]color.RGBA{true: col, false: rl.Fade(col, 0.2)}[false])
-			}
+
 			// Create unique shapes for each currency
-			rl.DrawRing(iconLargePosition, 0, iconLargeRadius, startAngle, 360+startAngle, segments, rl.Fade(col, 0.7)) // Other
+			rl.DrawRing(iconLargePosition, 0, iconLargeRadius, startAngle, 360+startAngle, segments, rl.Fade(currencyCol, 0.7)) // Other
 			// Draw Copper Quantity required for switched resource type and draw copper icon next to it
 			rl.DrawRing(iconPosition, 0, iconSmallRadius, 0, 360, 6, rl.Fade(currency.CurrencyColorMap[currency.Copper], 0.7))
-			availableCol := func() color.RGBA { // # exactly one branch will be evaluated
-				if convertedAmount < 1 {
-					return rl.Purple
-				} else {
-					return rl.White
-				}
-			}()
+			var availableCol color.RGBA
+			if convertedAmount < 1 {
+				availableCol = rl.Purple
+			} else {
+				availableCol = rl.White
+			}
 			rl.DrawTextEx(common.Font.Primary, actualText, actualPosition, fontSize, spacing, rl.Fade(availableCol, 0.8))
 
 		case TriggerRefuelDrill:
+			refuelGoalCurrencyTypes := []currency.CurrencyType{
+				currency.Copper,
+				currency.Pearl,
+				currency.Bronze,
+				currency.Silver,
+				currency.Ruby,
+				currency.Gold,
+				currency.Diamond,
+				currency.Sapphire,
+			}
+
+			type TriggerRefuelDrillDataSOA struct {
+				Currency    [currency.MaxCurrencyTypes * 2]currency.CurrencyType
+				CopperUnits [currency.MaxCurrencyTypes * 2]int32
+			}
+
+			triggerData := TriggerRefuelDrillDataSOA{
+				Currency: [currency.MaxCurrencyTypes * 2]currency.CurrencyType{
+					currency.Pearl, currency.Pearl, currency.Bronze,
+					currency.Bronze, currency.Silver, currency.Silver,
+					currency.Ruby, currency.Ruby, currency.Gold, currency.Gold,
+					currency.Diamond, currency.Diamond, currency.Sapphire,
+					currency.Sapphire, currency.Sapphire, currency.Sapphire,
+				},
+				CopperUnits: [currency.MaxCurrencyTypes * 2]int32{
+					80, 90, 100, 110, 120, 130, 150, 175, 180, 190, 200, 210,
+					220, 230, 240, 255,
+				},
+			}
+
+			id := triggerData.Currency[levelID]
+			if id > currency.CurrencyType(len(common.SavedgameSlotData.AllLevelIDS)) {
+				panic(fmt.Sprintf("%s", "id > currency.CurrencyType(len(common.SavedgameSlotData.AllLevelIDS))"))
+			}
+
+			refuelGoalCurrencyType := refuelGoalCurrencyTypes[id]
+			const multiplier = common.Phi
+
+			var (
+				pixelSize = float32(screenW) / float32(screenH)
+				fontSize  = float32(20.0)
+				spacing   = float32(1.5)
+
+				currencyID     = triggerChangeResourceCurrencyTypeState
+				currencyCol    = currency.CurrencyColorMap[currencyID]
+				currencyString = currency.CurrencyStringMap[currencyID]
+
+				currencyToCopperUnit = currency.CurrencyConversionRateMap[refuelGoalCurrencyType]
+
+				// refuelGoal    = int32(mathutil.FloorF(float32(id)*multiplier*100*float32(currencyToCopperUnit))) / 100
+				refuelGoal    = triggerData.CopperUnits[id]
+				actualText    = fmt.Sprintln(refuelGoal) // This much is required for 1 of currency to change into
+				actualStrSize = rl.MeasureTextEx(common.Font.Primary, actualText, fontSize, spacing)
+
+				actualPosition     = rl.NewVector2(0+0*pixelSize*5-actualStrSize.X/2, 0-actualStrSize.Y/4)
+				iconSmallPosition  = rl.NewVector2(actualPosition.X+actualStrSize.X+8*common.Phi, 0*actualPosition.Y)
+				iconLargePosition  = rl.NewVector2(actualPosition.X+actualStrSize.X/2, actualPosition.Y-8*2)
+				iconPosition       = rl.NewVector2(actualPosition.X+actualStrSize.X+8*common.Phi, 0*actualPosition.Y)
+				iconLargeRadius    = float32(8 + 8/2)
+				iconSmallRadius    = float32(8)
+				segmentsRingBuffer = []int32{3, 4, 5, 6}
+				segments           = segmentsRingBuffer[int(refuelGoalCurrencyType)%len(segmentsRingBuffer)]
+				startAngle         = float32(currencyID)*15 + float32(segments)*15
+
+				_ = currencyCol
+				_ = currencyString
+				_ = iconSmallPosition
+				_ = iconLargePosition
+				_ = iconPosition
+				_ = iconLargeRadius
+				_ = iconSmallRadius
+				_ = startAngle
+
+				convertedAmount = currencyToCopperUnit
+			)
+			rl.DrawRing(iconLargePosition, 0, iconLargeRadius, startAngle, 360+startAngle, segments, rl.Fade(currency.CurrencyColorMap[refuelGoalCurrencyType], 0.7)) // Other
+
+			// rl.DrawRing(iconPosition, 0, iconSmallRadius, 0, 360, 6, rl.Fade(currency.CurrencyColorMap[refuelGoalCurrencyType], 0.7))
+			var availableCol color.RGBA
+			if convertedAmount < 1 {
+				availableCol = rl.Purple
+			} else {
+				availableCol = rl.White
+			}
+			rl.DrawTextEx(common.Font.Primary, actualText, actualPosition, fontSize, spacing, rl.Fade(availableCol, 0.8))
+
 		case TriggerStartDrill:
 		default:
 			panic("unexpected drillroom.TriggerType")
@@ -643,4 +670,77 @@ func Unload() {
 // NOTE: This is called each frame in main game loop
 func Finish() int {
 	return finishScreen
+}
+
+func HandleTriggerOnPlayerPressF(i TriggerType) {
+	switch i {
+
+	case TriggerDigFaster:
+		rl.PlaySound(common.FX.InterfaceBong)
+
+	case TriggerDigHarder:
+		rl.PlaySound(common.FX.InterfaceBong)
+
+	case TriggerDigBigger:
+		rl.PlaySound(common.FX.InterfaceBong)
+
+	case TriggerDigMoveFaster:
+		rl.PlaySound(common.FX.InterfaceBong)
+
+	case TriggerGetTougher:
+		rl.PlaySound(common.FX.InterfaceBong)
+
+	case TriggerMakeResource:
+		rl.PlaySound(common.FX.InterfaceBong)
+
+	case TriggerChangeResource:
+		common.PlayRandomFromSounds(common.FXS.InterfaceClick)
+		rl.PlaySound(common.FX.InterfaceScratch)
+		triggerChangeResourceCurrencyTypeState = triggerChangeResourceCurrencyTypeState.Next()
+		if triggerChangeResourceCurrencyTypeState == currency.Copper { // Skip over base currency copper
+			triggerChangeResourceCurrencyTypeState++
+		}
+
+	case TriggerCarryMore:
+		rl.PlaySound(common.FX.InterfaceBong)
+
+	case TriggerStartDrill:
+		var canDrill bool
+
+		if __IS_TEMPORARY__ := true; __IS_TEMPORARY__ {
+			if isSuccess := true; isSuccess { // Force success
+				canDrill = hitCount == 0
+			} else {
+				canDrill = hitCount == xPlayer.MaxCargoCapacity
+			}
+		}
+
+		if !canDrill {
+			rl.PlaySound(common.FX.InterfaceErrorSemiDown)
+			rl.PlaySound(common.FX.InterfaceBong)
+		} else {
+			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_sci-fi-sounds", "Audio", "lowFrequency_explosion_000.ogg")))
+			common.PlayRandomFromSounds(common.FXS.InterfaceConfirmation)
+
+			// Transition to next level/screen
+			// NOTE: Why does this feel so hacky? ^_^
+			// NOTE: IDs are non-zero (unsigned) integers
+			// currLevelID := common.SavedgameSlotData.CurrentLevelID
+			finalLevelID := uint8(len(common.SavedgameSlotData.AllLevelIDS))
+			common.SavedgameSlotData.CurrentLevelID = min(finalLevelID, uint8(levelID)+1)
+
+			if uint8(levelID) >= finalLevelID {
+				finishScreen = 1 // => ending (gameover)
+			} else {
+				finishScreen = 2 // => gameplay (next-level)
+				common.SavedgameSlotData.UnlockedLevelIDS = append(common.SavedgameSlotData.UnlockedLevelIDS, uint8(levelID))
+			}
+		}
+
+	case TriggerRefuelDrill:
+		rl.PlaySound(common.FX.InterfaceBong)
+
+	default:
+		panic("unexpected drillroom.TriggerType")
+	}
 }

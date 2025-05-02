@@ -164,9 +164,35 @@ func Run() {
 	}
 	{
 		var dir = filepath.Join("res", "fx", "kenney_interface-sounds", "Audio")
+
+		common.FX.InterfaceMinimize = rl.LoadSound(filepath.Join(dir, "minimize_006.ogg"))
+		common.FX.InterfaceErrorSemiUp = rl.LoadSound(filepath.Join(dir, "error_005.ogg"))
+		rl.SetSoundVolume(common.FX.InterfaceErrorSemiUp, 0.7)
+		common.FX.InterfaceErrorSemiDown = rl.LoadSound(filepath.Join(dir, "error_005.ogg"))
+		rl.SetSoundVolume(common.FX.InterfaceErrorSemiDown, 0.7)
+		common.FX.InterfaceScratch = rl.LoadSound(filepath.Join(dir, "scratch_003.ogg"))
+		common.FX.InterfaceBong = rl.LoadSound(filepath.Join(dir, "bong_001.ogg"))
+		rl.SetSoundVolume(common.FX.InterfaceBong, 1.3)
+
+		common.FXS.InterfaceConfirmation = []rl.Sound{
+			rl.LoadSound(filepath.Join(dir, "confirmation_001.ogg")),
+			rl.LoadSound(filepath.Join(dir, "confirmation_002.ogg")),
+			rl.LoadSound(filepath.Join(dir, "confirmation_003.ogg")),
+			rl.LoadSound(filepath.Join(dir, "confirmation_004.ogg")),
+		}
 		common.FXS.InterfaceClick = []rl.Sound{
 			rl.LoadSound(filepath.Join(dir, "click_002.ogg")),
 			rl.LoadSound(filepath.Join(dir, "click_003.ogg")),
+		}
+		common.FXS.InterfaceError = []rl.Sound{
+			rl.LoadSound(filepath.Join(dir, "error_001.ogg")),
+			rl.LoadSound(filepath.Join(dir, "error_002.ogg")),
+			rl.LoadSound(filepath.Join(dir, "error_003.ogg")),
+			rl.LoadSound(filepath.Join(dir, "error_004.ogg")),
+			rl.LoadSound(filepath.Join(dir, "error_005.ogg")),
+			rl.LoadSound(filepath.Join(dir, "error_006.ogg")),
+			rl.LoadSound(filepath.Join(dir, "error_007.ogg")),
+			rl.LoadSound(filepath.Join(dir, "error_008.ogg")),
 		}
 	}
 
@@ -243,7 +269,7 @@ func Run() {
 	currentScreen = logoGameScreen
 	logo.Init()
 
-	if true {
+	if false {
 		slog.Warn("rl.SetMasterVolume(.1)")
 		rl.SetMasterVolume(.1)
 	}

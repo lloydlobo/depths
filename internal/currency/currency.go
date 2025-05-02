@@ -1,7 +1,6 @@
 package currency
 
 import (
-	"fmt"
 	"image/color"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -57,7 +56,5 @@ var CurrencyStringMap = map[CurrencyType]string{
 }
 
 func (ct CurrencyType) Next() CurrencyType {
-	next := (ct + 1) % MaxCurrencyTypes
-	fmt.Printf("next currency type: %v\n", next)
-	return next
+	return (ct + 1) % MaxCurrencyTypes
 }
