@@ -21,6 +21,7 @@ import (
 
 	"example/depths/internal/block"
 	"example/depths/internal/common"
+	"example/depths/internal/currency"
 	"example/depths/internal/floor"
 	"example/depths/internal/player"
 	"example/depths/internal/projectile"
@@ -400,8 +401,21 @@ func Update() {
 		)
 
 		if projectile.FireEntityProjectile(&xProjectileSOA, xPlayer.Position, xPlayer.Size, float32(xPlayer.Rotation+90)) {
-			if n := int32(len(common.FXS.SciFiLaserSmall)); n > 0 {
-				rl.PlaySound(common.FXS.SciFiLaserSmall[rl.GetRandomValue(0, n-1)])
+			for range 4 { // Multi-layered sound
+				if sounds := common.FXS.ImpactsGenericLight; len(sounds) > 0 {
+					sound := sounds[rl.GetRandomValue(0, int32(len(sounds))-1)]
+					rl.SetSoundPitch(sound, 1.5)
+					rl.PlaySound(sound)
+				}
+				if n := int32(len(common.FXS.SciFiLaserSmall)); n > 0 {
+					rl.PlaySound(common.FXS.SciFiLaserSmall[rl.GetRandomValue(0, n-1)])
+				}
+				if n := int32(len(common.FXS.SciFiLaserLarge)); n > 0 {
+					sound := common.FXS.SciFiLaserLarge[rl.GetRandomValue(0, n-1)]
+					rl.SetSoundPitch(sound, 0.2)
+					rl.SetSoundVolume(sound, 0.5)
+					rl.PlaySound(sound)
+				}
 			}
 		} else {
 			if false {
@@ -856,45 +870,6 @@ func Draw() {
 
 }
 
-type CurrencyType int32
-
-const (
-	Copper CurrencyType = iota
-	Pearl               // or Iron
-	Bronze
-	Silver
-	Ruby
-	Gold
-	Diamond
-	Sapphire // Yellow/Blue
-	// Platinum
-
-	MaxCurrencyTypes
-)
-
-var currencyColorMap = map[CurrencyType]color.RGBA{
-	Copper:   rl.Beige,
-	Pearl:    rl.Gray,
-	Bronze:   rl.Orange,
-	Silver:   rl.Gray,
-	Ruby:     rl.Maroon,
-	Gold:     rl.Gold,
-	Diamond:  rl.SkyBlue,
-	Sapphire: rl.Yellow,
-}
-
-// currencyConversionMap maps Currency in Copper units.
-var currencyConversionMap = map[CurrencyType]int32{
-	Copper:   1,
-	Pearl:    25,
-	Bronze:   25,
-	Silver:   30,
-	Ruby:     35,
-	Gold:     40,
-	Diamond:  80,
-	Sapphire: 80,
-}
-
 // DrawHUD draws the Heads-Up-Display on 2D screen.
 func DrawHUD() {
 	fontSize := float32(common.Font.Primary.BaseSize) * 3.0
@@ -918,7 +893,10 @@ func DrawHUD() {
 	radius0 := float32(15.)
 	circlePos := rl.NewVector2(radius, 20*1)
 	healthPartsCount := int32(rl.Clamp((xPlayer.Health*10.)/2., 0, 5))
-	if healthPartsCount <= 1 { // FIXME: Use a better transition effect.. circle zoom out
+	// Close eyes ////// Go to sleep
+	// FIXME: Use a better transition effect.. circle zoom out
+	// TODO: If player dead or health==0.. allow retry option or make it new game for that level id OR delete the level file
+	if healthPartsCount <= 1 {
 		radius1 := radius0 * common.InvPhi
 		f := rl.Clamp(xPlayer.Health, 0.00025, 1.0)
 		healthCirclePos := rl.Vector2Subtract(circlePos, rl.NewVector2(0, radius0/4))
@@ -995,7 +973,7 @@ func DrawHUD() {
 	rl.PushMatrix()
 	rl.Translatef(marginLeft*.5, marginY+20*4+radius+20*.25, 0)
 	type CurrencyItem struct {
-		CurrencyType   CurrencyType
+		CurrencyType   currency.CurrencyType
 		OnHandCount    int
 		CollectedCount int
 	}
@@ -1005,20 +983,20 @@ func DrawHUD() {
 	//	- If player enters drillroom:
 	//		- increment CollectedCount with OnHandCount
 	//		- reset OnHandCount to 0
-	currencyInventories := [MaxCurrencyTypes]CurrencyItem{
-		Copper:   {CurrencyType: Copper, OnHandCount: 0, CollectedCount: 0},
-		Pearl:    {CurrencyType: Pearl, OnHandCount: 0, CollectedCount: 0},
-		Bronze:   {CurrencyType: Bronze, OnHandCount: 0, CollectedCount: 0},
-		Silver:   {CurrencyType: Silver, OnHandCount: 0, CollectedCount: 0},
-		Ruby:     {CurrencyType: Ruby, OnHandCount: 0, CollectedCount: 0},
-		Gold:     {CurrencyType: Gold, OnHandCount: 0, CollectedCount: 0},
-		Diamond:  {CurrencyType: Diamond, OnHandCount: 0, CollectedCount: 0},
-		Sapphire: {CurrencyType: Sapphire, OnHandCount: 0, CollectedCount: 0},
+	currencyInventories := [currency.MaxCurrencyTypes]CurrencyItem{
+		currency.Copper:   {CurrencyType: currency.Copper, OnHandCount: 0, CollectedCount: 0},
+		currency.Pearl:    {CurrencyType: currency.Pearl, OnHandCount: 0, CollectedCount: 0},
+		currency.Bronze:   {CurrencyType: currency.Bronze, OnHandCount: 0, CollectedCount: 0},
+		currency.Silver:   {CurrencyType: currency.Silver, OnHandCount: 0, CollectedCount: 0},
+		currency.Ruby:     {CurrencyType: currency.Ruby, OnHandCount: 0, CollectedCount: 0},
+		currency.Gold:     {CurrencyType: currency.Gold, OnHandCount: 0, CollectedCount: 0},
+		currency.Diamond:  {CurrencyType: currency.Diamond, OnHandCount: 0, CollectedCount: 0},
+		currency.Sapphire: {CurrencyType: currency.Sapphire, OnHandCount: 0, CollectedCount: 0},
 	}
 
-	currencyInventories[Copper].OnHandCount = int(hitScore)
+	currencyInventories[currency.Copper].OnHandCount = int(hitScore)
 
-	for i := range MaxCurrencyTypes {
+	for i := range currency.MaxCurrencyTypes {
 		item := currencyInventories[i]
 
 		const offset = (radius * 3)
@@ -1026,7 +1004,7 @@ func DrawHUD() {
 		fontSize := (fontSize * 2. / 3.) - 2
 
 		position := rl.NewVector2(circlePos.X, circlePos.Y+gapY)
-		rl.DrawCircleV(position, min(fontSize/2, (radius*common.OneMinusInvPhi)), currencyColorMap[item.CurrencyType])
+		rl.DrawCircleV(position, min(fontSize/2, (radius*common.OneMinusInvPhi)), currency.CurrencyColorMap[item.CurrencyType])
 
 		{
 			text := fmt.Sprintf("%d", item.CollectedCount)
