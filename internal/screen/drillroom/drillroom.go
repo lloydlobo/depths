@@ -11,6 +11,7 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 
 	"example/depths/internal/common"
+	"example/depths/internal/currency"
 	"example/depths/internal/floor"
 	"example/depths/internal/player"
 	"example/depths/internal/util/mathutil"
@@ -259,11 +260,32 @@ func Update() {
 		// Disable everything apart from "Start drill" trigger for now
 		if __IS_TEMPORARY__ := false; __IS_TEMPORARY__ {
 			if !isTriggerActive[i] {
+
 				continue
 			}
 		}
 
 		isPlayerNearTriggerSensors[i] = rl.CheckCollisionBoxes(xPlayer.BoundingBox, triggerSensorBoundingBoxes[i])
+	}
+
+	for i := range MaxTriggerCount {
+		switch TriggerType(i) {
+		case TriggerCarryMore:
+		case TriggerChangeResource:
+			if isPlayerNearTriggerSensors[i] && rl.IsKeyPressed(rl.KeyF) {
+				triggerChangeResourceCurrencyTypeState = triggerChangeResourceCurrencyTypeState.Next()
+			}
+		case TriggerDigBigger:
+		case TriggerDigFaster:
+		case TriggerDigHarder:
+		case TriggerDigMoveFaster:
+		case TriggerGetTougher:
+		case TriggerMakeResource:
+		case TriggerRefuelDrill:
+		case TriggerStartDrill:
+		default:
+			panic("unexpected drillroom.TriggerType")
+		}
 	}
 
 	// Should just use maps or enumerations.. this seems kinda hacky
@@ -393,6 +415,8 @@ func Update() {
 	framesCounter++
 }
 
+var triggerChangeResourceCurrencyTypeState = currency.Copper
+
 func Draw() {
 	// TODO: Draw ending screen here!
 	screenW := int32(rl.GetScreenWidth())
@@ -431,6 +455,26 @@ func Draw() {
 			rl.DrawBoundingBox(triggerBoundingBoxes[i], rl.Fade(rl.SkyBlue, 0.1))
 			rl.DrawBoundingBox(triggerSensorBoundingBoxes[i], rl.Fade(col, 0.1))
 		}
+
+		rl.PushMatrix()
+		rl.Translatef(triggerPositions[i].X, triggerPositions[i].Y, triggerPositions[i].Z)
+		switch TriggerType(i) {
+		case TriggerCarryMore:
+		case TriggerChangeResource:
+			rl.DrawSphereEx(rl.NewVector3(0, 1, 0), 0.125, 16, 16, currency.CurrencyColorMap[triggerChangeResourceCurrencyTypeState])
+		case TriggerDigBigger:
+		case TriggerDigFaster:
+		case TriggerDigHarder:
+		case TriggerDigMoveFaster:
+		case TriggerGetTougher:
+		case TriggerMakeResource:
+		case TriggerRefuelDrill:
+		case TriggerStartDrill:
+		default:
+			panic("unexpected drillroom.TriggerType")
+		}
+		rl.PopMatrix()
+
 		rl.DrawModelEx(triggerModels[i], triggerPositions[i], common.YAxis, 0., scale, rl.White)
 
 	}
@@ -457,6 +501,42 @@ func Draw() {
 		}
 	}
 
+	// Draw description over for each trigger
+	for i := range MaxTriggerCount {
+		rl.PushMatrix()
+		srcPos := triggerPositions[i]                                                          // World 3d
+		dstPos := rl.GetWorldToScreen(rl.NewVector3(srcPos.X, srcPos.Y+1.5, srcPos.Z), camera) // Screen 2d
+		rl.Translatef(dstPos.X, dstPos.Y, 0)
+		switch TriggerType(i) {
+		case TriggerCarryMore:
+		case TriggerChangeResource:
+			pseudoAmount := 10 // copper coins
+			var (
+				currencyType         = triggerChangeResourceCurrencyTypeState
+				col                  = currency.CurrencyColorMap[currencyType]
+				currencyString       = currency.CurrencyStringMap[currencyType]
+				currencyToCopperUnit = currency.CurrencyConversionRateMap[currencyType]
+				text                 = fmt.Sprintf("%s [id::%d] [rate::%d] %d", currencyString, currencyType, currencyToCopperUnit, currencyToCopperUnit*int32(pseudoAmount))
+				fontSize, spacing    = float32(10.0), float32(1.0)
+				strSize              = rl.MeasureTextEx(common.Font.Primary, text, fontSize, spacing)
+				offsetX, offsetY     = float32(0.0), float32(-4.0)
+				position             = rl.NewVector2(offsetX-strSize.X/2, offsetY-strSize.Y/2)
+			)
+			rl.DrawTextEx(common.Font.Primary, text, position, fontSize, spacing, col)
+		case TriggerDigBigger:
+		case TriggerDigFaster:
+		case TriggerDigHarder:
+		case TriggerDigMoveFaster:
+		case TriggerGetTougher:
+		case TriggerMakeResource:
+		case TriggerRefuelDrill:
+		case TriggerStartDrill:
+		default:
+			panic("unexpected drillroom.TriggerType")
+		}
+		rl.PopMatrix()
+	}
+	// Draw description on HUD for each trigger
 	instructionPosY := float32(screenH) - 40
 	for i := range MaxTriggerCount {
 		textCol := rl.Fade(rl.Black, .6)
