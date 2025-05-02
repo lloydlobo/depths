@@ -398,23 +398,18 @@ func Draw() {
 		case TriggerMakeResource:
 
 		case TriggerRefuelDrill:
-			if isPlayerNearTriggerSensors[i] {
-				rl.Scalef(1.25, 1.25, 1.25)
-			}
+			rl.Scalef(scale.X, scale.Y, scale.Z) // WARN: This works till PopMatrix()
 
-			const y1 = 0.25 / 2
-			const h1 = 0.25 * common.Phi
+			const y1 = (1.0 / (8.0 * 2))
+			const h1 = (1.0 / math.Pi)
 			const y2 = y1 + h1
 			const h2 = 0.0625
+			const radius1 = 0.20
+			const radius2 = radius1 * 0.8
 
-			// NOTE: Maintain the draw order to avoid top part of the cylinder
-			// adding with bottom part of frustum like cover
-			rl.DrawCylinderEx(rl.NewVector3(0.0, y2, 0.0), rl.NewVector3(0.0, y2+h2, 0.0), 0.25, 0.20, 32, rl.Fade(rl.DarkGray, 0.2)) // Frustum Top-cover
-			rl.DrawCylinder(rl.NewVector3(0.0, y1, 0.0), 0.25, 0.25, h1, 16, rl.Fade(rl.DarkGray, 0.2))                               // Cylindric Sides
-
-			if isPlayerNearTriggerSensors[i] {
-				rl.Scalef(1.0, 1.0, 1.0)
-			}
+			// NOTE: Maintain the draw order to avoid top part of the cylinder adding with bottom part of frustum like cover
+			rl.DrawCylinderEx(rl.NewVector3(0.0, y2, 0.0), rl.NewVector3(0.0, y2+h2, 0.0), radius1, radius2, 32, rl.Fade(rl.DarkGray, 0.2)) // Frustum Top-cover
+			rl.DrawCylinderEx(rl.NewVector3(0.0, y1, 0.0), rl.NewVector3(0.0, y1+h1, 0.0), radius1, radius1, 32, rl.Fade(rl.DarkGray, 0.2)) // Cylindric Sides
 
 		case TriggerStartDrill:
 
