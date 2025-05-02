@@ -51,6 +51,10 @@ var (
 	drillroomExitBoundingBox rl.BoundingBox
 )
 
+var (
+	triggerChangeResourceCurrencyTypeState = currency.Copper + currency.CurrencyType(1) // 0:Copper + 1:Pearl
+)
+
 type TriggerType uint8
 
 const (
@@ -274,6 +278,9 @@ func Update() {
 		case TriggerChangeResource:
 			if isPlayerNearTriggerSensors[i] && rl.IsKeyPressed(rl.KeyF) {
 				triggerChangeResourceCurrencyTypeState = triggerChangeResourceCurrencyTypeState.Next()
+				if triggerChangeResourceCurrencyTypeState == currency.Copper { // Skip over base currency copper
+					triggerChangeResourceCurrencyTypeState++
+				}
 			}
 		case TriggerDigBigger:
 		case TriggerDigFaster:
@@ -415,8 +422,6 @@ func Update() {
 	framesCounter++
 }
 
-var triggerChangeResourceCurrencyTypeState = currency.Copper
-
 func Draw() {
 	// TODO: Draw ending screen here!
 	screenW := int32(rl.GetScreenWidth())
@@ -461,7 +466,12 @@ func Draw() {
 		switch TriggerType(i) {
 		case TriggerCarryMore:
 		case TriggerChangeResource:
-			rl.DrawSphereEx(rl.NewVector3(0, 1, 0), 0.125, 16, 16, currency.CurrencyColorMap[triggerChangeResourceCurrencyTypeState])
+			const resourceRadius = 0.22 / 2 // Hologram
+			const padInlineStart = 0.32
+			col := currency.CurrencyColorMap[triggerChangeResourceCurrencyTypeState]
+			if false {
+				rl.DrawSphereEx(rl.NewVector3(padInlineStart, 1, 0), resourceRadius, 6, 6, col)
+			}
 		case TriggerDigBigger:
 		case TriggerDigFaster:
 		case TriggerDigHarder:
@@ -487,9 +497,9 @@ func Draw() {
 	alpha := min(1., float32(framesCounter)/60.)
 	col := rl.Fade(rl.White, alpha)
 
-	if true {
-		// Draw trigger index
-		// See https://www.raylib.com/examples/core/loader.html?name=core_world_screen
+	// Draw trigger index
+	// See https://www.raylib.com/examples/core/loader.html?name=core_world_screen
+	if false {
 		for i := range MaxTriggerCount {
 			text := fmt.Sprintf("%d", i)
 			const fontSize = 16
@@ -500,29 +510,46 @@ func Draw() {
 			rl.DrawTextEx(common.Font.Primary, text, rl.NewVector2(x, y), fontSize, 2, col)
 		}
 	}
-
 	// Draw description over for each trigger
 	for i := range MaxTriggerCount {
+		srcPos := triggerPositions[i]                                                           // World 3d
+		dstPos0 := rl.GetWorldToScreen(rl.NewVector3(srcPos.X, srcPos.Y+1.0, srcPos.Z), camera) // Screen 2d
+		dstPos1 := rl.GetWorldToScreen(rl.NewVector3(srcPos.X, srcPos.Y+0.5, srcPos.Z), camera) // Screen 2d
+		_ = dstPos1
 		rl.PushMatrix()
-		srcPos := triggerPositions[i]                                                          // World 3d
-		dstPos := rl.GetWorldToScreen(rl.NewVector3(srcPos.X, srcPos.Y+1.5, srcPos.Z), camera) // Screen 2d
-		rl.Translatef(dstPos.X, dstPos.Y, 0)
+		rl.Translatef(dstPos0.X, dstPos0.Y, 0)
 		switch TriggerType(i) {
 		case TriggerCarryMore:
 		case TriggerChangeResource:
-			pseudoAmount := 10 // copper coins
+			pseudoAmount := int32(80)                                      // co base currency::Copper
+			if triggerChangeResourceCurrencyTypeState == currency.Copper { // Skip over base currency copper
+				panic(fmt.Sprintf("expected drillroom.TriggerType %d to be skipped", triggerChangeResourceCurrencyTypeState))
+			}
 			var (
-				currencyType         = triggerChangeResourceCurrencyTypeState
-				col                  = currency.CurrencyColorMap[currencyType]
-				currencyString       = currency.CurrencyStringMap[currencyType]
-				currencyToCopperUnit = currency.CurrencyConversionRateMap[currencyType]
-				text                 = fmt.Sprintf("%s [id::%d] [rate::%d] %d", currencyString, currencyType, currencyToCopperUnit, currencyToCopperUnit*int32(pseudoAmount))
-				fontSize, spacing    = float32(10.0), float32(1.0)
-				strSize              = rl.MeasureTextEx(common.Font.Primary, text, fontSize, spacing)
-				offsetX, offsetY     = float32(0.0), float32(-4.0)
-				position             = rl.NewVector2(offsetX-strSize.X/2, offsetY-strSize.Y/2)
+				currencyID           = triggerChangeResourceCurrencyTypeState
+				col                  = currency.CurrencyColorMap[currencyID]
+				currencyString       = currency.CurrencyStringMap[currencyID]
+				currencyToCopperUnit = currency.CurrencyConversionRateMap[currencyID]
+				convertedAmount      = pseudoAmount / currencyToCopperUnit
+				debugText            = fmt.Sprintf("%s::%d %dco=>%d", currencyString, currencyID, currencyToCopperUnit, convertedAmount)
+				actualText           = fmt.Sprintln(currencyToCopperUnit) // This much is required for 1 of currency to change into
+				fontSize, spacing    = float32(20.0), float32(1.0)
+				debugStrSize         = rl.MeasureTextEx(common.Font.Primary, debugText, fontSize, spacing)
+				actualStrSize        = rl.MeasureTextEx(common.Font.Primary, actualText, fontSize, spacing)
+				debugPosition        = rl.NewVector2(0-debugStrSize.X/2, 0-fontSize*2-debugStrSize.Y/2)
+				pixelSize            = float32(screenW) / float32(screenH)
+				actualPosition       = rl.NewVector2(0+0*pixelSize*5-actualStrSize.X/2, 0-actualStrSize.Y/4)
+				iconPosition         = rl.NewVector2(actualPosition.X+actualStrSize.X+8*common.Phi, 0*actualPosition.Y)
 			)
-			rl.DrawTextEx(common.Font.Primary, text, position, fontSize, spacing, col)
+			if false {
+				rl.DrawTextEx(common.Font.Primary, debugText, debugPosition, fontSize, spacing, map[bool]color.RGBA{true: col, false: rl.Fade(col, 0.2)}[false])
+			}
+			// Create unique shapes for each currency
+			segmentsRingBuffer := []int32{3, 4, 5, 6}
+			segments := segmentsRingBuffer[int(currencyID)%len(segmentsRingBuffer)]
+			startAngle := float32(currencyID)*15 + float32(segments)*15
+			rl.DrawRing(iconPosition, 5, 8, startAngle, 360+startAngle, segments, col)
+			rl.DrawTextEx(common.Font.Primary, actualText, actualPosition, fontSize, spacing, rl.White)
 		case TriggerDigBigger:
 		case TriggerDigFaster:
 		case TriggerDigHarder:

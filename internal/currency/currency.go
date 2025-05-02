@@ -10,7 +10,7 @@ import (
 type CurrencyType int32
 
 const (
-	Copper   CurrencyType = iota // 0
+	Copper   CurrencyType = iota // 0 Base currency
 	Pearl                        // 1
 	Bronze                       // 2
 	Silver                       // 3
