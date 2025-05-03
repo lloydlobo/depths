@@ -41,3 +41,7 @@ const (
 	OpenWorldRoom RoomType = iota
 	DrillRoom
 )
+
+const (
+	FPS = 60
+)

@@ -24,37 +24,48 @@ var (
 
 	// Text Resource
 
-	Font struct{ Primary, Secondary rl.Font }
+	Font struct {
+		RaylibDefault, SourGummy, SimpleMono rl.Font
+	}
 
 	// Audio Resource
 
 	Music struct {
-		OpenWorld000,
-		OpenWorld001,
-		DrillRoom000,
-		DrillRoom001,
-		UIScreen000,
-		UIScreen001,
+		OpenWorld000, OpenWorld001,
+		DrillRoom000, DrillRoom001,
+		UIScreen000, UIScreen001,
 		Ambient000 rl.Music
 	}
 
-	FX struct{ Coin rl.Sound }
+	FX struct {
+		Coin rl.Sound
+
+		InterfaceBong, InterfaceErrorSemiDown,
+		InterfaceErrorSemiUp, InterfaceMinimize, InterfaceScratch rl.Sound
+	}
 
 	FXS struct {
 		ImpactsSoftHeavy, ImpactsSoftMedium, ImpactsGenericLight, ImpactFootStepsConcrete []rl.Sound
-
-		RPGDrawKnife, RPGCloth []rl.Sound
-
-		SciFiLaserLarge, SciFiLaserSmall []rl.Sound
-
-		InterfaceClick []rl.Sound
+		RPGDrawKnife, RPGCloth                                                            []rl.Sound
+		SciFiLaserLarge, SciFiLaserSmall                                                  []rl.Sound
+		InterfaceClick, InterfaceConfirmation, InterfaceError                             []rl.Sound
 	}
 
 	// Models Resource
 
-	Shader struct{ PBR rl.Shader }
+	Shader struct {
+		PBR,
+		Grayscale rl.Shader
+	}
 
-	Texture struct{ CubicmapAtlas rl.Texture2D }
+	Model struct {
+		Dwarf rl.Model
+	}
+
+	Texture struct {
+		DwarfDiffuse,
+		CubicmapAtlas rl.Texture2D
+	}
 
 	ModelDungeonKit struct {
 		OBJ model.ModelsOBJ

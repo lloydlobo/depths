@@ -38,7 +38,7 @@ func NewPlayer(camera rl.Camera3D) Player {
 		Collisions: rl.NewQuaternion(0, 0, 0, 0),
 	}
 
-	player.BoundingBox = common.GetBoundingBoxFromPositionSizeV(camera.Target, player.Size)
+	player.BoundingBox = common.GetBoundingBoxPositionSizeV(camera.Target, player.Size)
 
 	currId := int(common.SavedgameSlotData.CurrentLevelID) // [1..]
 	player.MaxCargoCapacity = []int32{80, 86, 92, 96, 108, 116, 128, 136, 146, 156, 186, 206, 216, 236, 266, 296, 306}[currId-1]
@@ -124,6 +124,7 @@ func SetupPlayerModel() {
 	// See https://www.raylib.com/examples/models/loader.html?name=models_bone_socket
 	// See https://github.com/raysan5/raylib/tree/master/examples/models/resources/models/gltf
 	characterModel = rl.LoadModel(filepath.Join("res", "model", "gltf", "greenman.glb"))
+
 	equippedModels = [MaxBoneSockets]rl.Model{
 		rl.LoadModel(filepath.Join("res", "model", "gltf", "greenman_hat.glb")),    // Index for the hat model is the same as BONE_SOCKET_HAT
 		rl.LoadModel(filepath.Join("res", "model", "gltf", "greenman_sword.glb")),  // Index for the sword model is the same as BONE_SOCKET_HAND_R
@@ -256,7 +257,7 @@ func (p *Player) Update(camera rl.Camera3D, flr floor.Floor) {
 
 	// Project the player as the camera target
 	p.Position = camera.Target
-	p.BoundingBox = common.GetBoundingBoxFromPositionSizeV(p.Position, p.Size)
+	p.BoundingBox = common.GetBoundingBoxPositionSizeV(p.Position, p.Size)
 
 	// Update rotation based on camera forward projection
 	startPos := p.Position
@@ -412,7 +413,7 @@ func RevertPlayerAndCameraPositions(
 	srcCamera rl.Camera3D,
 ) {
 	dstPlayer.Position = srcPlayer.Position
-	dstPlayer.BoundingBox = common.GetBoundingBoxFromPositionSizeV(dstPlayer.Position, dstPlayer.Size)
+	dstPlayer.BoundingBox = common.GetBoundingBoxPositionSizeV(dstPlayer.Position, dstPlayer.Size)
 	dstCamera.Target = srcCamera.Target
 	dstCamera.Position = srcCamera.Position
 }

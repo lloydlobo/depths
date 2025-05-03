@@ -1,4 +1,16 @@
+# .gitignore
+
+# Binary
+depths
+os/
+
+storage/level*.json
+
 tmp
+
+screenrec*.gif
+screenshot*.png
+
 res/fx/kenney_interface-sounds.zip
 res/fx/kenney_rpg-audio.zip
 res/fx/kenney_ui-audio.zip

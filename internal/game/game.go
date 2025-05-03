@@ -59,7 +59,7 @@ var (
 func Run() {
 	// Initialize
 
-	rl.SetConfigFlags(rl.FlagMsaa4xHint)
+	rl.SetConfigFlags(rl.FlagMsaa4xHint) // Enable Multi Sampling Anti Aliasing 4x (if available)
 	rl.InitWindow(int32(rl.GetScreenWidth()), int32(rl.GetScreenHeight()), "tiny game ─ depths")
 
 	rl.InitAudioDevice()
@@ -68,8 +68,9 @@ func Run() {
 	common.SavedgameSlotData = *common.Must(common.LoadSavegameSlot(1))
 
 	// Load common assets once
-	common.Font.Primary = rl.GetFontDefault()
-	common.Font.Secondary = rl.LoadFont("res/mecha.png")
+	common.Font.RaylibDefault = rl.GetFontDefault()
+	common.Font.SourGummy = rl.LoadFont(filepath.Join("res", "font", "SourGummy-VariableFont_wdth,wght.ttf"))
+	common.Font.SimpleMono = rl.LoadFont(filepath.Join("res", "font", "simple_mono.ttf"))
 
 	common.Music.UIScreen000 = rl.LoadMusicStream(filepath.Join("res", "music", "inspiring-cinematic-ambient-116199.mp3")) // Menu/Options
 	common.Music.UIScreen000.Looping = true
@@ -164,15 +165,50 @@ func Run() {
 	}
 	{
 		var dir = filepath.Join("res", "fx", "kenney_interface-sounds", "Audio")
+
+		common.FX.InterfaceMinimize = rl.LoadSound(filepath.Join(dir, "minimize_006.ogg"))
+		common.FX.InterfaceErrorSemiUp = rl.LoadSound(filepath.Join(dir, "error_005.ogg"))
+		rl.SetSoundVolume(common.FX.InterfaceErrorSemiUp, 0.7)
+		common.FX.InterfaceErrorSemiDown = rl.LoadSound(filepath.Join(dir, "error_005.ogg"))
+		rl.SetSoundVolume(common.FX.InterfaceErrorSemiDown, 0.7)
+		common.FX.InterfaceScratch = rl.LoadSound(filepath.Join(dir, "scratch_003.ogg"))
+		common.FX.InterfaceBong = rl.LoadSound(filepath.Join(dir, "bong_001.ogg"))
+		rl.SetSoundVolume(common.FX.InterfaceBong, 1.3)
+
+		common.FXS.InterfaceConfirmation = []rl.Sound{
+			rl.LoadSound(filepath.Join(dir, "confirmation_001.ogg")),
+			rl.LoadSound(filepath.Join(dir, "confirmation_002.ogg")),
+			rl.LoadSound(filepath.Join(dir, "confirmation_003.ogg")),
+			rl.LoadSound(filepath.Join(dir, "confirmation_004.ogg")),
+		}
 		common.FXS.InterfaceClick = []rl.Sound{
 			rl.LoadSound(filepath.Join(dir, "click_002.ogg")),
 			rl.LoadSound(filepath.Join(dir, "click_003.ogg")),
+		}
+		common.FXS.InterfaceError = []rl.Sound{
+			rl.LoadSound(filepath.Join(dir, "error_001.ogg")),
+			rl.LoadSound(filepath.Join(dir, "error_002.ogg")),
+			rl.LoadSound(filepath.Join(dir, "error_003.ogg")),
+			rl.LoadSound(filepath.Join(dir, "error_004.ogg")),
+			rl.LoadSound(filepath.Join(dir, "error_005.ogg")),
+			rl.LoadSound(filepath.Join(dir, "error_006.ogg")),
+			rl.LoadSound(filepath.Join(dir, "error_007.ogg")),
+			rl.LoadSound(filepath.Join(dir, "error_008.ogg")),
 		}
 	}
 
 	// rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", fmt.Sprintf("glitch_00%d.ogg", rl.GetRandomValue(0, 4)))))
 
 	common.ModelDungeonKit.OBJ = model.LoadAssetModelOBJ()
+
+	{
+		common.Model.Dwarf = rl.LoadModel(filepath.Join("res", "model", "obj", "dwarf.obj"))
+		common.Texture.DwarfDiffuse = rl.LoadTexture(filepath.Join("res", "texture", "dwarf_diffuse.png"))
+		shaderDir := filepath.Join("res", "shader")
+		common.Shader.Grayscale = rl.LoadShader(filepath.Join(shaderDir, "glsl330_"+"base.vs"), filepath.Join(shaderDir, "glsl330_"+"grayscale.fs"))
+		rl.SetMaterialTexture(common.Model.Dwarf.Materials, rl.MapDiffuse, common.Texture.DwarfDiffuse)
+		common.Model.Dwarf.Materials.Shader = common.Shader.Grayscale
+	}
 
 	if shouldBeArchived := true; !shouldBeArchived {
 		common.Texture.CubicmapAtlas = rl.LoadTexture(filepath.Join("res", "texture", "cubicmap_atlas.png"))
@@ -234,16 +270,16 @@ func Run() {
 	currentScreen = logoGameScreen
 	logo.Init()
 
-	if false {
-		slog.Warn("rl.SetMasterVolume(.2)")
-		rl.SetMasterVolume(.2)
+	if true {
+		slog.Warn("rl.SetMasterVolume(.05)")
+		rl.SetMasterVolume(.05)
 	}
 
 	if _, ok := os.LookupEnv("PLATFORM_WEB"); ok {
 		// emscripten_set_main_loop(UpdateDrawFrame, 60, 1)
 		log.Printf("env: %v\n", "PLATFORM_WEB")
 	} else {
-		rl.SetTargetFPS(60)
+		rl.SetTargetFPS(common.FPS)
 
 		//
 		//
@@ -280,8 +316,8 @@ func Run() {
 	}
 
 	// Unload global data loaded
-	rl.UnloadFont(common.Font.Primary)
-	rl.UnloadFont(common.Font.Secondary)
+	rl.UnloadFont(common.Font.SourGummy)
+	rl.UnloadFont(common.Font.SimpleMono)
 	rl.UnloadMusicStream(common.Music.OpenWorld001)
 	rl.UnloadMusicStream(common.Music.Ambient000)
 	rl.UnloadSound(common.FX.Coin)
