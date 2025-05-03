@@ -20,8 +20,8 @@ import (
 )
 
 const (
-	screenTitleText    = "DRILL"                                                                             // This should be temporary during prototype
-	screenSubtitleText = "leave room: backspace swipe-left\nquit:          F10 pinch-out right-mouse-button" // "press enter or tap to jump to title screen"
+	screenTitleText    = "DRILL"
+	screenSubtitleText = "leave room: backspace swipe-left\nquit:          F10 pinch-out right-mouse-button"
 )
 
 var (
@@ -350,9 +350,9 @@ func Draw() {
 	rl.ClearBackground(rl.RayWhite)
 
 	xPlayer.Draw()
-	if false {
+	if true {
 		xFloor.Draw()
-	} else {
+	} else { // Fancy floor
 		mesh := rl.GenMeshPlane(xFloor.Size.X, xFloor.Size.Z, 1, 1)
 		rl.DrawMesh(mesh, *common.ModelDungeonKit.OBJ.Banner.Materials, rl.MatrixIdentity())
 	}
@@ -632,8 +632,6 @@ func Draw() {
 
 	hud.DrawHUD(xPlayer, hitScore)
 
-	fontSize := float32(common.Font.SourGummy.BaseSize) * 3.
-
 	if f := float32(framesCounter) / 60.; (alpha >= 1.) && (f > 2. && f < 1000.) {
 		delta := mathutil.PowF(float32(rl.GetTime()), 1.5-(2.0/f))
 		delta *= rl.GetFrameTime()
@@ -644,17 +642,26 @@ func Draw() {
 		alpha *= .5 * f
 	}
 
-	pos := rl.NewVector2(float32(screenW)/2.-float32(rl.MeasureText(screenTitleText, int32(fontSize*common.Phi)))/2., float32(screenH)/16.)
-	rl.DrawTextEx(common.Font.SourGummy, screenTitleText, pos, (fontSize * common.Phi), 4, rl.Fade(rl.Black, .5*(alpha)))
+	{
+		font := common.Font.SourGummy
+		strSize := rl.MeasureTextEx(font, screenTitleText, float32(font.BaseSize), 1.0)
+		pos := rl.NewVector2(float32(screenW)/2-strSize.X/2, float32(screenH)/16-strSize.Y/2)
+		rl.DrawTextEx(font, screenTitleText, pos, float32(font.BaseSize), 1.0, rl.Fade(rl.Black, 0.5+0.5*(alpha)))
+	}
 
-	pos = rl.NewVector2(float32(screenW)/2.-float32(rl.MeasureText("ROOM", int32(fontSize)))/2., float32(screenH)/16.+(fontSize*common.Phi))
-	rl.DrawTextEx(common.Font.SourGummy, "ROOM", pos, fontSize, common.Phi, rl.Fade(rl.Gray, .7*(alpha)))
+	{
+		font := common.Font.SourGummy
+		text := "ROOM"
+		strSize := rl.MeasureTextEx(font, text, float32(font.BaseSize), 1.0)
+		pos := rl.NewVector2(float32(screenW)/2-strSize.X/2, float32(screenH)/16-strSize.Y/2+float32(font.BaseSize))
+		rl.DrawTextEx(font, text, pos, float32(font.BaseSize), 1.0, rl.Fade(rl.Gray, 0.5+0.7*(alpha)))
+	}
 
 	{
 		fontSize := float32(20. - 9.)
 		subtextSize := rl.MeasureTextEx(common.Font.SourGummy, screenSubtitleText, fontSize, 1)
 		position := rl.NewVector2(float32(screenW)/2-subtextSize.X/2, min(instructionPosY-40-fontSize, float32(screenH)-subtextSize.Y*3))
-		rl.DrawTextEx(common.Font.SourGummy, screenSubtitleText, position, fontSize, 1, rl.Fade(rl.Gray, 1.0*alpha))
+		rl.DrawTextEx(common.Font.SourGummy, screenSubtitleText, position, fontSize, 1.0, rl.Fade(rl.Gray, 1.0*alpha))
 	}
 
 	if true {
