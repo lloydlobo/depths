@@ -24,7 +24,9 @@ var (
 
 	// Text Resource
 
-	Font struct{ Primary, Secondary rl.Font }
+	Font struct {
+		RaylibDefault, SourGummy, SimpleMono rl.Font
+	}
 
 	// Audio Resource
 

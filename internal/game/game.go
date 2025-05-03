@@ -68,8 +68,9 @@ func Run() {
 	common.SavedgameSlotData = *common.Must(common.LoadSavegameSlot(1))
 
 	// Load common assets once
-	common.Font.Primary = rl.GetFontDefault()
-	common.Font.Secondary = rl.LoadFont("res/mecha.png")
+	common.Font.RaylibDefault = rl.GetFontDefault()
+	common.Font.SourGummy = rl.LoadFont(filepath.Join("res", "font", "SourGummy-VariableFont_wdth,wght.ttf"))
+	common.Font.SimpleMono = rl.LoadFont(filepath.Join("res", "font", "simple_mono.ttf"))
 
 	common.Music.UIScreen000 = rl.LoadMusicStream(filepath.Join("res", "music", "inspiring-cinematic-ambient-116199.mp3")) // Menu/Options
 	common.Music.UIScreen000.Looping = true
@@ -269,9 +270,9 @@ func Run() {
 	currentScreen = logoGameScreen
 	logo.Init()
 
-	if false {
-		slog.Warn("rl.SetMasterVolume(.1)")
-		rl.SetMasterVolume(.1)
+	if true {
+		slog.Warn("rl.SetMasterVolume(.05)")
+		rl.SetMasterVolume(.05)
 	}
 
 	if _, ok := os.LookupEnv("PLATFORM_WEB"); ok {
@@ -315,8 +316,8 @@ func Run() {
 	}
 
 	// Unload global data loaded
-	rl.UnloadFont(common.Font.Primary)
-	rl.UnloadFont(common.Font.Secondary)
+	rl.UnloadFont(common.Font.SourGummy)
+	rl.UnloadFont(common.Font.SimpleMono)
 	rl.UnloadMusicStream(common.Music.OpenWorld001)
 	rl.UnloadMusicStream(common.Music.Ambient000)
 	rl.UnloadSound(common.FX.Coin)

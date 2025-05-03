@@ -33,9 +33,8 @@ func Draw() {
 	)
 	rl.DrawTextEx(fontThatIsInGameDotGo, screenTitleText, pos, fontSize, 4, rl.Orange)
 
-	posX := int32(rl.GetScreenWidth())/2 - rl.MeasureText(screenSubtitleText, 20)/2
-	posY := int32(rl.GetScreenHeight()) / 2
-	rl.DrawText(screenSubtitleText, posX, posY, 20, rl.Orange)
+	position := rl.NewVector2(float32(rl.GetScreenWidth())/2-float32(rl.MeasureText(screenSubtitleText, 20)/2), float32(rl.GetScreenHeight())/2)
+	rl.DrawTextEx(common.Font.SimpleMono, screenSubtitleText, position, float32(common.Font.SimpleMono.BaseSize), 1.0, rl.Orange)
 }
 
 func Unload() {

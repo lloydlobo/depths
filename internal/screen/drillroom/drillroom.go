@@ -13,6 +13,7 @@ import (
 	"example/depths/internal/common"
 	"example/depths/internal/currency"
 	"example/depths/internal/floor"
+	"example/depths/internal/hud"
 	"example/depths/internal/player"
 	"example/depths/internal/util/mathutil"
 	"example/depths/internal/wall"
@@ -349,7 +350,12 @@ func Draw() {
 	rl.ClearBackground(rl.RayWhite)
 
 	xPlayer.Draw()
-	xFloor.Draw()
+	if false {
+		xFloor.Draw()
+	} else {
+		mesh := rl.GenMeshPlane(xFloor.Size.X, xFloor.Size.Z, 1, 1)
+		rl.DrawMesh(mesh, *common.ModelDungeonKit.OBJ.Banner.Materials, rl.MatrixIdentity())
+	}
 	if false {
 		rl.DrawBoundingBox(drillroomExitBoundingBox, rl.Green)
 	}
@@ -426,6 +432,7 @@ func Draw() {
 
 	// 2D World
 
+	// Gradually fade in text wait for a second to reset World to Screen Coordinates
 	// One second fade in duration when fps==60
 	alpha := min(1., float32(framesCounter)/60.)
 	col := rl.Fade(rl.White, alpha)
@@ -435,22 +442,22 @@ func Draw() {
 	if false {
 		for i := range MaxTriggerCount {
 			text := fmt.Sprintf("%d", i)
-			const fontSize = 16
-			stringSize := rl.MeasureTextEx(common.Font.Primary, text, fontSize, 2)
-			x := triggerScreenPositions[i].X - stringSize.X
-			y := triggerScreenPositions[i].Y - stringSize.Y
-			// Gradually fade in text wait for a second to reset World to Screen Coordinates
-			rl.DrawTextEx(common.Font.Primary, text, rl.NewVector2(x, y), fontSize, 2, col)
+			stringSize := rl.MeasureTextEx(common.Font.SourGummy, text, float32(common.Font.SourGummy.BaseSize), 2)
+			position := rl.NewVector2(triggerScreenPositions[i].X-stringSize.X, triggerScreenPositions[i].Y-stringSize.Y)
+			rl.DrawTextEx(common.Font.SourGummy, text, position, float32(common.Font.SourGummy.BaseSize), 2, col)
 		}
 	}
+
 	// Draw description over for each trigger
 	for i := range MaxTriggerCount {
 		srcPos := triggerPositions[i]                                                           // World 3d
 		dstPos0 := rl.GetWorldToScreen(rl.NewVector3(srcPos.X, srcPos.Y+1.0, srcPos.Z), camera) // Screen 2d
 		dstPos1 := rl.GetWorldToScreen(rl.NewVector3(srcPos.X, srcPos.Y+0.5, srcPos.Z), camera) // Screen 2d
 		_ = dstPos1
+
 		rl.PushMatrix()
 		rl.Translatef(dstPos0.X, dstPos0.Y, 0)
+
 		switch TriggerType(i) {
 		case TriggerCarryMore:
 		case TriggerChangeResource:
@@ -470,7 +477,6 @@ func Draw() {
 
 			var (
 				pixelSize = float32(screenW) / float32(screenH)
-				fontSize  = float32(20.0)
 				spacing   = float32(1.5)
 
 				currencyID           = triggerChangeResourceCurrencyTypeState
@@ -480,12 +486,12 @@ func Draw() {
 				convertedAmount      = availableCopperQuantity / currencyToCopperUnit
 
 				debugText     = fmt.Sprintf("%s::%d %dco=>%d", currencyString, currencyID, currencyToCopperUnit, convertedAmount)
-				debugStrSize  = rl.MeasureTextEx(common.Font.Primary, debugText, fontSize, spacing)
-				debugPosition = rl.NewVector2(0-debugStrSize.X/2, 0-fontSize*2-debugStrSize.Y/2)
+				debugStrSize  = rl.MeasureTextEx(common.Font.SourGummy, debugText, float32(common.Font.SourGummy.BaseSize), spacing)
+				debugPosition = rl.NewVector2(0-debugStrSize.X/2, 0-float32(common.Font.SourGummy.BaseSize*2)-debugStrSize.Y/2)
 				_             = debugPosition
 
 				actualText     = fmt.Sprintln(currencyToCopperUnit) // This much is required for 1 of currency to change into
-				actualStrSize  = rl.MeasureTextEx(common.Font.Primary, actualText, fontSize, spacing)
+				actualStrSize  = rl.MeasureTextEx(common.Font.SourGummy, actualText, float32(common.Font.SourGummy.BaseSize), spacing)
 				actualPosition = rl.NewVector2(0+0*pixelSize*5-actualStrSize.X/2, 0-actualStrSize.Y/4)
 
 				iconLargePosition  = rl.NewVector2(actualPosition.X+actualStrSize.X/2, actualPosition.Y-8*2)
@@ -507,7 +513,7 @@ func Draw() {
 			} else {
 				availableCol = rl.White
 			}
-			rl.DrawTextEx(common.Font.Primary, actualText, actualPosition, fontSize, spacing, rl.Fade(availableCol, 0.8))
+			rl.DrawTextEx(common.Font.SourGummy, actualText, actualPosition, float32(common.Font.SourGummy.BaseSize), spacing, rl.Fade(availableCol, 0.8))
 
 		case TriggerRefuelDrill:
 			refuelGoalCurrencyTypes := []currency.CurrencyType{
@@ -547,10 +553,8 @@ func Draw() {
 
 			refuelGoalCurrencyType := refuelGoalCurrencyTypes[id]
 			const multiplier = common.Phi
-
 			var (
 				pixelSize = float32(screenW) / float32(screenH)
-				fontSize  = float32(20.0)
 				spacing   = float32(1.5)
 
 				currencyID     = triggerChangeResourceCurrencyTypeState
@@ -562,7 +566,7 @@ func Draw() {
 				// refuelGoal    = int32(mathutil.FloorF(float32(id)*multiplier*100*float32(currencyToCopperUnit))) / 100
 				refuelGoal    = triggerData.CopperUnits[id]
 				actualText    = fmt.Sprintln(refuelGoal) // This much is required for 1 of currency to change into
-				actualStrSize = rl.MeasureTextEx(common.Font.Primary, actualText, fontSize, spacing)
+				actualStrSize = rl.MeasureTextEx(common.Font.SourGummy, actualText, float32(common.Font.SourGummy.BaseSize), spacing)
 
 				actualPosition     = rl.NewVector2(0+0*pixelSize*5-actualStrSize.X/2, 0-actualStrSize.Y/4)
 				iconSmallPosition  = rl.NewVector2(actualPosition.X+actualStrSize.X+8*common.Phi, 0*actualPosition.Y)
@@ -594,14 +598,17 @@ func Draw() {
 			} else {
 				availableCol = rl.White
 			}
-			rl.DrawTextEx(common.Font.Primary, actualText, actualPosition, fontSize, spacing, rl.Fade(availableCol, 0.8))
+
+			rl.DrawTextEx(common.Font.SourGummy, actualText, actualPosition, float32(common.Font.SourGummy.BaseSize), spacing, rl.Fade(availableCol, 0.8))
 
 		case TriggerStartDrill:
+
 		default:
 			panic("unexpected drillroom.TriggerType")
 		}
 		rl.PopMatrix()
 	}
+
 	// Draw description on HUD for each trigger
 	instructionPosY := float32(screenH) - 40
 	for i := range MaxTriggerCount {
@@ -609,18 +616,24 @@ func Draw() {
 		bgCol := rl.RayWhite
 
 		if isPlayerNearTriggerSensors[i] {
-			fontSize := float32(common.Font.Primary.BaseSize) * 2
 			const maxLabelLenForFontSizeX2 = 148
+
+			fontSize := float32(common.Font.SourGummy.BaseSize) * 2
 			text := triggerLabels[i]
 			pos := rl.NewVector2(float32(screenW)/2-maxLabelLenForFontSizeX2*2./3., instructionPosY)
+
 			rl.DrawRectangleRounded(rl.NewRectangle(pos.X-2, pos.Y-2, fontSize+4, fontSize+4), .3, 16, textCol)
-			rl.DrawText("F", int32(pos.X)+2+2+1, int32(pos.Y)+2, int32(fontSize)-2, bgCol)
-			rl.DrawTextEx(common.Font.Primary, text, rl.Vector2{X: pos.X + fontSize + fontSize/2 + 1, Y: pos.Y}, fontSize, 2, textCol)
+			rl.DrawTextEx(common.Font.SourGummy, "F", rl.NewVector2(pos.X+2+2+1, pos.Y+2), fontSize-2, 1.0, bgCol)
+			rl.DrawTextEx(common.Font.SourGummy, text, rl.Vector2{X: pos.X + fontSize + fontSize/2 + 1, Y: pos.Y}, fontSize, 2, textCol)
+
 			break // Avoid overlapping text
 		}
 	}
 
-	fontSize := float32(common.Font.Primary.BaseSize) * 3.
+	hud.DrawHUD(xPlayer, hitScore)
+
+	fontSize := float32(common.Font.SourGummy.BaseSize) * 3.
+
 	if f := float32(framesCounter) / 60.; (alpha >= 1.) && (f > 2. && f < 1000.) {
 		delta := mathutil.PowF(float32(rl.GetTime()), 1.5-(2.0/f))
 		delta *= rl.GetFrameTime()
@@ -630,20 +643,21 @@ func Draw() {
 	} else { // Initial delay on screen start
 		alpha *= .5 * f
 	}
+
 	pos := rl.NewVector2(float32(screenW)/2.-float32(rl.MeasureText(screenTitleText, int32(fontSize*common.Phi)))/2., float32(screenH)/16.)
-	rl.DrawTextEx(common.Font.Primary, screenTitleText, pos, (fontSize * common.Phi), 4, rl.Fade(rl.Black, .5*(alpha)))
+	rl.DrawTextEx(common.Font.SourGummy, screenTitleText, pos, (fontSize * common.Phi), 4, rl.Fade(rl.Black, .5*(alpha)))
+
 	pos = rl.NewVector2(float32(screenW)/2.-float32(rl.MeasureText("ROOM", int32(fontSize)))/2., float32(screenH)/16.+(fontSize*common.Phi))
-	rl.DrawTextEx(common.Font.Primary, "ROOM", pos, fontSize, common.Phi, rl.Fade(rl.Gray, .7*(alpha)))
+	rl.DrawTextEx(common.Font.SourGummy, "ROOM", pos, fontSize, common.Phi, rl.Fade(rl.Gray, .7*(alpha)))
 
 	{
 		fontSize := float32(20. - 9.)
-		subtextSize := rl.MeasureTextEx(common.Font.Primary, screenSubtitleText, fontSize, 1)
-		rl.DrawTextEx(common.Font.Primary, screenSubtitleText,
-			rl.NewVector2(float32(screenW)/2-subtextSize.X/2, min(instructionPosY-40-fontSize, float32(screenH)-subtextSize.Y*3)),
-			fontSize, 1, rl.Fade(rl.Gray, 1.0*alpha))
+		subtextSize := rl.MeasureTextEx(common.Font.SourGummy, screenSubtitleText, fontSize, 1)
+		position := rl.NewVector2(float32(screenW)/2-subtextSize.X/2, min(instructionPosY-40-fontSize, float32(screenH)-subtextSize.Y*3))
+		rl.DrawTextEx(common.Font.SourGummy, screenSubtitleText, position, fontSize, 1, rl.Fade(rl.Gray, 1.0*alpha))
 	}
 
-	if false {
+	if true {
 		rl.DrawText(fmt.Sprint(rl.GetFrameTime()), 10, 30, 20, rl.Green)
 		rl.DrawText(fmt.Sprint(framesCounter), 10, 50, 20, rl.Green)
 	}
