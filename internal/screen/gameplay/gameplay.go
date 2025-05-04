@@ -21,6 +21,7 @@ import (
 
 	"example/depths/internal/block"
 	"example/depths/internal/common"
+	"example/depths/internal/currency"
 	"example/depths/internal/floor"
 	"example/depths/internal/hud"
 	"example/depths/internal/player"
@@ -859,7 +860,7 @@ func Draw() {
 		}
 	}
 
-	hud.DrawHUD(xPlayer, hitScore)
+	hud.DrawHUD(xPlayer, hitScore, currencyItems)
 
 	if true { // Perf
 		fontSize := float32(common.Font.SourGummy.BaseSize) * 3.0
@@ -1055,6 +1056,25 @@ func drawOuterDrillroom() {
 		rl.DrawModelEx(model, rl.NewVector3(maxDrillWallIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
 		rl.DrawModelEx(model, rl.NewVector3(-maxDrillWallIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
 	}
+
+	// Draw glass wall shell
+
+	// Outer drill room walls
+	const side = maxDrillWallIndex*2 + 1.0/2 + 0.001
+	outerSize := rl.NewVector3(side, side, side)
+	if true {
+		pos := xFloor.Position
+		pos.Y += outerSize.Y / 2
+		rl.DrawCubeV(pos, outerSize, rl.Fade(rl.DarkGray, 0.25))
+		rl.DrawCubeWiresV(pos, outerSize, rl.Fade(rl.Gray, 0.25))
+	}
+	{
+		startPos := rl.NewVector3(xFloor.Position.X, xFloor.Position.Y+outerSize.Y, xFloor.Position.Z)
+		endPos := startPos
+		endPos.Y += (outerSize.Y / 2) * common.InvPhi
+		startPos.Y -= endPos.Y / 2
+		rl.DrawCylinderEx(startPos, endPos, side/2, (side/1)*common.InvPhi, 12, rl.Fade(rl.DarkGray, 0.3)) // Draw a cylinder with base at startPos and top at endPos
+	}
 }
 
 type GameEntityData struct {
@@ -1196,6 +1216,7 @@ func loadGameLogicData() (*GameLogicData, error) {
 	default:
 		return nil, fmt.Errorf("invalid game %s data version %q", suffix, version)
 	}
+
 }
 func loadGameEntityData() (*GameEntityData, error) {
 	const suffix = entityGameDataVersionSuffix
