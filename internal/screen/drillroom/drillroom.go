@@ -350,16 +350,11 @@ func Draw() {
 	rl.ClearBackground(rl.RayWhite)
 
 	xPlayer.Draw()
-	if true {
-		xFloor.Draw()
-	} else { // Fancy floor
-		mesh := rl.GenMeshPlane(xFloor.Size.X, xFloor.Size.Z, 1, 1)
-		rl.DrawMesh(mesh, *common.ModelDungeonKit.OBJ.Banner.Materials, rl.MatrixIdentity())
+	xFloor.Draw()
+	{
+		scale := cmp.Or(rl.NewVector3(5, 2, 5), common.Vector3One)
+		wall.DrawBatch(common.DrillRoom, xFloor.Position, xFloor.Size, scale)
 	}
-	if false {
-		rl.DrawBoundingBox(drillroomExitBoundingBox, rl.Green)
-	}
-	wall.DrawBatch(common.DrillRoom, xFloor.Position, xFloor.Size, cmp.Or(rl.NewVector3(5, 2, 5), common.Vector3One))
 
 	for i := range MaxTriggerCount {
 		// Circular model shape --expand-> to 1x1x1 bounding box
@@ -630,7 +625,7 @@ func Draw() {
 		}
 	}
 
-	hud.DrawHUD(xPlayer, hitScore)
+	hud.DrawHUD(xPlayer, hitScore, [8]currency.CurrencyItem{})
 
 	if f := float32(framesCounter) / 60.; (alpha >= 1.) && (f > 2. && f < 1000.) {
 		delta := mathutil.PowF(float32(rl.GetTime()), 1.5-(2.0/f))

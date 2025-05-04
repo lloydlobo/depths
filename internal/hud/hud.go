@@ -14,29 +14,27 @@ import (
 	"example/depths/internal/util/mathutil"
 )
 
-type CurrencyItem struct {
-	CurrencyType   currency.CurrencyType
-	OnHandCount    int
-	CollectedCount int
-}
-
-// Hard-coded slice
-//   - If player enters drillroom:
-//   - increment CollectedCount with OnHandCount
-//   - reset OnHandCount to 0
-var currencyInventories = [currency.MaxCurrencyTypes]CurrencyItem{
-	currency.Copper:   {CurrencyType: currency.Copper, OnHandCount: 0, CollectedCount: 0},
-	currency.Pearl:    {CurrencyType: currency.Pearl, OnHandCount: 0, CollectedCount: 0},
-	currency.Bronze:   {CurrencyType: currency.Bronze, OnHandCount: 0, CollectedCount: 0},
-	currency.Silver:   {CurrencyType: currency.Silver, OnHandCount: 0, CollectedCount: 0},
-	currency.Ruby:     {CurrencyType: currency.Ruby, OnHandCount: 0, CollectedCount: 0},
-	currency.Gold:     {CurrencyType: currency.Gold, OnHandCount: 0, CollectedCount: 0},
-	currency.Diamond:  {CurrencyType: currency.Diamond, OnHandCount: 0, CollectedCount: 0},
-	currency.Sapphire: {CurrencyType: currency.Sapphire, OnHandCount: 0, CollectedCount: 0},
-}
+// // Hard-coded slice
+// //   - If player enters drillroom:
+// //   - increment CollectedCount with OnHandCount
+// //   - reset OnHandCount to 0
+// var currencyItems /* = */ [currency.MaxCurrencyTypes]currency.CurrencyItem /* {
+// 	currency.Copper:   {Type: currency.Copper, Wallet: 0, Bank: 0},
+// 	currency.Pearl:    {Type: currency.Pearl, Wallet: 0, Bank: 0},
+// 	currency.Bronze:   {Type: currency.Bronze, Wallet: 0, Bank: 0},
+// 	currency.Silver:   {Type: currency.Silver, Wallet: 0, Bank: 0},
+// 	currency.Ruby:     {Type: currency.Ruby, Wallet: 0, Bank: 0},
+// 	currency.Gold:     {Type: currency.Gold, Wallet: 0, Bank: 0},
+// 	currency.Diamond:  {Type: currency.Diamond, Wallet: 0, Bank: 0},
+// 	currency.Sapphire: {Type: currency.Sapphire, Wallet: 0, Bank: 0},
+// } */
 
 // DrawHUD draws the Heads-Up-Display on 2D screen.
-func DrawHUD(xPlayer player.Player, hitScore int32) {
+func DrawHUD(
+	xPlayer player.Player,
+	hitScore int32,
+	currencyItems [currency.MaxCurrencyTypes]currency.CurrencyItem,
+) {
 	screenW := int32(rl.GetScreenWidth())
 	screenH := int32(rl.GetScreenHeight())
 
@@ -145,25 +143,25 @@ func DrawHUD(xPlayer player.Player, hitScore int32) {
 	rl.PushMatrix()
 	rl.Translatef(marginLeft*.5, marginY+20*4+radius+20*.25, 0)
 	{
-		currencyInventories[currency.Copper].OnHandCount = int(hitScore)
+		currencyItems[currency.Copper].Wallet = hitScore
 
 		for i := range currency.MaxCurrencyTypes {
-			item := currencyInventories[i]
+			item := currencyItems[i]
 
 			const offset = (radius * 3)
 			gapY := offset * float32(i)
 			fontSize := (fontSize * 2. / 3.) - 2
 
 			position := rl.NewVector2(circlePos.X, circlePos.Y+gapY)
-			rl.DrawCircleV(position, min(fontSize/2, (radius*common.OneMinusInvPhi)), currency.CurrencyColorMap[item.CurrencyType])
+			rl.DrawCircleV(position, min(fontSize/2, (radius*common.OneMinusInvPhi)), currency.CurrencyColorMap[item.Type])
 			{
-				text := fmt.Sprintf("%d", item.CollectedCount)
+				text := fmt.Sprintf("%d", item.Bank)
 				textStringSize := rl.MeasureTextEx(font, text, fontSize, 1)
 				pos := rl.Vector2Add(position, rl.NewVector2(-textStringSize.X/2, textStringSize.Y*.8))
 				rl.DrawTextEx(font, text, pos, fontSize, 1., rl.White)
 			}
-			if item.OnHandCount > 0 {
-				text := fmt.Sprintf("+%d", item.OnHandCount)
+			if item.Wallet > 0 {
+				text := fmt.Sprintf("+%d", item.Wallet)
 				textStringSize := rl.MeasureTextEx(font, text, fontSize, 1)
 				fontSize := fontSize - 2
 				pos := rl.Vector2Add(position, rl.NewVector2(-textStringSize.X/2, textStringSize.Y*.8))

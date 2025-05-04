@@ -53,6 +53,10 @@ var (
 	xProjectileSOA         projectile.ProjectileSOA
 )
 
+var (
+	currencyItems [currency.MaxCurrencyTypes]currency.CurrencyItem
+)
+
 const projectileRadiusSphere = .05 // Duplicated.. but maybe wrong values
 const projectileGuardDamage = (1.0 / 3.0) + .01
 
@@ -1108,6 +1112,7 @@ func saveGameLogicData() {
 		LevelID: levelID,
 		Data:    bb.Bytes(),
 	}
+	currency.LoadCurrencyItems(&currencyItems)
 	storage.SaveStorageLevelEx(dataJSON, suffix)
 }
 func saveGameEntityData() {
@@ -1186,6 +1191,7 @@ func loadGameLogicData() (*GameLogicData, error) {
 		if err := json.Unmarshal(dest.Data, &v); err != nil {
 			return nil, err
 		}
+		currency.LoadCurrencyItems(&currencyItems)
 		return v, nil
 	default:
 		return nil, fmt.Errorf("invalid game %s data version %q", suffix, version)
@@ -1308,3 +1314,19 @@ func logicGameCurrencyConversionPrototype() {
 	// 70	Platinum	Platinum Jubilee
 
 }
+
+// NOTE: On disabling load**** and save**** functions, few lines are affected
+// TODO: Use a global Uberstruct/Mega game struct -> Unify for ease of sharing function signatures
+//
+// internal/screen/gameplay/gameplay.go|230 col 16-34 error| undefined: loadGameEntityData
+// internal/screen/gameplay/gameplay.go|243 col 4-22 error| undefined: saveGameEntityData
+// internal/screen/gameplay/gameplay.go|257 col 30-52 error| undefined: loadAdditionalGameData
+// internal/screen/gameplay/gameplay.go|266 col 4-26 error| undefined: saveGameAdditionalData
+// internal/screen/gameplay/gameplay.go|276 col 16-33 error| undefined: loadGameLogicData
+// internal/screen/gameplay/gameplay.go|282 col 4-21 error| undefined: saveGameLogicData
+// internal/screen/gameplay/gameplay.go|581 col 4-22 error| undefined: saveGameEntityData
+// internal/screen/gameplay/gameplay.go|582 col 4-26 error| undefined: saveGameAdditionalData
+// internal/screen/gameplay/gameplay.go|583 col 4-21 error| undefined: saveGameLogicData
+// internal/screen/gameplay/gameplay.go|596 col 3-21 error| undefined: saveGameEntityData
+// internal/screen/gameplay/gameplay.go|597 col 3-25 error| undefined: saveGameAdditionalData
+// internal/screen/gameplay/gameplay.go|598 col 3-20 error| undefined: saveGameLogicData
