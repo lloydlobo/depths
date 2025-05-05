@@ -654,14 +654,13 @@ func Update() {
 			// Save screen state
 			finishScreen = 2                      // 1=>ending 2=>drillroom
 			camera.Up = rl.NewVector3(0., 1., 0.) // Reset yaw/pitch/roll
-			{
-				currency.HandleWalletToBankTransaction(&currencyItems)
-				currency.SaveCurrencyItems(currencyItems)
-			}
 
 			saveGameEntityData()     // (player,camera,...) 705 bytes
 			saveGameAdditionalData() // (blocks,...)        82871 bytes
 			saveGameLogicData()
+
+			currency.HandleWalletToBankTransaction(&currencyItems)
+			currency.SaveCurrencyItems(currencyItems)
 		}
 	}
 
@@ -913,6 +912,9 @@ func handleBlockOnMining(b *block.Block) {
 
 		if canIncrementScore {
 			hitScore += cargoCapacityUnitPerIncrement
+			var currencyMined currency.CurrencyType
+			currencyMined = currency.Copper
+			currencyItems[currencyMined].Wallet += cargoCapacityUnitPerIncrement
 			xPlayer.CargoCapacity = min(xPlayer.MaxCargoCapacity, xPlayer.CargoCapacity+cargoCapacityUnitPerIncrement)
 		}
 		if canIncrementScore { // FIXME: Record.. hitCount and hitScore to save game.. and load and update directly

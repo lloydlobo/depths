@@ -242,6 +242,7 @@ func Update() {
 			// Save screen state
 			finishScreen = 2                      // 1=>ending 2=>gameplay(openworldroom)
 			camera.Up = rl.NewVector3(0., 1., 0.) // Reset yaw/pitch/roll
+
 			currency.HandleWalletToBankTransaction(&currencyItems)
 			currency.SaveCurrencyItems(currencyItems)
 

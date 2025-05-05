@@ -128,37 +128,45 @@ func DrawHUD(
 	rl.PushMatrix()
 	rl.Translatef(marginLeft+radius*2.25, marginY+20*3+radius, 0)
 	{
-		capText := fmt.Sprintf("%d", xPlayer.CargoCapacity)
-		capStrLenX := rl.MeasureText(capText, int32(fontSize*2./3.))
+		fontSize := fontSize * common.InvPhi
+		capText := fmt.Sprintf("%.2d", xPlayer.CargoCapacity)
+		capStrLen := rl.MeasureTextEx(font, capText, fontSize, 1.0)
 		divideText := fmt.Sprintf("%s", strings.Repeat("-", len(capText)))
-		divideStrLenX := rl.MeasureText(divideText, int32(fontSize)/2.)
-		maxCapText := fmt.Sprintf(" %d", xPlayer.MaxCargoCapacity)
+		divideStrLen := rl.MeasureTextEx(font, divideText, fontSize, 1.0)
+		maxCapText := fmt.Sprintf("%.2d", xPlayer.MaxCargoCapacity)
+		maxCapStrLen := rl.MeasureTextEx(font, maxCapText, fontSize, 1.0)
 
-		rl.DrawTextEx(font, capText, rl.NewVector2(float32(capStrLenX)/2, -20-10/2), fontSize*2./3., 1, rl.White)
-		rl.DrawTextEx(font, divideText, rl.NewVector2(float32(capStrLenX)/2+float32(divideStrLenX)/2, -(2*10)/1.5), fontSize/2., 0.0625, rl.Gray)
-		rl.DrawTextEx(font, maxCapText, rl.NewVector2(0, -10/2), fontSize/2., 1, rl.Gray)
+		rl.DrawTextEx(font, capText, rl.NewVector2(capStrLen.X/2, -20-10/2), fontSize, 1, rl.Black)
+		rl.DrawTextEx(font, capText, rl.NewVector2(capStrLen.X/2, -20-10/2), fontSize, 1, rl.Fade(rl.Yellow, 0.8))
+		rl.DrawTextEx(font, divideText, rl.NewVector2(divideStrLen.X/2, -(2*10)/1.5), fontSize, 0.0625, rl.Fade(rl.LightGray, 0.3))
+		rl.DrawTextEx(font, maxCapText, rl.NewVector2(maxCapStrLen.X/2, -10/2), fontSize, 1, rl.Gray)
 	}
 	rl.PopMatrix()
 
 	rl.PushMatrix()
 	rl.Translatef(marginLeft*.5, marginY+20*4+radius+20*.25, 0)
 	{
-		currencyItems[currency.Copper].Wallet = hitScore
+		// currencyItems[currency.Copper].Wallet = hitScore
 
 		for i := range currency.MaxCurrencyTypes {
 			item := currencyItems[i]
 
 			const offset = (radius * 3)
 			gapY := offset * float32(i)
-			fontSize := (fontSize * 2. / 3.) - 2
+			// fontSize := (fontSize * 2. / 3.) - 2
+			fontSize := float32(font.BaseSize)
 
 			position := rl.NewVector2(circlePos.X, circlePos.Y+gapY)
 			rl.DrawCircleV(position, min(fontSize/2, (radius*common.OneMinusInvPhi)), currency.ToColorMap[item.Type])
 			{
 				text := fmt.Sprintf("%d", item.Bank)
 				textStringSize := rl.MeasureTextEx(font, text, fontSize, 1)
-				pos := rl.Vector2Add(position, rl.NewVector2(-textStringSize.X/2, textStringSize.Y*.8))
-				rl.DrawTextEx(font, text, pos, fontSize, 1., rl.White)
+				_ = textStringSize
+				pos := position
+				pos.X -= textStringSize.X / 2
+				pos.Y += textStringSize.Y / 4
+				// pos := rl.Vector2Add(position, rl.NewVector2(-textStringSize.X/2, textStringSize.Y*.8))
+				rl.DrawTextEx(font, text, pos, fontSize, 1., rl.Orange)
 			}
 			if item.Wallet > 0 {
 				text := fmt.Sprintf("+%d", item.Wallet)
@@ -166,7 +174,7 @@ func DrawHUD(
 				fontSize := fontSize - 2
 				pos := rl.Vector2Add(position, rl.NewVector2(-textStringSize.X/2, textStringSize.Y*.8))
 				pos = rl.Vector2Add(pos, rl.NewVector2(fontSize*1.5, -fontSize/1.5))
-				rl.DrawTextEx(font, text, pos, fontSize, 1., rl.LightGray)
+				rl.DrawTextEx(font, text, pos, fontSize, 1., rl.Orange)
 			}
 		}
 	}

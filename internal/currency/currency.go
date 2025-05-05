@@ -85,8 +85,7 @@ type CurrencyItem struct {
 // NOTE: If the file already exists, it is truncated.
 // NOTE: If the file does not exist, it is created with mode 0o666 (before umask).
 func SaveCurrencyItems(input [MaxCurrencyTypes]CurrencyItem) {
-	// FIXME::::::SHOULD USE OS CWD PATH?
-	name := filepath.Join(defaultJSONSaveDirname, defaultJSONSaveFilename)
+	name := filepath.Join(common.Must(os.Getwd()), defaultJSONSaveDirname, defaultJSONSaveFilename)
 	data := common.Must(json.Marshal(input))
 	common.Must(common.Must(os.Create(name)).Write(data))
 }
@@ -120,7 +119,7 @@ func LoadCurrencyItems(output *[MaxCurrencyTypes]CurrencyItem) {
 	var temp [MaxCurrencyTypes]CurrencyItem
 	common.MustNotErrOn(json.Unmarshal(data, &temp))
 
-	{ // Verify file contents
+	if false { // Verify file contents
 		var seen = make(map[CurrencyType]struct{})
 		var isInvalid bool
 		for i := range temp {
@@ -155,6 +154,7 @@ func HandleWalletToBankTransaction(currencyItems *[MaxCurrencyTypes]CurrencyItem
 	{
 		fmt.Printf("000: currencyItems: %v\n", currencyItems)
 		for i := range MaxCurrencyTypes {
+			fmt.Printf("i: %v\n", i)
 			(&currencyItems[i]).Bank += currencyItems[i].Wallet
 			(&currencyItems[i]).Wallet = 0
 		}
