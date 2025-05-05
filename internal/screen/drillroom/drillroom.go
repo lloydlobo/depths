@@ -46,6 +46,8 @@ var (
 	//       JUST READ DATA FROM FILE
 	hitCount int32
 	hitScore int32
+
+	currencyItems [currency.MaxCurrencyTypes]currency.CurrencyItem
 )
 
 var (
@@ -193,6 +195,9 @@ func Init() {
 		rl.Vector3Subtract(xFloor.Size, rl.NewVector3(1+xPlayer.Size.X/2, -xPlayer.Size.Y*2, 1+xPlayer.Size.Z/2)),
 	)
 
+	currency.LoadCurrencyItems(&currencyItems)
+	fmt.Printf("currencyItems: %v\n", currencyItems)
+
 	// For camera thirdperson view
 	rl.DisableCursor()
 }
@@ -237,6 +242,9 @@ func Update() {
 			// Save screen state
 			finishScreen = 2                      // 1=>ending 2=>gameplay(openworldroom)
 			camera.Up = rl.NewVector3(0., 1., 0.) // Reset yaw/pitch/roll
+			currency.HandleWalletToBankTransaction(&currencyItems)
+			currency.SaveCurrencyItems(currencyItems)
+
 			// TODO: implement drillroom save/load functions (data and filenames)
 			// saveCoreLevelState()                  // (player,camera,...) 705 bytes
 			// saveAdditionalLevelState()            // (blocks,...)        82871 bytes
@@ -386,7 +394,7 @@ func Draw() {
 		case TriggerChangeResource:
 			const resourceRadius = 0.22 / 2 // Hologram
 			const padInlineStart = 0.32
-			col := currency.CurrencyColorMap[triggerChangeResourceCurrencyTypeState]
+			col := currency.ToColorMap[triggerChangeResourceCurrencyTypeState]
 			if false {
 				rl.DrawSphereEx(rl.NewVector3(padInlineStart, 1, 0), resourceRadius, 6, 6, col)
 			}
@@ -475,9 +483,9 @@ func Draw() {
 				spacing   = float32(1.5)
 
 				currencyID           = triggerChangeResourceCurrencyTypeState
-				currencyCol          = currency.CurrencyColorMap[currencyID]
-				currencyString       = currency.CurrencyStringMap[currencyID]
-				currencyToCopperUnit = currency.CurrencyConversionRateMap[currencyID]
+				currencyCol          = currency.ToColorMap[currencyID]
+				currencyString       = currency.ToStringMap[currencyID]
+				currencyToCopperUnit = currency.ToCopperUnitsMap[currencyID]
 				convertedAmount      = availableCopperQuantity / currencyToCopperUnit
 
 				debugText     = fmt.Sprintf("%s::%d %dco=>%d", currencyString, currencyID, currencyToCopperUnit, convertedAmount)
@@ -501,7 +509,7 @@ func Draw() {
 			// Create unique shapes for each currency
 			rl.DrawRing(iconLargePosition, 0, iconLargeRadius, startAngle, 360+startAngle, segments, rl.Fade(currencyCol, 0.7)) // Other
 			// Draw Copper Quantity required for switched resource type and draw copper icon next to it
-			rl.DrawRing(iconPosition, 0, iconSmallRadius, 0, 360, 6, rl.Fade(currency.CurrencyColorMap[currency.Copper], 0.7))
+			rl.DrawRing(iconPosition, 0, iconSmallRadius, 0, 360, 6, rl.Fade(currency.ToColorMap[currency.Copper], 0.7))
 			var availableCol color.RGBA
 			if convertedAmount < 1 {
 				availableCol = rl.Purple
@@ -553,10 +561,10 @@ func Draw() {
 				spacing   = float32(1.5)
 
 				currencyID     = triggerChangeResourceCurrencyTypeState
-				currencyCol    = currency.CurrencyColorMap[currencyID]
-				currencyString = currency.CurrencyStringMap[currencyID]
+				currencyCol    = currency.ToColorMap[currencyID]
+				currencyString = currency.ToStringMap[currencyID]
 
-				currencyToCopperUnit = currency.CurrencyConversionRateMap[refuelGoalCurrencyType]
+				currencyToCopperUnit = currency.ToCopperUnitsMap[refuelGoalCurrencyType]
 
 				// refuelGoal    = int32(mathutil.FloorF(float32(id)*multiplier*100*float32(currencyToCopperUnit))) / 100
 				refuelGoal    = triggerData.CopperUnits[id]
@@ -584,7 +592,7 @@ func Draw() {
 
 				convertedAmount = currencyToCopperUnit
 			)
-			rl.DrawRing(iconLargePosition, 0, iconLargeRadius, startAngle, 360+startAngle, segments, rl.Fade(currency.CurrencyColorMap[refuelGoalCurrencyType], 0.7)) // Other
+			rl.DrawRing(iconLargePosition, 0, iconLargeRadius, startAngle, 360+startAngle, segments, rl.Fade(currency.ToColorMap[refuelGoalCurrencyType], 0.7)) // Other
 
 			// rl.DrawRing(iconPosition, 0, iconSmallRadius, 0, 360, 6, rl.Fade(currency.CurrencyColorMap[refuelGoalCurrencyType], 0.7))
 			var availableCol color.RGBA
@@ -625,7 +633,7 @@ func Draw() {
 		}
 	}
 
-	hud.DrawHUD(xPlayer, hitScore, [8]currency.CurrencyItem{})
+	hud.DrawHUD(xPlayer, hitScore, currencyItems)
 
 	if f := float32(framesCounter) / 60.; (alpha >= 1.) && (f > 2. && f < 1000.) {
 		delta := mathutil.PowF(float32(rl.GetTime()), 1.5-(2.0/f))

@@ -153,7 +153,7 @@ func DrawHUD(
 			fontSize := (fontSize * 2. / 3.) - 2
 
 			position := rl.NewVector2(circlePos.X, circlePos.Y+gapY)
-			rl.DrawCircleV(position, min(fontSize/2, (radius*common.OneMinusInvPhi)), currency.CurrencyColorMap[item.Type])
+			rl.DrawCircleV(position, min(fontSize/2, (radius*common.OneMinusInvPhi)), currency.ToColorMap[item.Type])
 			{
 				text := fmt.Sprintf("%d", item.Bank)
 				textStringSize := rl.MeasureTextEx(font, text, fontSize, 1)

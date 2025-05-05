@@ -654,8 +654,13 @@ func Update() {
 			// Save screen state
 			finishScreen = 2                      // 1=>ending 2=>drillroom
 			camera.Up = rl.NewVector3(0., 1., 0.) // Reset yaw/pitch/roll
-			saveGameEntityData()                  // (player,camera,...) 705 bytes
-			saveGameAdditionalData()              // (blocks,...)        82871 bytes
+			{
+				currency.HandleWalletToBankTransaction(&currencyItems)
+				currency.SaveCurrencyItems(currencyItems)
+			}
+
+			saveGameEntityData()     // (player,camera,...) 705 bytes
+			saveGameAdditionalData() // (blocks,...)        82871 bytes
 			saveGameLogicData()
 		}
 	}
@@ -1103,7 +1108,7 @@ func saveGameLogicData() {
 		LevelID: levelID,
 		Data:    bb.Bytes(),
 	}
-	currency.LoadCurrencyItems(&currencyItems)
+	currency.SaveCurrencyItems(currencyItems)
 	storage.SaveStorageLevelEx(dataJSON, suffix)
 }
 func saveGameEntityData() {
