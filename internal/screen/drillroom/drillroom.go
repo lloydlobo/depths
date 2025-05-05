@@ -622,7 +622,7 @@ func Draw() {
 		if isPlayerNearTriggerSensors[i] {
 			const maxLabelLenForFontSizeX2 = 148
 
-			fontSize := float32(common.Font.SourGummy.BaseSize) * 2
+			fontSize := float32(common.Font.SourGummy.BaseSize) * common.InvPhi
 			text := triggerLabels[i]
 			pos := rl.NewVector2(float32(screenW)/2-maxLabelLenForFontSizeX2*2./3., instructionPosY)
 

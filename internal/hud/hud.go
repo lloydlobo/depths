@@ -166,7 +166,7 @@ func DrawHUD(
 				pos.X -= textStringSize.X / 2
 				pos.Y += textStringSize.Y / 4
 				// pos := rl.Vector2Add(position, rl.NewVector2(-textStringSize.X/2, textStringSize.Y*.8))
-				rl.DrawTextEx(font, text, pos, fontSize, 1., rl.Orange)
+				rl.DrawTextEx(font, text, pos, fontSize, 1., rl.LightGray)
 			}
 			if item.Wallet > 0 {
 				text := fmt.Sprintf("+%d", item.Wallet)
@@ -174,7 +174,7 @@ func DrawHUD(
 				fontSize := fontSize - 2
 				pos := rl.Vector2Add(position, rl.NewVector2(-textStringSize.X/2, textStringSize.Y*.8))
 				pos = rl.Vector2Add(pos, rl.NewVector2(fontSize*1.5, -fontSize/1.5))
-				rl.DrawTextEx(font, text, pos, fontSize, 1., rl.Orange)
+				rl.DrawTextEx(font, text, pos, fontSize, 1., rl.LightGray)
 			}
 		}
 	}
