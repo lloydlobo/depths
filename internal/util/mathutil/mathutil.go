@@ -38,7 +38,12 @@ func SignF[T NumberType](x T) float32 {
 	}
 	return float32(math.Abs(float64(x)) / float64(x))
 }
-
+func PingPongF[T NumberType](x T) float32 {
+	if x == 0 {
+		return 0
+	}
+	return -SignF(x)
+}
 func MaxF[T NumberType](x T, y T) float32 { return float32(max(float64(x), float64(y))) }
 func MinF[T NumberType](x T, y T) float32 { return float32(min(float64(x), float64(y))) }
 func PowF[T NumberType](x T, y T) float32 { return float32(math.Pow(float64(x), float64(y))) }

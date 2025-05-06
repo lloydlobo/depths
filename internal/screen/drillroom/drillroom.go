@@ -20,8 +20,8 @@ import (
 )
 
 const (
-	screenTitleText    = "DRILL"                                                                             // This should be temporary during prototype
-	screenSubtitleText = "leave room: backspace swipe-left\nquit:          F10 pinch-out right-mouse-button" // "press enter or tap to jump to title screen"
+	screenTitleText    = "DRILL"
+	screenSubtitleText = "leave room: backspace swipe-left\nquit:          F10 pinch-out right-mouse-button"
 )
 
 var (
@@ -46,6 +46,8 @@ var (
 	//       JUST READ DATA FROM FILE
 	hitCount int32
 	hitScore int32
+
+	currencyItems [currency.MaxCurrencyTypes]currency.CurrencyItem
 )
 
 var (
@@ -193,6 +195,9 @@ func Init() {
 		rl.Vector3Subtract(xFloor.Size, rl.NewVector3(1+xPlayer.Size.X/2, -xPlayer.Size.Y*2, 1+xPlayer.Size.Z/2)),
 	)
 
+	currency.LoadCurrencyItems(&currencyItems)
+	fmt.Printf("currencyItems: %v\n", currencyItems)
+
 	// For camera thirdperson view
 	rl.DisableCursor()
 }
@@ -237,6 +242,10 @@ func Update() {
 			// Save screen state
 			finishScreen = 2                      // 1=>ending 2=>gameplay(openworldroom)
 			camera.Up = rl.NewVector3(0., 1., 0.) // Reset yaw/pitch/roll
+
+			currency.HandleWalletToBankTransaction(&currencyItems)
+			currency.SaveCurrencyItems(currencyItems)
+
 			// TODO: implement drillroom save/load functions (data and filenames)
 			// saveCoreLevelState()                  // (player,camera,...) 705 bytes
 			// saveAdditionalLevelState()            // (blocks,...)        82871 bytes
@@ -350,16 +359,11 @@ func Draw() {
 	rl.ClearBackground(rl.RayWhite)
 
 	xPlayer.Draw()
-	if false {
-		xFloor.Draw()
-	} else {
-		mesh := rl.GenMeshPlane(xFloor.Size.X, xFloor.Size.Z, 1, 1)
-		rl.DrawMesh(mesh, *common.ModelDungeonKit.OBJ.Banner.Materials, rl.MatrixIdentity())
+	xFloor.Draw()
+	{
+		scale := cmp.Or(rl.NewVector3(5, 2, 5), common.Vector3One)
+		wall.DrawBatch(common.DrillRoom, xFloor.Position, xFloor.Size, scale)
 	}
-	if false {
-		rl.DrawBoundingBox(drillroomExitBoundingBox, rl.Green)
-	}
-	wall.DrawBatch(common.DrillRoom, xFloor.Position, xFloor.Size, cmp.Or(rl.NewVector3(5, 2, 5), common.Vector3One))
 
 	for i := range MaxTriggerCount {
 		// Circular model shape --expand-> to 1x1x1 bounding box
@@ -391,7 +395,7 @@ func Draw() {
 		case TriggerChangeResource:
 			const resourceRadius = 0.22 / 2 // Hologram
 			const padInlineStart = 0.32
-			col := currency.CurrencyColorMap[triggerChangeResourceCurrencyTypeState]
+			col := currency.ToColorMap[triggerChangeResourceCurrencyTypeState]
 			if false {
 				rl.DrawSphereEx(rl.NewVector3(padInlineStart, 1, 0), resourceRadius, 6, 6, col)
 			}
@@ -480,9 +484,9 @@ func Draw() {
 				spacing   = float32(1.5)
 
 				currencyID           = triggerChangeResourceCurrencyTypeState
-				currencyCol          = currency.CurrencyColorMap[currencyID]
-				currencyString       = currency.CurrencyStringMap[currencyID]
-				currencyToCopperUnit = currency.CurrencyConversionRateMap[currencyID]
+				currencyCol          = currency.ToColorMap[currencyID]
+				currencyString       = currency.ToStringMap[currencyID]
+				currencyToCopperUnit = currency.ToCopperUnitsMap[currencyID]
 				convertedAmount      = availableCopperQuantity / currencyToCopperUnit
 
 				debugText     = fmt.Sprintf("%s::%d %dco=>%d", currencyString, currencyID, currencyToCopperUnit, convertedAmount)
@@ -506,7 +510,7 @@ func Draw() {
 			// Create unique shapes for each currency
 			rl.DrawRing(iconLargePosition, 0, iconLargeRadius, startAngle, 360+startAngle, segments, rl.Fade(currencyCol, 0.7)) // Other
 			// Draw Copper Quantity required for switched resource type and draw copper icon next to it
-			rl.DrawRing(iconPosition, 0, iconSmallRadius, 0, 360, 6, rl.Fade(currency.CurrencyColorMap[currency.Copper], 0.7))
+			rl.DrawRing(iconPosition, 0, iconSmallRadius, 0, 360, 6, rl.Fade(currency.ToColorMap[currency.Copper], 0.7))
 			var availableCol color.RGBA
 			if convertedAmount < 1 {
 				availableCol = rl.Purple
@@ -558,10 +562,10 @@ func Draw() {
 				spacing   = float32(1.5)
 
 				currencyID     = triggerChangeResourceCurrencyTypeState
-				currencyCol    = currency.CurrencyColorMap[currencyID]
-				currencyString = currency.CurrencyStringMap[currencyID]
+				currencyCol    = currency.ToColorMap[currencyID]
+				currencyString = currency.ToStringMap[currencyID]
 
-				currencyToCopperUnit = currency.CurrencyConversionRateMap[refuelGoalCurrencyType]
+				currencyToCopperUnit = currency.ToCopperUnitsMap[refuelGoalCurrencyType]
 
 				// refuelGoal    = int32(mathutil.FloorF(float32(id)*multiplier*100*float32(currencyToCopperUnit))) / 100
 				refuelGoal    = triggerData.CopperUnits[id]
@@ -589,7 +593,7 @@ func Draw() {
 
 				convertedAmount = currencyToCopperUnit
 			)
-			rl.DrawRing(iconLargePosition, 0, iconLargeRadius, startAngle, 360+startAngle, segments, rl.Fade(currency.CurrencyColorMap[refuelGoalCurrencyType], 0.7)) // Other
+			rl.DrawRing(iconLargePosition, 0, iconLargeRadius, startAngle, 360+startAngle, segments, rl.Fade(currency.ToColorMap[refuelGoalCurrencyType], 0.7)) // Other
 
 			// rl.DrawRing(iconPosition, 0, iconSmallRadius, 0, 360, 6, rl.Fade(currency.CurrencyColorMap[refuelGoalCurrencyType], 0.7))
 			var availableCol color.RGBA
@@ -618,7 +622,7 @@ func Draw() {
 		if isPlayerNearTriggerSensors[i] {
 			const maxLabelLenForFontSizeX2 = 148
 
-			fontSize := float32(common.Font.SourGummy.BaseSize) * 2
+			fontSize := float32(common.Font.SourGummy.BaseSize) * common.InvPhi
 			text := triggerLabels[i]
 			pos := rl.NewVector2(float32(screenW)/2-maxLabelLenForFontSizeX2*2./3., instructionPosY)
 
@@ -630,9 +634,7 @@ func Draw() {
 		}
 	}
 
-	hud.DrawHUD(xPlayer, hitScore)
-
-	fontSize := float32(common.Font.SourGummy.BaseSize) * 3.
+	hud.DrawHUD(xPlayer, hitScore, currencyItems)
 
 	if f := float32(framesCounter) / 60.; (alpha >= 1.) && (f > 2. && f < 1000.) {
 		delta := mathutil.PowF(float32(rl.GetTime()), 1.5-(2.0/f))
@@ -644,17 +646,26 @@ func Draw() {
 		alpha *= .5 * f
 	}
 
-	pos := rl.NewVector2(float32(screenW)/2.-float32(rl.MeasureText(screenTitleText, int32(fontSize*common.Phi)))/2., float32(screenH)/16.)
-	rl.DrawTextEx(common.Font.SourGummy, screenTitleText, pos, (fontSize * common.Phi), 4, rl.Fade(rl.Black, .5*(alpha)))
+	{
+		font := common.Font.SourGummy
+		strSize := rl.MeasureTextEx(font, screenTitleText, float32(font.BaseSize), 1.0)
+		pos := rl.NewVector2(float32(screenW)/2-strSize.X/2, float32(screenH)/16-strSize.Y/2)
+		rl.DrawTextEx(font, screenTitleText, pos, float32(font.BaseSize), 1.0, rl.Fade(rl.Black, 0.5+0.5*(alpha)))
+	}
 
-	pos = rl.NewVector2(float32(screenW)/2.-float32(rl.MeasureText("ROOM", int32(fontSize)))/2., float32(screenH)/16.+(fontSize*common.Phi))
-	rl.DrawTextEx(common.Font.SourGummy, "ROOM", pos, fontSize, common.Phi, rl.Fade(rl.Gray, .7*(alpha)))
+	{
+		font := common.Font.SourGummy
+		text := "ROOM"
+		strSize := rl.MeasureTextEx(font, text, float32(font.BaseSize), 1.0)
+		pos := rl.NewVector2(float32(screenW)/2-strSize.X/2, float32(screenH)/16-strSize.Y/2+float32(font.BaseSize))
+		rl.DrawTextEx(font, text, pos, float32(font.BaseSize), 1.0, rl.Fade(rl.Gray, 0.5+0.7*(alpha)))
+	}
 
 	{
 		fontSize := float32(20. - 9.)
 		subtextSize := rl.MeasureTextEx(common.Font.SourGummy, screenSubtitleText, fontSize, 1)
 		position := rl.NewVector2(float32(screenW)/2-subtextSize.X/2, min(instructionPosY-40-fontSize, float32(screenH)-subtextSize.Y*3))
-		rl.DrawTextEx(common.Font.SourGummy, screenSubtitleText, position, fontSize, 1, rl.Fade(rl.Gray, 1.0*alpha))
+		rl.DrawTextEx(common.Font.SourGummy, screenSubtitleText, position, fontSize, 1.0, rl.Fade(rl.Gray, 1.0*alpha))
 	}
 
 	if true {
