@@ -1,6 +1,11 @@
 // TODO: Package drillroom only makes sense if player has a limited cargo capacity
 package drillroom
 
+// TODO: Make the transactiom on "Make Resource" for every 25 copper -> convert them to get a new pearl/iron
+//		- iron++
+//		- copper-=25
+// FIXME - The cargo must match sum of all inventories in wallet
+
 import (
 	"cmp"
 	"fmt"
@@ -634,7 +639,7 @@ func Draw() {
 		}
 	}
 
-	hud.DrawHUD(xPlayer, hitScore, currencyItems)
+	hud.DrawHUD(xPlayer, currencyItems)
 
 	if f := float32(framesCounter) / 60.; (alpha >= 1.) && (f > 2. && f < 1000.) {
 		delta := mathutil.PowF(float32(rl.GetTime()), 1.5-(2.0/f))
@@ -714,7 +719,7 @@ func HandleTriggerOnPlayerPressF(i TriggerType) {
 		rl.PlaySound(common.FX.InterfaceBong)
 
 	case TriggerChangeResource:
-		common.PlayRandomFromSounds(common.FXS.InterfaceClick)
+		common.PlayRandomSound(common.FXS.InterfaceClick)
 		rl.PlaySound(common.FX.InterfaceScratch)
 		triggerChangeResourceCurrencyTypeState = triggerChangeResourceCurrencyTypeState.Next()
 		if triggerChangeResourceCurrencyTypeState == currency.Copper { // Skip over base currency copper
@@ -740,7 +745,7 @@ func HandleTriggerOnPlayerPressF(i TriggerType) {
 			rl.PlaySound(common.FX.InterfaceBong)
 		} else {
 			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_sci-fi-sounds", "Audio", "lowFrequency_explosion_000.ogg")))
-			common.PlayRandomFromSounds(common.FXS.InterfaceConfirmation)
+			common.PlayRandomSound(common.FXS.InterfaceConfirmation)
 
 			// Transition to next level/screen
 			// NOTE: Why does this feel so hacky? ^_^

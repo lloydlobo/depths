@@ -16,7 +16,7 @@ func CheckCollisionPointBox(point rl.Vector3, box rl.BoundingBox) bool {
 		point.Z >= box.Min.Z && point.Z <= box.Max.Z
 }
 
-func PlayRandomFromSounds(sounds []rl.Sound) {
+func PlayRandomSound(sounds []rl.Sound) {
 	if n := int32(len(sounds)); n > 0 {
 		rl.PlaySound(sounds[rl.GetRandomValue(0, n-1)])
 	}

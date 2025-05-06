@@ -1,5 +1,10 @@
 package gameplay
 
+// TODO: Make the transactiom on "Make Resource" for every 25 copper -> convert them to get a new pearl/iron
+//		- iron++
+//		- copper-=25
+// FIXME - The cargo must match sum of all inventories in wallet
+
 // See fog shader: https://github.com/mohsengreen1388/raylib-go-utility/blob/main/utility/fog.go
 
 import (
@@ -147,18 +152,6 @@ func Init() {
 
 	const isNewGame = false
 
-	/* xNPCSOA = NPCSOA{
-		Position:        [MaxNPCS]rl.Vector3{},
-		Size:            [MaxNPCS]rl.Vector3{},
-		BoundingBox:     [MaxNPCS]rl.BoundingBox{},
-		Collisions:      [MaxNPCS]rl.Quaternion{},
-		Rotation:        [MaxNPCS]float32{},
-		Health:          [MaxNPCS]float32{},
-		Color:           [MaxNPCS]color.RGBA{},
-		IsActive:        [MaxNPCS]bool{},
-		IsWallCollision: [MaxNPCS]bool{},
-		IsWalk:          [MaxNPCS]bool{},
-	} */
 	xNPCSOA.Reset()
 
 	// Core resources
@@ -280,30 +273,20 @@ func Update() {
 
 	// See https://github.com/lloydlobo/tinycreatures/blob/210c4a44ed62fbb08b5f003872e046c99e288bb9/src/main.lua#L624
 	for i := range projectile.MaxProjectiles {
-		if !xProjectileSOA.IsActive[i] {
-			continue
-		}
-
-		isKillAnim := xProjectileSOA.TimeLeft[i] <= 0
-
-		if isKillAnim {
-			xProjectileSOA.IsActive[i] = false
-		} else {
-			playerProjectileSpeed := 10 * rl.GetFrameTime()
-
-			angleRad := xProjectileSOA.Rotation[i] * rl.Deg2rad
-
-			displacement := rl.NewVector3(mathutil.CosF(angleRad)*playerProjectileSpeed, 0, mathutil.SinF(angleRad)*playerProjectileSpeed)
-
-			xProjectileSOA.Position[i] = rl.Vector3Add(xProjectileSOA.Position[i], displacement)
-
-			pos := xProjectileSOA.Position[i]
-
-			isOOBX := pos.X < xFloor.BoundingBox.Min.X || pos.X > xFloor.BoundingBox.Max.X
-			isOOBZ := pos.Z < xFloor.BoundingBox.Min.Z || pos.Z > xFloor.BoundingBox.Max.Z
-
-			if isOOBX || isOOBZ {
+		if xProjectileSOA.IsActive[i] {
+			if isKillAnim := xProjectileSOA.TimeLeft[i] <= 0; isKillAnim {
 				xProjectileSOA.IsActive[i] = false
+			} else {
+				ppSpeed := 10 * rl.GetFrameTime()
+				angleRad := xProjectileSOA.Rotation[i] * rl.Deg2rad
+				displacement := rl.NewVector3(mathutil.CosF(angleRad)*ppSpeed, 0, mathutil.SinF(angleRad)*ppSpeed)
+				xProjectileSOA.Position[i] = rl.Vector3Add(xProjectileSOA.Position[i], displacement)
+
+				pos := xProjectileSOA.Position[i]
+				fbox := xFloor.BoundingBox
+				if (pos.X < fbox.Min.X || pos.X > fbox.Max.X) || (pos.Z < fbox.Min.Z || pos.Z > fbox.Max.Z) {
+					xProjectileSOA.IsActive[i] = false
+				}
 			}
 		}
 	}
@@ -336,15 +319,8 @@ func Update() {
 	// Play player weapon sounds
 	if rl.IsMouseButtonPressed(rl.MouseButtonLeft) || rl.IsMouseButtonDown(rl.MouseButtonLeft) {
 		playerRay = rl.NewRay(
-			rl.Vector3{
-				X: xPlayer.Position.X,
-				Y: xPlayer.Position.Y + xPlayer.Size.Y/4,
-				Z: xPlayer.Position.Z,
-			},
-			rl.Vector3Multiply(
-				rl.GetCameraForward(&camera),
-				rl.Vector3{X: 5., Y: .125 / 2., Z: 5.}, /* playerForwardEstimateMagnitude */
-			),
+			rl.Vector3{X: xPlayer.Position.X, Y: xPlayer.Position.Y + xPlayer.Size.Y/4, Z: xPlayer.Position.Z},
+			rl.Vector3Multiply(rl.GetCameraForward(&camera), rl.Vector3{X: 5., Y: .125 / 2., Z: 5.}), /* playerForwardEstimateMagnitude */
 		)
 
 		if projectile.FireEntityProjectile(&xProjectileSOA, xPlayer.Position, xPlayer.Size, float32(xPlayer.Rotation+90)) {
@@ -354,21 +330,13 @@ func Update() {
 					rl.SetSoundPitch(sound, 1.5)
 					rl.PlaySound(sound)
 				}
-				if n := int32(len(common.FXS.SciFiLaserSmall)); n > 0 {
-					rl.PlaySound(common.FXS.SciFiLaserSmall[rl.GetRandomValue(0, n-1)])
-				}
 				if n := int32(len(common.FXS.SciFiLaserLarge)); n > 0 {
 					sound := common.FXS.SciFiLaserLarge[rl.GetRandomValue(0, n-1)]
 					rl.SetSoundPitch(sound, 0.2)
 					rl.SetSoundVolume(sound, 0.5)
 					rl.PlaySound(sound)
 				}
-			}
-		} else {
-			if false {
-				if n := int32(len(common.FXS.InterfaceClick)); n > 0 {
-					rl.PlaySound(common.FXS.InterfaceClick[rl.GetRandomValue(0, n-1)])
-				}
+				common.PlayRandomSound(common.FXS.SciFiLaserSmall)
 			}
 		}
 	}
@@ -376,21 +344,18 @@ func Update() {
 	// Update block and player interaction/mining
 	// TODO: Find out where player touched the box
 	// WARN: Should we clear out player collision
+	// NOTE: It is important that player touches the block first before mining
 	for i := range xBlocks {
-		if xBlocks[i].IsActive &&
-			xBlocks[i].State < block.MaxBlockState-1 &&
-			rl.CheckCollisionBoxes(xBlocks[i].GetBlockBoundingBox(), xPlayer.BoundingBox) {
+		if xBlocks[i].IsActive && xBlocks[i].State < block.MaxBlockState-1 && rl.CheckCollisionBoxes(xBlocks[i].GetBlockBoundingBox(), xPlayer.BoundingBox) {
 			xPlayer.Collisions.X = -mathutil.AbsF(oldPlayer.Position.X - xPlayer.Position.X)
 			xPlayer.Collisions.Z = -mathutil.SignF(oldPlayer.Position.Z - xPlayer.Position.Z)
-			// NOTE: It is important that player touches the block first before mining
 			player.RevertPlayerAndCameraPositions(&xPlayer, oldPlayer, &camera, oldCam)
 
 			if rl.IsKeyDown(rl.KeySpace) {
 				mineFasterIndex := 3 // Higher index ~= Faster mining
 				mineFasterFrames := []int32{60, 52, 48, 40, 32, 24, 20, 16, 8}
 				debounceRate := mineFasterFrames[mineFasterIndex]
-				isDebounce := framesCounter%debounceRate != 0
-				if !isDebounce {
+				if isDebounce := framesCounter%debounceRate != 0; !isDebounce {
 					handleBlockOnMining(&xBlocks[i])
 				}
 			}
@@ -429,25 +394,11 @@ func Update() {
 		}
 	}
 
-	if false { // PLACEHOLDER PROTOTYPE IN Draw() for now
-		for i := range npc.MaxNPC {
-			if framesCounter%4 == 0 {
-				xNPCSOA.Position[i].X += rl.GetFrameTime() * float32(rl.GetRandomValue(-1, 1))
-				xNPCSOA.Position[i].Z += rl.GetFrameTime() * float32(rl.GetRandomValue(-1, 1))
-			}
-			xNPCSOA.BoundingBox[i] = common.GetBoundingBoxPositionSizeV(xNPCSOA.Position[i], xNPCSOA.Size[i])
-		}
-	}
-
 	for i := range projectile.MaxProjectiles {
 		if xProjectileSOA.IsActive[i] {
 			for j := range npc.MaxNPC {
 				if xNPCSOA.IsActive[j] {
-					if rl.CheckCollisionBoxSphere(
-						xNPCSOA.BoundingBox[j],
-						xProjectileSOA.Position[i],
-						projectileRadiusSphere,
-					) {
+					if rl.CheckCollisionBoxSphere(xNPCSOA.BoundingBox[j], xProjectileSOA.Position[i], projectileRadiusSphere) {
 						xProjectileSOA.IsActive[i] = false
 						xNPCSOA.Health[j] -= projectileNPCDamage
 						if xNPCSOA.Health[j] <= 0. {
@@ -461,207 +412,184 @@ func Update() {
 	}
 
 	// UpdateNPCS
-	{
-		// Update player damage on collison with npc
-		for i := range npc.MaxNPC {
-			if xNPCSOA.IsActive[i] && rl.CheckCollisionBoxes(xPlayer.BoundingBox, xNPCSOA.BoundingBox[i]) {
+
+	// Update player damage on collison with npc
+	for i := range npc.MaxNPC {
+		if xNPCSOA.IsActive[i] && rl.CheckCollisionBoxes(xPlayer.BoundingBox, xNPCSOA.BoundingBox[i]) {
+			switch typ := xNPCSOA.Type[i]; typ {
+			case npc.TypeGrunt:
+				ncpOnPlayerDamage := rl.GetFrameTime() * 0.25
+				xPlayer.Health = max(0.0, xPlayer.Health-ncpOnPlayerDamage)
+			case npc.TypeLeader:
+			case npc.TypeSniper: // See: DrawHeart references • {1.0 == 5 hearts} • {0.0 == 0 hearts}
+				npcOnPlayerDamage := float32(1.0 / 5.0)
+				framesBeforeTakeDamage := int32(common.FPS * 2)
+				if framesCounter%framesBeforeTakeDamage == 0 {
+					xPlayer.Health -= npcOnPlayerDamage
+				}
+			case npc.TypeSquad:
+			case npc.TypeSwarm:
+			case npc.TypeTank:
+			default:
+				panic(fmt.Sprintf("unexpected npc.NPCType: %#v", typ))
+			}
+		}
+	}
+	// Move NPCs
+	for i := range npc.MaxNPC {
+		if xNPCSOA.IsActive[i] {
+			if framesCounter%8 == 0 { // Meander around
 				switch typ := xNPCSOA.Type[i]; typ {
 				case npc.TypeGrunt:
-					ncpOnPlayerDamage := rl.GetFrameTime() * 0.25
-					xPlayer.Health = max(0.0, xPlayer.Health-ncpOnPlayerDamage)
-				case npc.TypeLeader:
-				case npc.TypeSniper: // See: DrawHeart references • {1.0 == 5 hearts} • {0.0 == 0 hearts}
-					npcOnPlayerDamage := float32(1.0 / 5.0)
-					framesBeforeTakeDamage := int32(common.FPS * 2)
-					if framesCounter%framesBeforeTakeDamage == 0 {
-						xPlayer.Health -= npcOnPlayerDamage
+					f := mathutil.SinF(2 * float32(framesCounter) / common.FPS)
+					fn := rl.Normalize(f, -1.0, 1.0)
+					if rl.GetRandomValue(1, 3) == 1 {
+						xNPCSOA.Position[i].X += (mathutil.PingPongF(f) * fn) / 4
 					}
+					if rl.GetRandomValue(1, 3) == 1 {
+						xNPCSOA.Position[i].Z += (mathutil.PingPongF(f) * fn) / 4
+					}
+				case npc.TypeLeader:
+					const maxDist = 1.0
+					f := float32(rl.GetRandomValue(-10, 10) / 10.0)
+					dx := xNPCSOA.Size[i].X * rl.GetFrameTime() * f
+					dz := xNPCSOA.Size[i].Z * rl.GetFrameTime() * f
+					xNPCSOA.Position[i].X *= rl.Lerp(maxDist-dx, maxDist+dx, f)
+					xNPCSOA.Position[i].Z *= rl.Lerp(maxDist-dz, maxDist+dz, f)
+				case npc.TypeSniper:
 				case npc.TypeSquad:
 				case npc.TypeSwarm:
 				case npc.TypeTank:
+					const maxDist = 1.0
+					f := float32(rl.GetRandomValue(-10, 10) / 10.0)
+					dx := xNPCSOA.Size[i].X * rl.GetFrameTime() * f
+					dz := xNPCSOA.Size[i].Z * rl.GetFrameTime() * f
+					xNPCSOA.Position[i].X *= rl.Lerp(maxDist, maxDist+dx, 0.33)
+					xNPCSOA.Position[i].Z *= rl.Lerp(maxDist, maxDist+dz, 0.33)
+
 				default:
 					panic(fmt.Sprintf("unexpected npc.NPCType: %#v", typ))
 				}
 			}
+			xNPCSOA.BoundingBox[i] = common.GetBoundingBoxPositionSizeV(xNPCSOA.Position[i], xNPCSOA.Size[i])
 		}
-		// Move NPCs
-		for i := range npc.MaxNPC {
-			if xNPCSOA.IsActive[i] {
-				if framesCounter%8 == 0 { // Meander around
-					switch typ := xNPCSOA.Type[i]; typ {
-					case npc.TypeGrunt:
-						f := mathutil.SinF(2 * float32(framesCounter) / common.FPS)
-						fn := rl.Normalize(f, -1.0, 1.0)
-						if rl.GetRandomValue(1, 3) == 1 {
-							xNPCSOA.Position[i].X += (mathutil.PingPongF(f) * fn) / 4
+	}
+	// Update NPC collision with other NPC
+	for i := range npc.MaxNPC {
+		if xNPCSOA.IsActive[i] {
+			for j := range npc.MaxNPC {
+				if xNPCSOA.IsActive[j] && rl.CheckCollisionBoxes(xNPCSOA.BoundingBox[i], xNPCSOA.BoundingBox[j]) {
+					counter := 0
+					maxCounter := 100
+					for (counter < maxCounter) && rl.CheckCollisionBoxes(
+						common.GetBoundingBoxPositionSizeV(xNPCSOA.Position[i], xNPCSOA.Size[i]),
+						common.GetBoundingBoxPositionSizeV(xNPCSOA.Position[j], xNPCSOA.Size[j]),
+					) { // => In a while loop
+						if rl.GetRandomValue(1, 2) == 1 { // 1/2 probability
+							xNPCSOA.Position[i].X = rl.Lerp(xNPCSOA.Position[i].X, xNPCSOA.Position[j].X, -0.05)
+							xNPCSOA.Position[i].Z = rl.Lerp(xNPCSOA.Position[i].Z, xNPCSOA.Position[j].Z, -0.05)
+						} else {
+							xNPCSOA.Position[j].X = rl.Lerp(xNPCSOA.Position[j].X, xNPCSOA.Position[i].X, -0.05)
+							xNPCSOA.Position[j].Z = rl.Lerp(xNPCSOA.Position[j].Z, xNPCSOA.Position[i].Z, -0.05)
 						}
-						if rl.GetRandomValue(1, 3) == 1 {
-							xNPCSOA.Position[i].Z += (mathutil.PingPongF(f) * fn) / 4
-						}
-
-						// resource.PlatformPositions[i].X = f
-						// resource.PlatformBoundingBoxes[i].Min.X = resource.PlatformPositions[i].X - resource.PlatformSizes[i].X/2
-						// resource.PlatformBoundingBoxes[i].Max.X = resource.PlatformPositions[i].X + resource.PlatformSizes[i].X/2
-
-					case npc.TypeLeader:
-						const maxDist = 1.0
-						f := float32(rl.GetRandomValue(-10, 10) / 10.0)
-						dx := xNPCSOA.Size[i].X * rl.GetFrameTime() * f
-						dz := xNPCSOA.Size[i].Z * rl.GetFrameTime() * f
-						xNPCSOA.Position[i].X *= rl.Lerp(maxDist-dx, maxDist+dx, f)
-						xNPCSOA.Position[i].Z *= rl.Lerp(maxDist-dz, maxDist+dz, f)
-
-					case npc.TypeSniper:
-					case npc.TypeSquad:
-					case npc.TypeSwarm:
-					case npc.TypeTank:
-						const maxDist = 1.0
-						f := float32(rl.GetRandomValue(-10, 10) / 10.0)
-						dx := xNPCSOA.Size[i].X * rl.GetFrameTime() * f
-						dz := xNPCSOA.Size[i].Z * rl.GetFrameTime() * f
-						xNPCSOA.Position[i].X *= rl.Lerp(maxDist, maxDist+dx, 0.33)
-						xNPCSOA.Position[i].Z *= rl.Lerp(maxDist, maxDist+dz, 0.33)
-
-					default:
-						panic(fmt.Sprintf("unexpected npc.NPCType: %#v", typ))
-					}
-				}
-				xNPCSOA.BoundingBox[i] = common.GetBoundingBoxPositionSizeV(xNPCSOA.Position[i], xNPCSOA.Size[i])
-			}
-		}
-		// Update NPC collision with other NPC
-		for i := range npc.MaxNPC {
-			if xNPCSOA.IsActive[i] {
-				for j := range npc.MaxNPC {
-					if xNPCSOA.IsActive[j] && rl.CheckCollisionBoxes(xNPCSOA.BoundingBox[i], xNPCSOA.BoundingBox[j]) {
-						counter := 0
-						maxCounter := 100
-						for (counter < maxCounter) && rl.CheckCollisionBoxes(
-							common.GetBoundingBoxPositionSizeV(xNPCSOA.Position[i], xNPCSOA.Size[i]),
-							common.GetBoundingBoxPositionSizeV(xNPCSOA.Position[j], xNPCSOA.Size[j]),
-						) { // => In a while loop
-							if rl.GetRandomValue(1, 2) == 1 { // 1/2 probability
-								xNPCSOA.Position[i].X = rl.Lerp(xNPCSOA.Position[i].X, xNPCSOA.Position[j].X, -0.05)
-								xNPCSOA.Position[i].Z = rl.Lerp(xNPCSOA.Position[i].Z, xNPCSOA.Position[j].Z, -0.05)
-							} else {
-								xNPCSOA.Position[j].X = rl.Lerp(xNPCSOA.Position[j].X, xNPCSOA.Position[i].X, -0.05)
-								xNPCSOA.Position[j].Z = rl.Lerp(xNPCSOA.Position[j].Z, xNPCSOA.Position[i].Z, -0.05)
-							}
-							counter++
-						}
+						counter++
 					}
 				}
 			}
 		}
-		// Update NPC scanning and approaching player
-		for i := range npc.MaxNPC {
-			if xNPCSOA.IsActive[i] {
-				const lookahead = float32(12.)
-				lookaheadSize := rl.Vector3Multiply(xNPCSOA.Size[i], rl.NewVector3(lookahead, 1, lookahead)) // Maintain y position
-				lookaheadBounds := common.GetBoundingBoxPositionSizeV(xNPCSOA.Position[i], lookaheadSize)
+	}
+	// Update NPC scanning and approaching player
+	for i := range npc.MaxNPC {
+		if xNPCSOA.IsActive[i] {
+			const lookahead = float32(12.)
+			lookaheadSize := rl.Vector3Multiply(xNPCSOA.Size[i], rl.NewVector3(lookahead, 1, lookahead)) // Maintain y position
+			lookaheadBounds := common.GetBoundingBoxPositionSizeV(xNPCSOA.Position[i], lookaheadSize)
 
-				// NPC must dart towards player
-				if rl.CheckCollisionBoxes(xPlayer.BoundingBox, lookaheadBounds) {
-					distCol := rl.Fade(rl.White, .1) // DEBUG - [1]
-					distThresholdCol := rl.Fade(rl.Beige, .1)
+			// NPC must dart towards player
+			if rl.CheckCollisionBoxes(xPlayer.BoundingBox, lookaheadBounds) {
+				distCol := rl.Fade(rl.White, .1) // DEBUG - [1]
+				distThresholdCol := rl.Fade(rl.Beige, .1)
+				distThreshold := float32(mathutil.SqrtF(lookahead * common.InvPhi))
+				dist := rl.Vector3Distance(xNPCSOA.Position[i], xPlayer.Position)
+				dt := rl.GetFrameTime() // Approach rate
 
-					distThreshold := float32(mathutil.SqrtF(lookahead * common.InvPhi))
-					dist := rl.Vector3Distance(xNPCSOA.Position[i], xPlayer.Position)
-					dt := rl.GetFrameTime() // Approach rate
-
-					// Rush player once this is crossed
-					if dist <= distThreshold {
-						f := dist / (lookahead / 2.)
-						dt += mathutil.SqrtF(f) / 8. // Jump scare
-
-						distCol = rl.Fade(rl.Red, .1)
-						distThresholdCol = rl.Fade(rl.Gold, .1)
-					}
-					if isDebugTweening := true; isDebugTweening {
-						rl.DrawSphereWires(xNPCSOA.Position[i], dist, 8, 8, distCol) // DEBUG - [1]
-						rl.DrawSphereWires(xNPCSOA.Position[i], distThreshold, 8, 8, distThresholdCol)
-					}
-
-					// Approach player
-					// DONE: Avoid other NPCs from colliding with each other
-					// TODO: Avoid NPCs from colliding with blocks/drillroom/etc..
-					xNPCSOA.Position[i].X = rl.Lerp(xNPCSOA.Position[i].X, xPlayer.Position.X, dt)
-					xNPCSOA.Position[i].Z = rl.Lerp(xNPCSOA.Position[i].Z, xPlayer.Position.Z, dt)
+				// Rush player once this is crossed
+				if dist <= distThreshold {
+					f := dist / (lookahead / 2.)
+					dt += mathutil.SqrtF(f) / 8. // Jump scare
+					distCol = rl.Fade(rl.Red, .1)
+					distThresholdCol = rl.Fade(rl.Gold, .1)
 				}
-				if true {
-					rl.DrawBoundingBox(lookaheadBounds, rl.Fade(rl.SkyBlue, 0.3))
-					rl.DrawBoundingBox(lookaheadBounds, rl.Fade(rl.Blue, 0.3))
+				if isDebugTweening := true; isDebugTweening {
+					rl.DrawSphereWires(xNPCSOA.Position[i], dist, 8, 8, distCol) // DEBUG - [1]
+					rl.DrawSphereWires(xNPCSOA.Position[i], distThreshold, 8, 8, distThresholdCol)
 				}
+
+				// Approach player (TODO: Avoid NPCs from colliding with blocks/drillroom/etc..)
+				xNPCSOA.Position[i].X = rl.Lerp(xNPCSOA.Position[i].X, xPlayer.Position.X, dt)
+				xNPCSOA.Position[i].Z = rl.Lerp(xNPCSOA.Position[i].Z, xPlayer.Position.Z, dt)
+			}
+			if true {
+				rl.DrawBoundingBox(lookaheadBounds, rl.Fade(rl.SkyBlue, 0.3))
+				rl.DrawBoundingBox(lookaheadBounds, rl.Fade(rl.Blue, 0.3))
 			}
 		}
 	}
 
 	// Update player exter/exit drillroom screen
-	{
-		origin := xFloor.Position
+	var canSwitchToDrillRoom bool
+	isPlayerInsideBase := rl.CheckCollisionBoxes(xPlayer.BoundingBox, common.GetBoundingBoxPositionSizeV(xFloor.Position, rl.NewVector3(3, 2, 3)))
+	isPlayerEnteringBase := rl.CheckCollisionBoxes(xPlayer.BoundingBox, common.GetBoundingBoxPositionSizeV(xFloor.Position, rl.NewVector3(5, 2, 5)))
+	isPlayerInsideBotBarrier := rl.CheckCollisionBoxes(xPlayer.BoundingBox, common.GetBoundingBoxPositionSizeV(xFloor.Position, rl.NewVector3(7, 2, 7)))
+	if isPlayerInsideBotBarrier && !isPlayerEnteringBase && !isPlayerInsideBase {
+		player.SetColor(rl.Blue)
+	} else if isPlayerEnteringBase && !isPlayerInsideBase {
+		player.SetColor(rl.Green)
 
-		bb1 := common.GetBoundingBoxPositionSizeV(origin, rl.NewVector3(3, 2, 3)) // player is inside
-		bb2 := common.GetBoundingBoxPositionSizeV(origin, rl.NewVector3(5, 2, 5)) // player is entering
-		bb3 := common.GetBoundingBoxPositionSizeV(origin, rl.NewVector3(7, 2, 7)) // bot barrier
+		// STEP [2] ─ Wait a frame before switching // Avoid glitches (also quick dodge to not-exit)
+		if hasPlayerLeftDrillBase {
+			hasPlayerLeftDrillBase = false
+			canSwitchToDrillRoom = true // Actual work done here
+		}
+	} else if isPlayerInsideBase {
+		player.SetColor(rl.Red)
+	} else { // If outside bounds check
+		player.SetColor(rl.RayWhite)
 
-		isPlayerInsideBase := rl.CheckCollisionBoxes(xPlayer.BoundingBox, bb1)
-		isPlayerEnteringBase := rl.CheckCollisionBoxes(xPlayer.BoundingBox, bb2)
-		isPlayerInsideBotBarrier := rl.CheckCollisionBoxes(xPlayer.BoundingBox, bb3)
+		// Q: How to check non-binary logic.. more options.. unlike drill room
+		// A: bitsets?
+		if !hasPlayerLeftDrillBase {
+			hasPlayerLeftDrillBase = true // STEP [1]
+		}
+	}
+	if canSwitchToDrillRoom { // Play entry sounds
+		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("footstep0%d.ogg", rl.GetRandomValue(0, 9))))) // 05
+		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "metalClick.ogg")))                                        // metalClick
+		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("creak%d.ogg", rl.GetRandomValue(1, 3)))))     // 3
+		rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("doorOpen_%d.ogg", rl.GetRandomValue(1, 2))))) // 2
 
-		canSwitchToDrillRoom := false
-
-		if isPlayerInsideBotBarrier && !isPlayerEnteringBase && !isPlayerInsideBase {
-			player.SetColor(rl.Blue)
-		} else if isPlayerEnteringBase && !isPlayerInsideBase {
-			player.SetColor(rl.Green)
-
-			if hasPlayerLeftDrillBase { // STEP [2] ─ Wait a frame before switching // Avoid glitches (also quick dodge to not-exit)
-				hasPlayerLeftDrillBase = false
-				canSwitchToDrillRoom = true // Actual work done here
+		// ASSERTIONS pre save screen state
+		if true {
+			temp := xPlayer.CargoCapacity
+			accum := 0
+			for i := range currency.MaxCurrencyTypes {
+				accum += int(currencyItems[i].Wallet)
 			}
-		} else if isPlayerInsideBase {
-			player.SetColor(rl.Red)
-		} else { // => is outside bounds check
-			player.SetColor(rl.RayWhite) // How to check non-binary logic.. more options.. unlike drill room
-			if !hasPlayerLeftDrillBase {
-				// - RESET FLAG as soon as player leaves bounds check
-				// - This is useful when player spawns near the drill room.
-				// - This avoids re-entering drill base Immediately.
-				hasPlayerLeftDrillBase = true // STEP [1]
+			if temp != int32(accum) {
+				panic(fmt.Sprintln("xPlayer.CargoCapacity!=sum(currencyItems[:].Wallet)", temp, "!=", accum))
 			}
 		}
-		if __IS_TEMPORARY__ := false; __IS_TEMPORARY__ {
-			// Do not allow entry till cargo capacity is full.. This is temporary.. to quickly develop a simple gameloop.
-			// Later we add transactions and resource conversions
-			if canSwitchToDrillRoom {
-				slog.Warn("OVERIDING ENTRY TO DRILL ROOM. (TEMPORARY)")
-				canSwitchToDrillRoom = hitScore >= xPlayer.MaxCargoCapacity
-			}
-		}
-		if canSwitchToDrillRoom { // Play entry sounds
-			// NOTES:
-			//	 - (gameplay ) saveScore?
-			//	 - (common   )   how much resource is required to drill to next level
-			//	 - (drillroom) how will you handle modifying currentLevelID in gamesave/slot/1.json?
-			//	 - (drillroom) what decides
-			//	 - Are we drilling asteroids in space?
-			//		- Draw a protection barrier over the scene (like a firmament)
-			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("footstep0%d.ogg", rl.GetRandomValue(0, 9))))) // 05
-			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", "metalClick.ogg")))                                        // metalClick
-			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("creak%d.ogg", rl.GetRandomValue(1, 3)))))     // 3
-			rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_rpg-audio", "Audio", fmt.Sprintf("doorOpen_%d.ogg", rl.GetRandomValue(1, 2))))) // 2
 
-			// Save screen state
-			finishScreen = 2                      // 1=>ending 2=>drillroom
-			camera.Up = rl.NewVector3(0., 1., 0.) // Reset yaw/pitch/roll
-
-			saveGameEntityData()     // (player,camera,...) 705 bytes
-			saveGameAdditionalData() // (blocks,...)        82871 bytes
-			saveGameLogicData()
-
-			currency.HandleWalletToBankTransaction(&currencyItems)
-			currency.SaveCurrencyItems(currencyItems)
-		}
+		// Save screen state
+		finishScreen = 2                      // 1=>ending 2=>drillroom
+		camera.Up = rl.NewVector3(0., 1., 0.) // Reset yaw/pitch/roll
+		xPlayer.CargoCapacity = 0
+		hitScore = 0
+		currency.HandleWalletToBankTransaction(&currencyItems)
+		currency.SaveCurrencyItems(currencyItems) // (currencyType,Wallet,Bank,...)				250		bytes
+		saveGameLogicData()                       // (money,experience,hitScore,hitCount,...)	140		bytes
+		saveGameEntityData()                      // (player,camera,...)						705		bytes
+		saveGameAdditionalData()                  // (blocks,...)								82871	bytes
 	}
 
 	// Press enter or tap to change to ending game screen
@@ -673,9 +601,13 @@ func Update() {
 		// Save screen state
 		finishScreen = 1                      // 1=>ending 2=>drillroom
 		camera.Up = rl.NewVector3(0., 1., 0.) // Reset yaw/pitch/roll
-		saveGameEntityData()                  // (player,camera,...) 705 bytes
-		saveGameAdditionalData()              // (blocks,...)        82871 bytes
-		saveGameLogicData()
+		xPlayer.CargoCapacity = 0
+		hitScore = 0
+		currency.HandleWalletToBankTransaction(&currencyItems)
+		currency.SaveCurrencyItems(currencyItems) // (currencyType,Wallet,Bank,...)				250		bytes
+		saveGameLogicData()                       // (money,experience,hitScore,hitCount,...)	140		bytes
+		saveGameEntityData()                      // (player,camera,...)						705		bytes
+		saveGameAdditionalData()                  // (blocks,...)								82871	bytes
 	}
 
 	// TODO: Move this in package player (if possible)
@@ -833,7 +765,7 @@ func Draw() {
 		}
 	}
 
-	hud.DrawHUD(xPlayer, hitScore, currencyItems)
+	hud.DrawHUD(xPlayer, currencyItems)
 
 	if true { // Perf
 		fontSize := float32(common.Font.RaylibDefault.BaseSize)

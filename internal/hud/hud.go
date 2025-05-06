@@ -32,7 +32,6 @@ import (
 // DrawHUD draws the Heads-Up-Display on 2D screen.
 func DrawHUD(
 	xPlayer player.Player,
-	hitScore int32,
 	currencyItems [currency.MaxCurrencyTypes]currency.CurrencyItem,
 ) {
 	screenW := int32(rl.GetScreenWidth())
