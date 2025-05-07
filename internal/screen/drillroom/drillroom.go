@@ -1,10 +1,6 @@
 // TODO: Package drillroom only makes sense if player has a limited cargo capacity
-package drillroom
-
-// TODO: Make the transactiom on "Make Resource" for every 25 copper -> convert them to get a new pearl/iron
-//		- iron++
-//		- copper-=25
 // FIXME - The cargo must match sum of all inventories in wallet
+package drillroom
 
 import (
 	"cmp"
@@ -103,7 +99,7 @@ type TriggerRefuelDrillDataSOA struct {
 var (
 	xTriggerRefuelDrillData = TriggerRefuelDrillDataSOA{
 		Currency: [currency.MaxCurrencyTypes * 2]currency.CurrencyType{
-			currency.Pearl, currency.Pearl, currency.Bronze,
+			currency.Tin, currency.Tin, currency.Bronze,
 			currency.Bronze, currency.Silver, currency.Silver,
 			currency.Ruby, currency.Ruby, currency.Gold, currency.Gold,
 			currency.Diamond, currency.Diamond, currency.Sapphire,
@@ -116,7 +112,7 @@ var (
 	}
 	refuelGoalCurrencyTypes = []currency.CurrencyType{
 		currency.Copper,
-		currency.Pearl,
+		currency.Tin,
 		currency.Bronze,
 		currency.Silver,
 		currency.Ruby,
@@ -463,17 +459,13 @@ func HandleTriggerOnPlayerPressF(i TriggerType) {
 
 	case TriggerRefuelDrill:
 		id := xTriggerRefuelDrillData.Currency[levelID] // WARN: id should note be >= len(common.SavedgameSlotData.AllLevelIDS)
-		requiredAmount := xTriggerRefuelDrillData.CopperUnitsGoal[levelID]
-		isDrillRefueled_ThisStateShouldBeSavedToAFileWithLevelID = currencyItems[id].Bank >= requiredAmount
+		isDrillRefueled_ThisStateShouldBeSavedToAFileWithLevelID = currencyItems[id].Bank >= xTriggerRefuelDrillData.CopperUnitsGoal[levelID]
 		if isDrillRefueled_ThisStateShouldBeSavedToAFileWithLevelID {
-			currencyItems[id].Bank -= requiredAmount
+			currencyItems[id].Bank -= xTriggerRefuelDrillData.CopperUnitsGoal[levelID]
 			rl.PlaySound(common.FX.Coin)
 		} else {
 			rl.PlaySound(common.FX.InterfaceBong)
 		}
-		fmt.Printf("currencyItems[id].Bank: %v\n", currencyItems[id].Bank)
-		fmt.Printf("requiredAmount: %v\n", requiredAmount)
-		fmt.Printf("isDrillRefueled_ThisStateShouldBeSavedToAFileWithLevelID: %v\n", isDrillRefueled_ThisStateShouldBeSavedToAFileWithLevelID)
 
 	default:
 		panic("unexpected drillroom.TriggerType")
@@ -492,20 +484,15 @@ func Draw() {
 
 	xPlayer.Draw()
 	xFloor.Draw()
-	{
-		scale := cmp.Or(rl.NewVector3(5, 2, 5), common.Vector3One)
-		wall.DrawBatch(common.DrillRoom, xFloor.Position, xFloor.Size, scale)
-	}
+	wall.DrawBatch(common.DrillRoom, xFloor.Position, xFloor.Size, rl.Vector3{X: 5, Y: 2, Z: 5})
 
 	for i := range MaxTriggerCount {
 		// Circular model shape --expand-> to 1x1x1 bounding box
 		const k = 1. + common.OneMinusInvPhi
-
 		var (
 			scale rl.Vector3
 			col   color.RGBA
 		)
-
 		if isPlayerNearTriggerSensors[i] {
 			scale = rl.Vector3{X: k * 1.25, Y: k * 1.25, Z: k * 1.25}
 			col = rl.Purple
@@ -513,8 +500,7 @@ func Draw() {
 			scale = rl.Vector3{X: k, Y: k, Z: k}
 			col = rl.Pink
 		}
-
-		if false {
+		if false { // DEBUG
 			rl.DrawBoundingBox(triggerBoundingBoxes[i], rl.Fade(rl.SkyBlue, 0.1))
 			rl.DrawBoundingBox(triggerSensorBoundingBoxes[i], rl.Fade(col, 0.1))
 		}
@@ -665,8 +651,7 @@ func Draw() {
 				pixelSize = float32(screenW) / float32(screenH)
 				spacing   = float32(1.5)
 
-				currencyID           = currentChangeResourceTriggerType
-				currencyToCopperUnit = currency.ToCopperUnitsMap[refuelGoalCurrencyType]
+				currencyID = currentChangeResourceTriggerType
 
 				refuelGoal    = xTriggerRefuelDrillData.CopperUnitsGoal[id]
 				actualText    = fmt.Sprintln(refuelGoal) // This much is required for 1 of currency to change into
@@ -678,19 +663,16 @@ func Draw() {
 				segmentsRingBuffer = []int32{3, 4, 5, 6}
 				segments           = segmentsRingBuffer[int(refuelGoalCurrencyType)%len(segmentsRingBuffer)]
 				startAngle         = float32(currencyID)*15 + float32(segments)*15
-
-				convertedAmount = currencyToCopperUnit
 			)
 			rl.DrawRing(iconLargePosition, 0, iconLargeRadius, startAngle, 360+startAngle, segments, rl.Fade(currency.ToColorMap[refuelGoalCurrencyType], 0.7)) // Other
-
 			// rl.DrawRing(iconPosition, 0, iconSmallRadius, 0, 360, 6, rl.Fade(currency.CurrencyColorMap[refuelGoalCurrencyType], 0.7))
-			var availableCol color.RGBA
-			if convertedAmount < 1 {
-				availableCol = rl.Purple
-			} else {
-				availableCol = rl.White
-			}
 
+			var availableCol color.RGBA
+			if currencyItems[id].Bank < xTriggerRefuelDrillData.CopperUnitsGoal[levelID] {
+				availableCol = rl.Purple // Not enough
+			} else {
+				availableCol = rl.White // Is enough
+			}
 			rl.DrawTextEx(common.Font.SourGummy, actualText, actualPosition, float32(common.Font.SourGummy.BaseSize), spacing, rl.Fade(availableCol, 0.8))
 
 		case TriggerStartDrill:

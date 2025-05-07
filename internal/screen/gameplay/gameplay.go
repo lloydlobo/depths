@@ -1,8 +1,5 @@
 package gameplay
 
-// TODO: Make the transactiom on "Make Resource" for every 25 copper -> convert them to get a new pearl/iron
-//		- iron++
-//		- copper-=25
 // FIXME - The cargo must match sum of all inventories in wallet
 
 // See fog shader: https://github.com/mohsengreen1388/raylib-go-utility/blob/main/utility/fog.go
@@ -329,7 +326,7 @@ func Update() {
 	}
 
 	// Update block and player interaction/mining
-	// TODO: Find out where player touched the box
+	// NOTE: Find out where player touched the box?
 	// WARN: Should we clear out player collision
 	// NOTE: It is important that player touches the block first before mining
 	for i := range xBlocks {
@@ -512,7 +509,7 @@ func Update() {
 					rl.DrawSphereWires(xNPCSOA.Position[i], distThreshold, 8, 8, distThresholdCol)
 				}
 
-				// Approach player (TODO: Avoid NPCs from colliding with blocks/drillroom/etc..)
+				// Approach player (NOTE: Avoid NPCs from colliding with blocks/drillroom/etc..?)
 				xNPCSOA.Position[i].X = rl.Lerp(xNPCSOA.Position[i].X, xPlayer.Position.X, dt)
 				xNPCSOA.Position[i].Z = rl.Lerp(xNPCSOA.Position[i].Z, xPlayer.Position.Z, dt)
 			}
@@ -597,7 +594,7 @@ func Update() {
 		saveGameAdditionalData()                  // (blocks,...)								82871	bytes
 	}
 
-	// TODO: Move this in package player (if possible)
+	// NOTE: Move this in package player (if possible)
 	if rl.IsKeyDown(rl.KeyW) || rl.IsKeyDown(rl.KeyA) || rl.IsKeyDown(rl.KeyS) || rl.IsKeyDown(rl.KeyD) {
 		const fps = 60.0
 		const framesInterval = fps / 2.
@@ -770,7 +767,7 @@ func Draw() {
 }
 
 func Unload() {
-	// TODO: Unload gameplay screen variables here!
+	// NOTE: Unload gameplay screen variables here!
 	if rl.IsCursorHidden() {
 		rl.EnableCursor() // without 3d ThirdPersonPerspective
 	}
@@ -1234,7 +1231,7 @@ func logicGameCurrencyConversionPrototype() {
 }
 
 // NOTE: On disabling load**** and save**** functions, few lines are affected
-// TODO: Use a global Uberstruct/Mega game struct -> Unify for ease of sharing function signatures
+// NOTE: Use a global Uberstruct/Mega game struct -> Unify for ease of sharing function signatures
 //
 // internal/screen/gameplay/gameplay.go|230 col 16-34 error| undefined: loadGameEntityData
 // internal/screen/gameplay/gameplay.go|243 col 4-22 error| undefined: saveGameEntityData

@@ -27,7 +27,7 @@ type CurrencyType int32
 
 const (
 	Copper CurrencyType = iota // Base currency
-	Pearl
+	Tin
 	Bronze
 	Silver
 	Ruby
@@ -40,7 +40,7 @@ const (
 
 var ToColorMap = map[CurrencyType]color.RGBA{
 	Copper:   rl.Beige,
-	Pearl:    rl.ColorBrightness(rl.DarkGray, 0.05),
+	Tin:      rl.ColorBrightness(rl.DarkGray, 0.05),
 	Bronze:   rl.Orange,
 	Silver:   rl.ColorBrightness(rl.DarkGray, 0.15),
 	Ruby:     rl.Maroon,
@@ -52,7 +52,7 @@ var ToColorMap = map[CurrencyType]color.RGBA{
 // ToCopperUnitsMap maps any Currency type into its equivalent Copper units.
 var ToCopperUnitsMap = map[CurrencyType]int32{
 	Copper:   1,
-	Pearl:    25,
+	Tin:      25,
 	Bronze:   25,
 	Silver:   30,
 	Ruby:     35,
@@ -63,7 +63,7 @@ var ToCopperUnitsMap = map[CurrencyType]int32{
 
 var ToStringMap = map[CurrencyType]string{
 	Copper:   "Copper",
-	Pearl:    "Pearl",
+	Tin:      "Pearl",
 	Bronze:   "Bronze",
 	Silver:   "Silver",
 	Ruby:     "Ruby",
