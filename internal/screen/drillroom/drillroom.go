@@ -60,7 +60,7 @@ var (
 )
 
 var (
-	triggerChangeResourceCurrencyTypeState = currency.Copper + currency.CurrencyType(1) // 0:Copper + 1:Pearl
+	currentChangeResourceTriggerType = currency.Copper + currency.CurrencyType(1) // 0:Copper + 1:Pearl
 )
 
 type TriggerType uint8
@@ -400,7 +400,7 @@ func Draw() {
 		case TriggerChangeResource:
 			const resourceRadius = 0.22 / 2 // Hologram
 			const padInlineStart = 0.32
-			col := currency.ToColorMap[triggerChangeResourceCurrencyTypeState]
+			col := currency.ToColorMap[currentChangeResourceTriggerType]
 			if false {
 				rl.DrawSphereEx(rl.NewVector3(padInlineStart, 1, 0), resourceRadius, 6, 6, col)
 			}
@@ -480,15 +480,15 @@ func Draw() {
 			// TEMPORARY
 			availableCopperQuantity = int32(30)
 
-			if triggerChangeResourceCurrencyTypeState == currency.Copper { // Skip over base currency copper
-				panic(fmt.Sprintf("expected drillroom.TriggerType %d to be skipped", triggerChangeResourceCurrencyTypeState))
+			if currentChangeResourceTriggerType == currency.Copper { // Skip over base currency copper
+				panic(fmt.Sprintf("expected drillroom.TriggerType %d to be skipped", currentChangeResourceTriggerType))
 			}
 
 			var (
 				pixelSize = float32(screenW) / float32(screenH)
 				spacing   = float32(1.5)
 
-				currencyID           = triggerChangeResourceCurrencyTypeState
+				currencyID           = currentChangeResourceTriggerType
 				currencyCol          = currency.ToColorMap[currencyID]
 				currencyString       = currency.ToStringMap[currencyID]
 				currencyToCopperUnit = currency.ToCopperUnitsMap[currencyID]
@@ -566,7 +566,7 @@ func Draw() {
 				pixelSize = float32(screenW) / float32(screenH)
 				spacing   = float32(1.5)
 
-				currencyID     = triggerChangeResourceCurrencyTypeState
+				currencyID     = currentChangeResourceTriggerType
 				currencyCol    = currency.ToColorMap[currencyID]
 				currencyString = currency.ToStringMap[currencyID]
 
@@ -697,6 +697,18 @@ func Finish() int {
 	return finishScreen
 }
 
+/*
+	finishScreen = 2                      // 1=>ending 2=>drillroom
+	camera.Up = rl.NewVector3(0., 1., 0.) // Reset yaw/pitch/roll
+	xPlayer.CargoCapacity = 0
+	hitScore = 0
+	currency.HandleWalletToBankTransaction(&currencyItems)
+	currency.SaveCurrencyItems(currencyItems) // (currencyType,Wallet,Bank,...)				250		bytes
+	saveGameLogicData()                       // (money,experience,hitScore,hitCount,...)	140		bytes
+	saveGameEntityData()                      // (player,camera,...)						705		bytes
+	saveGameAdditionalData()                  // (blocks,...)								82871	bytes
+*/
+
 func HandleTriggerOnPlayerPressF(i TriggerType) {
 	switch i {
 
@@ -717,13 +729,20 @@ func HandleTriggerOnPlayerPressF(i TriggerType) {
 
 	case TriggerMakeResource:
 		rl.PlaySound(common.FX.InterfaceBong)
+		baseType, currType := currency.Copper, currentChangeResourceTriggerType
+		if got, want := currencyItems[baseType].Bank, currency.ToCopperUnitsMap[currType]; got >= want {
+			currencyItems[baseType].Bank -= want
+			currencyItems[currType].Bank++
+		}
 
 	case TriggerChangeResource:
 		common.PlayRandomSound(common.FXS.InterfaceClick)
 		rl.PlaySound(common.FX.InterfaceScratch)
-		triggerChangeResourceCurrencyTypeState = triggerChangeResourceCurrencyTypeState.Next()
-		if triggerChangeResourceCurrencyTypeState == currency.Copper { // Skip over base currency copper
-			triggerChangeResourceCurrencyTypeState++
+
+		currentChangeResourceTriggerType = currentChangeResourceTriggerType.Next()
+
+		if currentChangeResourceTriggerType == currency.Copper { // Skip over base currency copper
+			currentChangeResourceTriggerType++
 		}
 
 	case TriggerCarryMore:
@@ -752,6 +771,7 @@ func HandleTriggerOnPlayerPressF(i TriggerType) {
 			// NOTE: IDs are non-zero (unsigned) integers
 			// currLevelID := common.SavedgameSlotData.CurrentLevelID
 			finalLevelID := uint8(len(common.SavedgameSlotData.AllLevelIDS))
+
 			common.SavedgameSlotData.CurrentLevelID = min(finalLevelID, uint8(levelID)+1)
 
 			if uint8(levelID) >= finalLevelID {
