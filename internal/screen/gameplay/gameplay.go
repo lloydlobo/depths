@@ -102,11 +102,8 @@ func Init() {
 	// PERF: See also https://github.com/raylib-extras/extras-c/blob/main/cameras/rlTPCamera/rlTPCamera.h
 	cameraPullbackDistance := float32(cmp.Or(5, 3))
 	camera = rl.Camera3D{
-		Target: rl.NewVector3(0., .5, 0.),
-		Position: cmp.Or(
-			rl.Vector3Add(rl.NewVector3(0., .5, 0.), rl.NewVector3(0, 0, cameraPullbackDistance)),
-			rl.NewVector3(0., 10., 10.),
-		),
+		Target:     rl.NewVector3(0., .5, 0.),
+		Position:   cmp.Or(rl.Vector3Add(rl.NewVector3(0., .5, 0.), rl.NewVector3(0, 0, cameraPullbackDistance)), rl.NewVector3(0., 10., 10.)),
 		Up:         rl.NewVector3(0., 1., 0.),
 		Fovy:       15. * float32(cmp.Or(4., 3., 2.)),
 		Projection: rl.CameraPerspective,
@@ -114,15 +111,11 @@ func Init() {
 
 	loadNewEntityData := func() {
 		var mu sync.Mutex
-
 		mu.Lock()
 		defer mu.Unlock()
-
 		finishScreen = 0
 		framesCounter = 0
-
-		// Order could be important
-		player.InitPlayer(&xPlayer, camera)
+		player.InitPlayer(&xPlayer, camera)                                            // Order could be important
 		xFloor = floor.NewFloor(common.Vector3Zero, rl.NewVector3(16*2, 0.001*2, 9*2)) // 16:9 ratio // floor.InitFloor(&gameFloor)
 		wall.InitWall()                                                                // NOTE: Empty func for convention
 
@@ -131,19 +124,15 @@ func Init() {
 	}
 	loadNewAdditionalData := func() {
 		var mu sync.Mutex
-
 		mu.Lock()
 		defer mu.Unlock()
-
 		xBlocks = []block.Block{} // Clear
 		block.InitBlocks(&xBlocks, block.GenerateRandomBlockPositions(xFloor))
 	}
 	loadNewLogicData := func() {
 		var mu sync.Mutex
-
 		mu.Lock()
 		defer mu.Unlock()
-
 		money = 1000
 		experience = 0
 		hitCount = 0
@@ -162,8 +151,7 @@ func Init() {
 
 	// Core data
 	if !isNewGame {
-		data, err := loadGameEntityData()
-		if err == nil { // OK
+		if data, err := loadGameEntityData(); err == nil { // OK
 			finishScreen = 0
 			framesCounter = 0
 			camera = data.Camera
@@ -208,14 +196,13 @@ func Init() {
 	}
 
 	if !isNewGame {
-		data, err := loadGameLogicData()
-		if err == nil { // OK
+		if data, err := loadGameLogicData(); err == nil { // ok
 			money = data.Money
 			experience = data.Experience
 			hitCount = data.HitCount
 			hitScore = data.HitScore
 			saveGameLogicData() // Save ASAP
-		} else { // ERR
+		} else { // error
 			slog.Warn(err.Error())
 			loadNewLogicData()
 		}
