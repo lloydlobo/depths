@@ -98,7 +98,7 @@ func LoadCurrencyItems(output *[MaxCurrencyTypes]CurrencyItem) {
 		SaveCurrencyItems(input)
 	}
 
-	{ // Create new save file if not found
+	if false { // Create new save file if not found
 		var isFound bool
 		dirs := common.Must(os.ReadDir(filepath.Join(common.Must(os.Getwd()), defaultJSONSaveDirname)))
 		for i := range dirs { // Search only the first directory hierarchy
@@ -143,6 +143,8 @@ func LoadCurrencyItems(output *[MaxCurrencyTypes]CurrencyItem) {
 			saveDefaultFileTemplate()
 		}
 	}
+
+	fmt.Printf("temp: %v\n", temp)
 
 	// Transfer data to receiver
 	for i := range output {

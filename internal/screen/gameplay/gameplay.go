@@ -160,7 +160,8 @@ func Init() {
 				hasPlayerLeftDrillBase = false // How do we know?
 			}
 			xPlayer.IsPlayerWallCollision = false
-			saveGameEntityData() // Save ASAP
+			// saveGameEntityData() // Save ASAP
+			saveGameData(storage.EntityGDT)
 		} else { // ERR
 			slog.Warn(err.Error())
 			loadNewEntityData()
@@ -183,7 +184,8 @@ func Init() {
 			} else {
 				log.Panic("Incorrect saved file. Please delete it")
 			}
-			saveGameAdditionalData() // Save ASAP
+			// saveGameAdditionalData() // Save ASAP
+			saveGameData(storage.AdditionalGDT)
 		} else { // ERR
 			slog.Warn(err.Error())
 			loadNewAdditionalData()
@@ -198,7 +200,8 @@ func Init() {
 			experience = data.Experience
 			hitCount = data.HitCount
 			hitScore = data.HitScore
-			saveGameLogicData() // Save ASAP
+			// saveGameLogicData() // Save ASAP
+			saveGameData(storage.LogicGDT)
 		} else { // error
 			slog.Warn(err.Error())
 			loadNewLogicData()
@@ -206,6 +209,12 @@ func Init() {
 	} else {
 		loadNewLogicData()
 	}
+
+	// LoadCurrencyItems manually.
+	// HACK: If no level json files are present, the loadGameLogicData fails
+	//       early. And so load currency items in the procedure is never called
+	currency.LoadCurrencyItems(&currencyItems)
+	fmt.Printf("currencyItems: %v\n", currencyItems)
 
 	musicChoices := []rl.Music{common.Music.OpenWorld000, common.Music.OpenWorld001}
 	tempMusic := musicChoices[rl.GetRandomValue(0, int32(len(musicChoices)-1))]
@@ -560,7 +569,8 @@ func Update() {
 				accum += int(currencyItems[i].Wallet)
 			}
 			if temp != int32(accum) {
-				panic(fmt.Sprintln("xPlayer.CargoCapacity!=sum(currencyItems[:].Wallet)", temp, "!=", accum))
+				err := fmt.Sprintln("xPlayer.CargoCapacity!=sum(currencyItems[:].Wallet)", temp, "!=", accum)
+				slog.Warn(err)
 			}
 		}
 
@@ -571,9 +581,12 @@ func Update() {
 		hitScore = 0
 		currency.HandleWalletToBankTransaction(&currencyItems)
 		currency.SaveCurrencyItems(currencyItems) // (currencyType,Wallet,Bank,...)				250		bytes
-		saveGameLogicData()                       // (money,experience,hitScore,hitCount,...)	140		bytes
-		saveGameEntityData()                      // (player,camera,...)						705		bytes
-		saveGameAdditionalData()                  // (blocks,...)								82871	bytes
+		// saveGameLogicData()                       // (money,experience,hitScore,hitCount,...)	140		bytes
+		// saveGameEntityData()                      // (player,camera,...)						705		bytes
+		// saveGameAdditionalData()                  // (blocks,...)								82871	bytes
+		saveGameData(storage.LogicGDT)
+		saveGameData(storage.EntityGDT)
+		saveGameData(storage.AdditionalGDT)
 	}
 
 	// Press enter or tap to change to ending game screen
@@ -589,9 +602,12 @@ func Update() {
 		hitScore = 0
 		currency.HandleWalletToBankTransaction(&currencyItems)
 		currency.SaveCurrencyItems(currencyItems) // (currencyType,Wallet,Bank,...)				250		bytes
-		saveGameLogicData()                       // (money,experience,hitScore,hitCount,...)	140		bytes
-		saveGameEntityData()                      // (player,camera,...)						705		bytes
-		saveGameAdditionalData()                  // (blocks,...)								82871	bytes
+		// saveGameLogicData()                       // (money,experience,hitScore,hitCount,...)	140		bytes
+		// saveGameEntityData()                      // (player,camera,...)						705		bytes
+		// saveGameAdditionalData()                  // (blocks,...)								82871	bytes
+		saveGameData(storage.LogicGDT)
+		saveGameData(storage.EntityGDT)
+		saveGameData(storage.AdditionalGDT)
 	}
 
 	// NOTE: Move this in package player (if possible)
@@ -971,113 +987,80 @@ func drawOuterDrillroom() {
 	}
 }
 
-type GameEntityData struct {
-	LevelID int32 `json:"levelID"`
-
-	Camera                 rl.Camera3D   `json:"camera"`
-	FinishScreen           int           `json:"finishScreen"`
-	FramesCounter          int32         `json:"framesCounter"`
-	XFloor                 floor.Floor   `json:"xFloor"`
-	XPlayer                player.Player `json:"xPlayer"`
-	HasPlayerLeftDrillBase bool          `json:"hasPlayerLeftDrillBase"`
-}
-
-type GameAdditionalData struct {
-	LevelID int32
-
-	Blocks []block.Block `json:"blocks"`
-}
-
-type GameLogicData struct {
-	LevelID int32
-
-	Money      int32 `json:"money"`
-	Experience int32 `json:"experience"`
-	HitScore   int32 `json:"hitScore"`
-	HitCount   int32 `json:"hitCount"`
-}
-
 const (
 	entityGameDataVersionSuffix     = "entity"
 	additionalGameDataVersionSuffix = "additional"
 	logicGameDataVersionSuffix      = "logic"
 )
 
-func saveGameLogicData() {
-	const suffix = logicGameDataVersionSuffix
-	input := GameLogicData{
-		LevelID: levelID,
-
-		Money:      1000,
-		Experience: 0,
-		HitScore:   hitScore,
-		HitCount:   hitCount,
-	}
-	var b []byte
-	bb := bytes.NewBuffer(b)
-	{
+func saveGameData(dataType storage.GameDataType) {
+	dataTypeStr := storage.GameDataTypeToStringMap[dataType]
+	switch dataType {
+	case storage.EntityGDT:
+		input := storage.GameEntityData{
+			LevelID:                levelID,
+			Camera:                 camera,
+			FinishScreen:           finishScreen,
+			FramesCounter:          framesCounter,
+			XFloor:                 xFloor,
+			XPlayer:                xPlayer,
+			HasPlayerLeftDrillBase: hasPlayerLeftDrillBase,
+		}
+		var b []byte
+		bb := bytes.NewBuffer(b)
 		enc := json.NewEncoder(bb)
 		if err := enc.Encode(input); err != nil {
-			panic(fmt.Errorf("encode game %s level data: %w", suffix, err))
+			panic(fmt.Errorf("encode game %s level data: %w", dataTypeStr, err))
 		}
-	}
-	dataJSON := storage.GameStorageLevelJSON{
-		Version: "0.0.0" + "-" + suffix,
-		LevelID: levelID,
-		Data:    bb.Bytes(),
-	}
-	currency.SaveCurrencyItems(currencyItems)
-	storage.SaveStorageLevelEx(dataJSON, suffix)
-}
-func saveGameEntityData() {
-	const suffix = entityGameDataVersionSuffix
-	input := GameEntityData{
-		LevelID: levelID,
-
-		Camera:                 camera,
-		FinishScreen:           finishScreen,
-		FramesCounter:          framesCounter,
-		XFloor:                 xFloor,
-		XPlayer:                xPlayer,
-		HasPlayerLeftDrillBase: hasPlayerLeftDrillBase,
-	}
-	var b []byte
-	bb := bytes.NewBuffer(b)
-	{
+		dataJSON := storage.GameStorageLevelJSON{
+			Version: "0.0.0" + "-" + dataTypeStr,
+			LevelID: levelID,
+			Data:    bb.Bytes(),
+		}
+		storage.SaveStorageLevelEx(dataJSON, dataTypeStr)
+	case storage.AdditionalGDT:
+		input := storage.GameAdditionalData{
+			Blocks: xBlocks,
+		}
+		var b []byte
+		bb := bytes.NewBuffer(b)
 		enc := json.NewEncoder(bb)
 		if err := enc.Encode(input); err != nil {
-			panic(fmt.Errorf("encode game %s level data: %w", suffix, err))
+			panic(fmt.Errorf("encode game %s level data: %w", dataTypeStr, err))
 		}
-	}
-	dataJSON := storage.GameStorageLevelJSON{
-		Version: "0.0.0" + "-" + suffix,
-		LevelID: levelID,
-		Data:    bb.Bytes(),
-	}
-	storage.SaveStorageLevelEx(dataJSON, suffix)
-}
-func saveGameAdditionalData() {
-	const suffix = additionalGameDataVersionSuffix
-	input := GameAdditionalData{
-		Blocks: xBlocks,
-	}
-	var b []byte
-	bb := bytes.NewBuffer(b)
-	{
+		data := storage.GameStorageLevelJSON{
+			Version: "0.0.0" + "-" + dataTypeStr,
+			LevelID: levelID,
+			Data:    bb.Bytes(),
+		}
+		storage.SaveStorageLevelEx(data, dataTypeStr)
+	case storage.LogicGDT:
+		input := storage.GameLogicData{
+			LevelID:    levelID,
+			Money:      1000,
+			Experience: 0,
+			HitScore:   hitScore,
+			HitCount:   hitCount,
+		}
+		var b []byte
+		bb := bytes.NewBuffer(b)
 		enc := json.NewEncoder(bb)
 		if err := enc.Encode(input); err != nil {
-			panic(fmt.Errorf("encode game %s level data: %w", suffix, err))
+			panic(fmt.Errorf("encode game %s level data: %w", dataTypeStr, err))
 		}
+		dataJSON := storage.GameStorageLevelJSON{
+			Version: "0.0.0" + "-" + dataTypeStr,
+			LevelID: levelID,
+			Data:    bb.Bytes(),
+		}
+		currency.SaveCurrencyItems(currencyItems)
+		storage.SaveStorageLevelEx(dataJSON, dataTypeStr)
+	default:
+		panic(fmt.Sprintf("unexpected gameplay.GameDataType: %#v", dataType))
 	}
-	data := storage.GameStorageLevelJSON{
-		Version: "0.0.0" + "-" + suffix,
-		LevelID: levelID,
-		Data:    bb.Bytes(),
-	}
-	storage.SaveStorageLevelEx(data, suffix)
 }
 
-func loadGameLogicData() (*GameLogicData, error) {
+func loadGameLogicData() (*storage.GameLogicData, error) {
 	const suffix = logicGameDataVersionSuffix
 
 	cwd, err := os.Getwd()
@@ -1101,7 +1084,7 @@ func loadGameLogicData() (*GameLogicData, error) {
 
 	switch version := dest.Version; version {
 	case "0.0.0" + "-" + suffix:
-		var v *GameLogicData
+		var v *storage.GameLogicData
 		if err := json.Unmarshal(dest.Data, &v); err != nil {
 			return nil, err
 		}
@@ -1112,7 +1095,7 @@ func loadGameLogicData() (*GameLogicData, error) {
 	}
 
 }
-func loadGameEntityData() (*GameEntityData, error) {
+func loadGameEntityData() (*storage.GameEntityData, error) {
 	const suffix = entityGameDataVersionSuffix
 
 	cwd, err := os.Getwd()
@@ -1137,14 +1120,14 @@ func loadGameEntityData() (*GameEntityData, error) {
 
 	switch version := dest.Version; version {
 	case "0.0.0" + "-" + suffix:
-		var v *GameEntityData
+		var v *storage.GameEntityData
 		err := json.Unmarshal(dest.Data, &v)
 		return v, err
 	default:
 		return nil, fmt.Errorf("invalid game %s data version %q", suffix, version)
 	}
 }
-func loadAdditionalGameData() (*GameAdditionalData, error) {
+func loadAdditionalGameData() (*storage.GameAdditionalData, error) {
 	const suffix = additionalGameDataVersionSuffix
 
 	cwd, err := os.Getwd()
@@ -1168,7 +1151,7 @@ func loadAdditionalGameData() (*GameAdditionalData, error) {
 
 	switch version := dest.Version; version {
 	case "0.0.0" + "-" + suffix:
-		var v *GameAdditionalData
+		var v *storage.GameAdditionalData
 		if err := json.Unmarshal(dest.Data, &v); err != nil {
 			return nil, err
 		}

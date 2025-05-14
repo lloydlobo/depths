@@ -3,7 +3,9 @@
 package drillroom
 
 import (
+	"bytes"
 	"cmp"
+	"encoding/json"
 	"fmt"
 	"image/color"
 	"math"
@@ -16,6 +18,7 @@ import (
 	"example/depths/internal/floor"
 	"example/depths/internal/hud"
 	"example/depths/internal/player"
+	"example/depths/internal/storage"
 	"example/depths/internal/util/mathutil"
 	"example/depths/internal/wall"
 )
@@ -231,6 +234,11 @@ func Init() {
 
 	currency.LoadCurrencyItems(&currencyItems)
 	fmt.Printf("currencyItems: %v\n", currencyItems)
+
+	// Save once to default
+	// saveGameData(storage.LogicGDT)
+	// saveGameData(storage.EntityGDT)
+	// saveGameData(storage.AdditionalGDT)
 
 	// For camera thirdperson view
 	rl.DisableCursor()
@@ -454,6 +462,21 @@ func HandleTriggerOnPlayerPressF(i TriggerType) {
 			} else {
 				finishScreen = 2 // => gameplay (next-level)
 				common.SavedgameSlotData.UnlockedLevelIDS = append(common.SavedgameSlotData.UnlockedLevelIDS, uint8(levelID))
+
+				// Consume fuel / reset flag
+				isDrillRefueled_ThisStateShouldBeSavedToAFileWithLevelID = false
+
+				xPlayer.CargoCapacity = 0
+				hitScore = 0
+
+				currency.HandleWalletToBankTransaction(&currencyItems)
+				currency.SaveCurrencyItems(currencyItems) // (currencyType,Wallet,Bank,...)				250		bytes
+				// saveGameLogicData()                       // (money,experience,hitScore,hitCount,...)	140		bytes
+				// saveGameEntityData()                      // (player,camera,...)						705		bytes
+				// saveGameAdditionalData()                  // (blocks,...)								82871	bytes
+				saveGameData(storage.LogicGDT)
+				// saveGameData(storage.EntityGDT)
+				// saveGameData(storage.AdditionalGDT)
 			}
 		}
 
@@ -760,4 +783,72 @@ func Unload() {
 // NOTE: This is called each frame in main game loop
 func Finish() int {
 	return finishScreen
+}
+
+func saveGameData(dataType storage.GameDataType) {
+	dataTypeStr := storage.GameDataTypeToStringMap[dataType]
+	switch dataType {
+	case storage.EntityGDT:
+		input := storage.GameEntityData{
+			LevelID:                levelID,
+			Camera:                 camera,
+			FinishScreen:           finishScreen,
+			FramesCounter:          framesCounter,
+			// FIXME: Floor should be in additional GDT (SINCE FLOOR DIMENSIONS CHANGES BASED ON SCREEN)
+			XFloor:                 xFloor,
+			XPlayer:                xPlayer,
+			HasPlayerLeftDrillBase: hasPlayerLeftDrillBase,
+		}
+		var b []byte
+		bb := bytes.NewBuffer(b)
+		enc := json.NewEncoder(bb)
+		if err := enc.Encode(input); err != nil {
+			panic(fmt.Errorf("encode game %s level data: %w", dataTypeStr, err))
+		}
+		dataJSON := storage.GameStorageLevelJSON{
+			Version: "0.0.0" + "-" + dataTypeStr,
+			LevelID: levelID,
+			Data:    bb.Bytes(),
+		}
+		storage.SaveStorageLevelEx(dataJSON, dataTypeStr)
+	case storage.AdditionalGDT:
+		// input := storage.GameAdditionalData{
+		// 	Blocks: xBlocks,
+		// }
+		// var b []byte
+		// bb := bytes.NewBuffer(b)
+		// enc := json.NewEncoder(bb)
+		// if err := enc.Encode(input); err != nil {
+		// 	panic(fmt.Errorf("encode game %s level data: %w", dataTypeStr, err))
+		// }
+		// data := storage.GameStorageLevelJSON{
+		// 	Version: "0.0.0" + "-" + dataTypeStr,
+		// 	LevelID: levelID,
+		// 	Data:    bb.Bytes(),
+		// }
+		// storage.SaveStorageLevelEx(data, dataTypeStr)
+	case storage.LogicGDT:
+		input := storage.GameLogicData{
+			LevelID:    levelID,
+			Money:      1000,
+			Experience: 0,
+			HitScore:   hitScore,
+			HitCount:   hitCount,
+		}
+		var b []byte
+		bb := bytes.NewBuffer(b)
+		enc := json.NewEncoder(bb)
+		if err := enc.Encode(input); err != nil {
+			panic(fmt.Errorf("encode game %s level data: %w", dataTypeStr, err))
+		}
+		dataJSON := storage.GameStorageLevelJSON{
+			Version: "0.0.0" + "-" + dataTypeStr,
+			LevelID: levelID,
+			Data:    bb.Bytes(),
+		}
+		currency.SaveCurrencyItems(currencyItems)
+		storage.SaveStorageLevelEx(dataJSON, dataTypeStr)
+	default:
+		panic(fmt.Sprintf("unexpected gameplay.GameDataType: %#v", dataType))
+	}
 }

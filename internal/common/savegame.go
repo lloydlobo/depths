@@ -23,7 +23,6 @@ func LoadSavegameSlot(slotID uint8) (*SavedgameSlotDataType, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	saveDir := filepath.Join(cwd, "storage", "savegame", "slot")
 	fname := filepath.Join(saveDir, fmt.Sprintf("%d.json", slotID))
 
@@ -39,4 +38,30 @@ func LoadSavegameSlot(slotID uint8) (*SavedgameSlotDataType, error) {
 	}
 
 	return sg, nil
+}
+
+func SaveSavegameSlot(slotID uint8, data SavedgameSlotDataType) error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("get working directory: %w", err)
+	}
+	saveDir := filepath.Join(cwd, "storage", "savegame", "slot")
+
+	if err := os.MkdirAll(saveDir, 0755); err != nil {
+		return fmt.Errorf("mkdir %q: %w", saveDir, err)
+	}
+
+	fname := filepath.Join(saveDir, fmt.Sprintf("%d.json", slotID))
+
+	// name := filepath.Join(saveDir, "level_"+strconv.Itoa(int(l.LevelID))+".json")
+	f, err := os.Create(fname)
+	if err != nil {
+		return fmt.Errorf("create %q: %w", fname, err)
+	}
+	enc := json.NewEncoder(f)
+	if err := enc.Encode(data); err != nil {
+		return fmt.Errorf("encode level: %w", err)
+	}
+
+	return nil
 }
