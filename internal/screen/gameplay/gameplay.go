@@ -1,7 +1,5 @@
 package gameplay
 
-// FIXME - The cargo must match sum of all inventories in wallet
-
 // See fog shader: https://github.com/mohsengreen1388/raylib-go-utility/blob/main/utility/fog.go
 
 import (
@@ -35,6 +33,11 @@ import (
 	"example/depths/internal/wall"
 )
 
+const (
+	projectileRadiusSphere = .05 // Duplicated.. but maybe wrong values
+	projectileNPCDamage    = (1.0 / 3.0) + .01
+)
+
 var (
 	// Core data
 
@@ -55,14 +58,14 @@ var (
 )
 
 var (
+	fogDensity    = float32(0.15) / 7
+	fogDensityLoc int32
+)
+
+var (
 	playerRay              rl.Ray
 	playerRayCollision     rl.RayCollision
 	playerForwardAimEndPos rl.Vector3 // Aim start is player position
-)
-
-const (
-	projectileRadiusSphere = .05 // Duplicated.. but maybe wrong values
-	projectileNPCDamage    = (1.0 / 3.0) + .01
 )
 
 var (
@@ -86,22 +89,21 @@ var (
 	previousMusic rl.Music
 )
 
-var (
-	fogDensity    = float32(0.15) / 7
-	fogDensityLoc int32
-)
-
 func Init() {
+	// ========================================================================
 	framesCounter = 0
 	finishScreen = 0
 
+	// ========================================================================
 	xProjectileSOA.Reset()
 
+	// ========================================================================
 	levelID = int32(common.SavedgameSlotData.CurrentLevelID)
 	if levelID == 0 {
 		panic("unexpected levelID")
 	}
 
+	// ========================================================================
 	// PERF: See also https://github.com/raylib-extras/extras-c/blob/main/cameras/rlTPCamera/rlTPCamera.h
 	cameraPullbackDistance := float32(cmp.Or(5, 3))
 	camera = rl.Camera3D{
@@ -111,6 +113,22 @@ func Init() {
 		Fovy:       15. * float32(cmp.Or(4., 3., 2.)),
 		Projection: rl.CameraPerspective,
 	}
+
+	// ========================================================================
+	// Setup fog shader values
+
+	// Ambient light level
+	ambientLoc := rl.GetShaderLocation(common.Shader.Fog, "ambient")
+	rl.SetShaderValue(common.Shader.Fog, ambientLoc, []float32{0.2, 0.2, 0.2, 1.0}, rl.ShaderUniformVec4)
+
+	fogDensityLoc = rl.GetShaderLocation(common.Shader.Fog, "fogDensity")
+	rl.SetShaderValue(common.Shader.Fog, fogDensityLoc, []float32{fogDensity}, rl.ShaderUniformFloat)
+
+	// Using just 1 point lights
+	_ = light.CreateLight(light.PointLight, rl.NewVector3(0, 5, 0), rl.Vector3Zero(), rl.White, 1.0, common.Shader.Fog)
+
+	// ========================================================================
+	// Handle game state
 
 	loadNewEntityData := func() {
 		var mu sync.Mutex
@@ -142,32 +160,18 @@ func Init() {
 		hitScore = 0
 	}
 
-	// Ambient light level
-	ambientLoc := rl.GetShaderLocation(common.Shader.Fog, "ambient")
-	rl.SetShaderValue(common.Shader.Fog, ambientLoc, []float32{0.2, 0.2, 0.2, 1.0}, rl.ShaderUniformVec4)
-
-	fogDensityLoc = rl.GetShaderLocation(common.Shader.Fog, "fogDensity")
-	rl.SetShaderValue(common.Shader.Fog, fogDensityLoc, []float32{fogDensity}, rl.ShaderUniformFloat)
-
-	// NOTE: All models share the same shader
-	// modelA.Materials.Shader = shader
-	// modelB.Materials.Shader = shader
-	// modelC.Materials.Shader = shader
-
-	// Using just 1 point lights
-	// _ = light.CreateLight(light.PointLight, rl.NewVector3(0, 2, 6), rl.Vector3Zero(), rl.White, 1.0, common.Shader.Fog)
-	_ = light.CreateLight(light.PointLight, rl.NewVector3(0, 5, 0), rl.Vector3Zero(), rl.White, 1.0, common.Shader.Fog)
-
 	const isNewGame = false
 
 	xNPCSOA.Reset()
 
+	// ========================================================================
 	// Core resources
 	floor.SetupFloorModel()
 	wall.SetupWallModel(common.OpenWorldRoom)
 	player.SetupPlayerModel()                                                     // FIXME: in this func, use package common for models
 	player.ToggleEquippedModels([player.MaxBoneSockets]bool{false, false, false}) // Unequip hat sword shield
 
+	// ========================================================================
 	// Core data
 	if !isNewGame {
 		if data, err := loadGameEntityData(); err == nil { // OK
@@ -192,9 +196,11 @@ func Init() {
 		loadNewEntityData()
 	}
 
+	// ========================================================================
 	// Additional resources
 	block.SetupBlockModels()
 
+	// ========================================================================
 	// Additional data
 	if !isNewGame {
 		additionalGameData, err := loadAdditionalGameData()
@@ -216,6 +222,8 @@ func Init() {
 		loadNewAdditionalData()
 	}
 
+	// ========================================================================
+	// Logic Data
 	if !isNewGame {
 		if data, err := loadGameLogicData(); err == nil { // ok
 			money = data.Money
@@ -232,12 +240,14 @@ func Init() {
 		loadNewLogicData()
 	}
 
+	// ========================================================================
 	// LoadCurrencyItems manually.
 	// HACK: If no level json files are present, the loadGameLogicData fails
 	//       early. And so load currency items in the procedure is never called
 	currency.LoadCurrencyItems(&currencyItems)
-	fmt.Printf("currencyItems: %v\n", currencyItems)
 
+	// ========================================================================
+	// Handle music
 	musicChoices := []rl.Music{common.Music.OpenWorld000, common.Music.OpenWorld001}
 	tempMusic := musicChoices[rl.GetRandomValue(0, int32(len(musicChoices)-1))]
 	if tempMusic != currentMusic {
@@ -274,18 +284,14 @@ func Init() {
 		}
 	}
 
-	// TEMPORARY
-	if false {
-		slog.Warn("rl.PauseMusicStream(currentMusic)")
-		rl.PauseMusicStream(currentMusic)
-	}
-
 	rl.DisableCursor() // for ThirdPersonPerspective
 }
 
 func Update() {
 	rl.UpdateMusicStream(currentMusic)
 
+	// ========================================================================
+	// Update shaders
 	{
 		fogDensityValue := []float32{fogDensity}
 		rl.SetShaderValue(common.Shader.Fog, fogDensityLoc, fogDensityValue, rl.ShaderUniformFloat)
@@ -304,6 +310,8 @@ func Update() {
 
 	}
 
+	// ========================================================================
+	// NOTE: How far can this be moved down?
 	// See https://github.com/lloydlobo/tinycreatures/blob/210c4a44ed62fbb08b5f003872e046c99e288bb9/src/main.lua#L624
 	for i := range projectile.MaxProjectiles {
 		if xProjectileSOA.IsActive[i] {
@@ -325,6 +333,7 @@ func Update() {
 	}
 	xProjectileSOA.FireRateTimer -= rl.GetFrameTime()
 
+	// =======================================================================
 	// Save variables this frame
 	oldCam := camera
 	oldPlayer := xPlayer
@@ -333,6 +342,7 @@ func Update() {
 	xPlayer.Collisions = rl.Quaternion{}
 	xPlayer.IsPlayerWallCollision = false
 
+	// =======================================================================
 	// Update the game camera for this screen
 	rl.UpdateCamera(&camera, rl.CameraThirdPerson)
 
@@ -341,6 +351,7 @@ func Update() {
 		camera.Up = want
 	}
 
+	// ========================================================================
 	xPlayer.Update(camera, xFloor)
 
 	UpdatePlayerRay()
@@ -374,6 +385,7 @@ func Update() {
 		}
 	}
 
+	// ========================================================================
 	// Update block and player interaction/mining
 	// NOTE: Find out where player touched the box?
 	// WARN: Should we clear out player collision
@@ -395,6 +407,8 @@ func Update() {
 		}
 	}
 
+	// ========================================================================
+	// Update block and projectiles
 	for i := range projectile.MaxProjectiles {
 		if xProjectileSOA.IsActive[i] {
 			for j := range xBlocks {
@@ -427,6 +441,8 @@ func Update() {
 		}
 	}
 
+	// ========================================================================
+	// Update npc and projectiles
 	for i := range projectile.MaxProjectiles {
 		if xProjectileSOA.IsActive[i] {
 			for j := range npc.MaxNPC {
@@ -444,6 +460,7 @@ func Update() {
 		}
 	}
 
+	// ========================================================================
 	// UpdateNPCS
 
 	// Update player damage on collison with npc
@@ -499,7 +516,6 @@ func Update() {
 					dz := xNPCSOA.Size[i].Z * rl.GetFrameTime() * f
 					xNPCSOA.Position[i].X *= rl.Lerp(maxDist, maxDist+dx, 0.33)
 					xNPCSOA.Position[i].Z *= rl.Lerp(maxDist, maxDist+dz, 0.33)
-
 				default:
 					panic(fmt.Sprintf("unexpected npc.NPCType: %#v", typ))
 				}
@@ -569,6 +585,7 @@ func Update() {
 		}
 	}
 
+	// ========================================================================
 	// Update player exter/exit drillroom screen
 	var canSwitchToDrillRoom bool
 	isPlayerInsideBase := rl.CheckCollisionBoxes(xPlayer.BoundingBox, common.GetBoundingBoxPositionSizeV(xFloor.Position, rl.NewVector3(3, 2, 3)))
@@ -578,7 +595,6 @@ func Update() {
 		player.SetColor(rl.Blue)
 	} else if isPlayerEnteringBase && !isPlayerInsideBase {
 		player.SetColor(rl.Green)
-
 		// STEP [2] ─ Wait a frame before switching // Avoid glitches (also quick dodge to not-exit)
 		if hasPlayerLeftDrillBase {
 			hasPlayerLeftDrillBase = false
@@ -588,7 +604,6 @@ func Update() {
 		player.SetColor(rl.Red)
 	} else { // If outside bounds check
 		player.SetColor(rl.RayWhite)
-
 		// Q: How to check non-binary logic.. more options.. unlike drill room
 		// A: bitsets?
 		if !hasPlayerLeftDrillBase {
@@ -650,6 +665,7 @@ func Update() {
 		saveGameData(storage.AdditionalGDT)
 	}
 
+	// ========================================================================
 	// NOTE: Move this in package player (if possible)
 	if rl.IsKeyDown(rl.KeyW) || rl.IsKeyDown(rl.KeyA) || rl.IsKeyDown(rl.KeyS) || rl.IsKeyDown(rl.KeyD) {
 		const fps = 60.0
@@ -663,6 +679,7 @@ func Update() {
 		}
 	}
 
+	// ========================================================================
 	// Increment gameplay frames counter
 	framesCounter++
 }
@@ -673,6 +690,7 @@ func Draw() {
 	screenW := int32(rl.GetScreenWidth())
 	screenH := int32(rl.GetScreenHeight())
 
+	// ========================================================================
 	// 3D World
 	rl.BeginMode3D(camera)
 
@@ -682,14 +700,10 @@ func Draw() {
 
 	wall.DrawBatch(common.OpenWorldRoom, xFloor.Position, xFloor.Size, common.Vector3One)
 
-	drawOuterDrillroom()
+	DrawOuterDrillroom()
 
 	for i := range xBlocks {
 		xBlocks[i].Draw()
-
-		if false { // DEBUG
-			rl.DrawBoundingBox(xBlocks[i].GetBlockBoundingBox(), rl.Fade(rl.Gold, .3))
-		}
 	}
 
 	xPlayer.Draw()
@@ -697,113 +711,26 @@ func Draw() {
 	DrawProjectiles()
 
 	// ‥ Draw player to camera forward projected direction ray & area blob/blurb
-	// TEMPORARY EXAMPLE TO SHOW RAY COLLISIONS
 	rayTargetBoundingBox := common.GetBoundingBoxPositionSizeV(rl.NewVector3(0, 0, 0), rl.NewVector3(5, 5, 5)) // TEMPORARY
-	playerRayCollision = rl.GetRayCollisionBox(playerRay, rayTargetBoundingBox)                                // Update
-
-	if playerRayCollision.Hit {
-		startPos := rl.Vector3{X: playerRay.Position.X, Y: playerRay.Position.Y + xPlayer.Size.Y/4, Z: playerRay.Position.Z}
-		endPos := playerRayCollision.Point
-		rl.DrawLine3D(startPos, endPos, rl.SkyBlue)
-	}
-
-	if false {
-		rl.DrawBoundingBox(rayTargetBoundingBox, rl.Blue)
-	}
+	playerRayCollision = rl.GetRayCollisionBox(playerRay, rayTargetBoundingBox)                                // Update reticle ray
 
 	for i := range npc.MaxNPC {
-		if !xNPCSOA.IsActive[i] {
-			continue
-		}
-
-		startPos := rl.Vector3Add(xNPCSOA.Position[i], rl.NewVector3(0., -xNPCSOA.Size[i].Y/2, 0.)) // bottom
-		endPos := rl.Vector3Add(xNPCSOA.Position[i], rl.NewVector3(0., xNPCSOA.Size[i].Y/2, 0.))    // top
-
-		common.DrawXYZOrbitV(startPos, .1)            // bottom
-		common.DrawXYZOrbitV(xNPCSOA.Position[i], .2) // center
-		common.DrawXYZOrbitV(endPos, .1)              // top
-
-		const radius = .25
-		startPos.Y += radius
-		endPos.Y -= radius
-
-		model := common.ModelDungeonKit.OBJ.Barrel
-
-		relativeModelPosition := xNPCSOA.Position[i]
-		relativeModelPosition.Y -= xNPCSOA.Size[i].Y / 2
-
-		const modelFloatInAirOffsetY = .0625
-		relativeModelPosition.Y += modelFloatInAirOffsetY
-
-		rl.DrawModelEx(model, relativeModelPosition, common.YAxis, 0, common.Vector3One, rl.Green)
-
-		if false {
-			rl.DrawBoundingBox(xNPCSOA.BoundingBox[i], rl.Fade(xNPCSOA.Color[i], .3))
-		}
-		if false {
-			rings := int32(4)
-			slices := int32(4)
-			if framesCounter%4 == 0 {
-				rings = int32(rl.Lerp(float32(rings), float32(rl.GetRandomValue(rings+1, 24)), .1))
-				slices = int32(rl.Lerp(float32(slices), float32(rl.GetRandomValue(slices+1, 24)), .1))
-			}
-			rl.DrawSphereWires(xNPCSOA.Position[i], radius, rings, slices, rl.Red)
+		if xNPCSOA.IsActive[i] {
+			const radius = .25
+			model := common.ModelDungeonKit.OBJ.Barrel
+			relativeModelPosition := xNPCSOA.Position[i]
+			relativeModelPosition.Y -= xNPCSOA.Size[i].Y / 2
+			const modelFloatInAirOffsetY = .0625
+			relativeModelPosition.Y += modelFloatInAirOffsetY
+			rl.DrawModelEx(model, relativeModelPosition, common.YAxis, 0, common.Vector3One, rl.White)
 		}
 	}
 
 	rl.EndMode3D()
 
-	// =======================================================================
+	// ========================================================================
 	// 2D World
-
-	// Draw ray reticle on any 2D open space
-	if playerRayCollision.Hit {
-		rl.DrawCircleV(rl.GetWorldToScreen(playerRayCollision.Point, camera), 4, rl.Fade(rl.Gold, .3))
-	} else {
-		pos := rl.GetWorldToScreen(playerForwardAimEndPos, camera) // Draw a diamond
-		rl.DrawRectanglePro(rl.NewRectangle(pos.X, pos.Y, 8, 8), rl.NewVector2(0, 0), 45, rl.Fade(rl.White, .1))
-	}
-
-	// Draw shooting/aiming ray reticle on block
-	if closestBlockIndex := GetClosestMiningBlockIndexOnRayCollision(); closestBlockIndex > -1 && closestBlockIndex < len(xBlocks) {
-		collision := rl.GetRayCollisionBox(playerRay, xBlocks[closestBlockIndex].GetBlockBoundingBox())
-		pos := rl.GetWorldToScreen(collision.Point, camera) // Draw a diamond
-		rl.DrawRectanglePro(rl.NewRectangle(pos.X, pos.Y, 3, 3), rl.NewVector2(0, 0), 45, rl.Fade(rl.Green, .3))
-	}
-
-	// Draw depth meter
-	{
-		const gapX = 10
-		var (
-			totalLevels = len(common.SavedgameSlotData.AllLevelIDS)
-			isShowText  bool
-		)
-		if rl.IsKeyDown(rl.KeyApostrophe) {
-			isShowText = true
-		}
-		gapY := int32(mathutil.CeilF(float32(screenH) / float32(totalLevels))) // parts
-		rl.DrawLine(screenW-gapX, gapY/2, screenW-gapX, screenH-gapY/2, rl.Gray)
-		for i := range int32(totalLevels) {
-			x := screenW - gapX
-			y := gapY/2 + i*gapY
-			rl.DrawLine(x, y, x-gapX/2, y, rl.Gray)
-			radius := float32(6)
-			if (i + 1) == levelID {
-				var col color.RGBA
-				if isShowText {
-					col = rl.Red
-				} else {
-					col = rl.Orange
-				}
-				rl.DrawCircle(x-int32(radius*2.5), y, radius, col)
-			}
-			if isShowText {
-				rl.DrawTextEx(common.Font.SourGummy, fmt.Sprintf("%.2d", i+1),
-					rl.Vector2{X: float32(x) - float32(gapX)*2 - radius*2, Y: float32(y) - 5},
-					float32(common.Font.SourGummy.BaseSize), 1.0, rl.LightGray)
-			}
-		}
-	}
+	DrawDepthMeter(screenH, screenW)
 
 	hud.DrawHUD(xPlayer, currencyItems)
 
@@ -813,13 +740,47 @@ func Draw() {
 		rl.DrawTextEx(common.Font.RaylibDefault, fmt.Sprintf("%.6f", rl.GetFrameTime()), rl.NewVector2(10, float32(screenH)-35-20*1), fontSize, 1, rl.Lime)
 		rl.DrawTextEx(common.Font.RaylibDefault, fmt.Sprintf("%.3d", framesCounter), rl.NewVector2(10, float32(screenH)-35-20*2), fontSize, 1, rl.Lime)
 	}
-	if true { // Debug logic stats
+	if false { // Debug logic stats
 		text := fmt.Sprintf("money: %.3d\nexperience: %.3d\n", money, experience)
-		rl.DrawTextEx(common.Font.SourGummy, text,
+		rl.DrawTextEx(common.Font.RaylibDefault, text,
 			rl.Vector2{X: float32(screenW-10) - float32(rl.MeasureText(text, 10)), Y: float32(screenH) - 40},
-			float32(common.Font.SourGummy.BaseSize), 1.0, rl.Green)
+			float32(common.Font.RaylibDefault.BaseSize), 1.0, rl.Green)
 	}
 
+}
+
+// DrawDepthMeter draw depth meter indicating current level depth on a scale from first to last level.
+func DrawDepthMeter(screenH int32, screenW int32) {
+	const gapX = 10
+	var (
+		totalLevels = len(common.SavedgameSlotData.AllLevelIDS)
+		isShowText  bool
+	)
+	if rl.IsKeyDown(rl.KeyApostrophe) {
+		isShowText = true
+	}
+	gapY := int32(mathutil.CeilF(float32(screenH) / float32(totalLevels))) // parts
+	rl.DrawLine(screenW-gapX, gapY/2, screenW-gapX, screenH-gapY/2, rl.Gray)
+	for i := range int32(totalLevels) {
+		x := screenW - gapX
+		y := gapY/2 + i*gapY
+		rl.DrawLine(x, y, x-gapX/2, y, rl.Gray)
+		radius := float32(6)
+		if (i + 1) == levelID {
+			var col color.RGBA
+			if isShowText {
+				col = rl.Red
+			} else {
+				col = rl.Orange
+			}
+			rl.DrawCircle(x-int32(radius*2.5), y, radius, col)
+		}
+		if isShowText {
+			rl.DrawTextEx(common.Font.SourGummy, fmt.Sprintf("%.2d", i+1),
+				rl.Vector2{X: float32(x) - float32(gapX)*2 - radius*2, Y: float32(y) - 5},
+				float32(common.Font.SourGummy.BaseSize), 1.0, rl.LightGray)
+		}
+	}
 }
 
 func Unload() {
@@ -839,6 +800,8 @@ func Finish() int {
 // Update score
 // Play mining impacts with variations (s1:kick + s2:snare + s3:hollow-thock)
 func handleBlockOnMining(b *block.Block) {
+	// ========================================================================
+	// Handle each block state
 	if b.State == block.DirtBlockState { // First state
 		soundName := "handleSmallLeather"
 		if rl.GetRandomValue(0, 1) == 0 {
@@ -873,33 +836,34 @@ func handleBlockOnMining(b *block.Block) {
 		rl.PlaySound(s3)
 	}
 
+	// ========================================================================
 	// Update stats
 	hitCount++
 
-	{
-		const finalState = (block.MaxBlockState - 1)
-		const cargoCapacityUnitPerIncrement = 2
-
-		canIncrementScore := b.State == finalState-1
-
-		if canIncrementScore {
-			hitScore += cargoCapacityUnitPerIncrement
-			var currencyMined currency.CurrencyType
-			currencyMined = currency.Copper
-			currencyItems[currencyMined].Wallet += cargoCapacityUnitPerIncrement
-			xPlayer.CargoCapacity = min(xPlayer.MaxCargoCapacity, xPlayer.CargoCapacity+cargoCapacityUnitPerIncrement)
-		}
-		if canIncrementScore { // FIXME: Record.. hitCount and hitScore to save game.. and load and update directly
-			if hitCount/hitScore != int32(finalState) {
-				msg := fmt.Sprintf("expect for %d hits, score to incrementby 1. (except if counter started from an already semi-mined block)", finalState)
-				if isEnablePerfectionist := false; isEnablePerfectionist {
-					panic(msg)
-				}
-				slog.Warn(msg)
+	// ========================================================================
+	// Update side-effects from mining
+	const finalState = (block.MaxBlockState - 1)
+	const cargoCapacityUnitPerIncrement = 2
+	canIncrementScore := b.State == finalState-1
+	if canIncrementScore {
+		hitScore += cargoCapacityUnitPerIncrement
+		var currencyMined currency.CurrencyType
+		currencyMined = currency.Copper
+		currencyItems[currencyMined].Wallet += cargoCapacityUnitPerIncrement
+		xPlayer.CargoCapacity = min(xPlayer.MaxCargoCapacity, xPlayer.CargoCapacity+cargoCapacityUnitPerIncrement)
+	}
+	// FIXME: Record.. hitCount and hitScore to save game.. and load and update directly
+	if canIncrementScore {
+		if hitCount/hitScore != int32(finalState) {
+			msg := fmt.Sprintf("expect for %d hits, score to incrementby 1. (except if counter started from an already semi-mined block)", finalState)
+			if isEnablePerfectionist := false; isEnablePerfectionist {
+				panic(msg)
 			}
+			slog.Warn(msg)
 		}
 	}
 
+	// ========================================================================
 	// Increment state on successful mining action
 	b.NextState()
 }
@@ -916,10 +880,8 @@ func DrawProjectiles() {
 		const maxTrailLength = 3. // Projectile trail
 		const maxTrailThick = .08 // Radius
 		const radius0 = maxTrailThick * common.InvPhi
-
 		// rl.DrawSphere(projectiles.Position[i], radius0, col) // Projectile Head
 		rl.DrawSphereWires(xProjectileSOA.Position[i], radius0, 16, 16, rl.Fade(col, .1))
-
 		timeFactor := (xProjectileSOA.TimeLeft[i] / projectile.MaxTimeLeft)
 
 		angle := xProjectileSOA.Rotation[i] * rl.Deg2rad
@@ -953,48 +915,54 @@ func DrawProjectiles() {
 //
 // See https://github.com/raylib-extras/examples-c/blob/6ed2ac244d961239b1695d0b6a729f6fd7bc209b/ray2d_rect_intersection/ray2d_rect_intersection.c
 func UpdatePlayerRay() {
+	forwardMagnitude := rl.Vector3{X: 5., Y: .125 / 2., Z: 5.} // HACK: Estimated projection
 	cameraForward := rl.GetCameraForward(&camera)
-	playerForwardEstimateMagnitude := rl.Vector3{X: 5., Y: .125 / 2., Z: 5.} // HACK: Projection
-	playerReticlePosition := rl.Vector3Multiply(cameraForward, playerForwardEstimateMagnitude)
-	playerRay = rl.NewRay(rl.Vector3{X: xPlayer.Position.X, Y: xPlayer.Position.Y /* + xPlayer.Size.Y/4 */, Z: xPlayer.Position.Z}, playerReticlePosition)
-	playerForwardAimEndPos = rl.Vector3Add(xPlayer.Position, playerReticlePosition)
+	reticlePos := rl.Vector3Multiply(cameraForward, forwardMagnitude)
+	playerRay = rl.NewRay(
+		rl.Vector3{
+			X: xPlayer.Position.X,
+			Y: xPlayer.Position.Y, /* + xPlayer.Size.Y/4 */
+			Z: xPlayer.Position.Z,
+		},
+		reticlePos,
+	)
+	playerForwardAimEndPos = rl.Vector3Add(xPlayer.Position, reticlePos)
 }
 
 func GetClosestMiningBlockIndexOnRayCollision() int {
 	var (
-		index           = -1
-		minimumDistance = float32(math.MaxFloat32)
+		index   = -1
+		minDist = float32(math.MaxFloat32)
 	)
 	for i := range xBlocks {
-		if !xBlocks[i].IsActive || xBlocks[i].State >= (block.MaxBlockState-1) { // for max==4 -> where last is 3 , only allow 0,1,2
-			continue
-		}
-		if rc := rl.GetRayCollisionBox(playerRay, xBlocks[i].GetBlockBoundingBox()); rc.Hit {
-			temp := minimumDistance
-			minimumDistance = min(rc.Distance, minimumDistance)
-
-			if minimumDistance < temp {
-				index = i
+		if xBlocks[i].IsActive && xBlocks[i].State < (block.MaxBlockState-1) {
+			if rc := rl.GetRayCollisionBox(playerRay, xBlocks[i].GetBlockBoundingBox()); rc.Hit {
+				temp := minDist
+				minDist = min(rc.Distance, minDist)
+				if minDist < temp {
+					index = i
+				}
 			}
-		}
+		} // for max==4 -> where last is 3 , only allow 0,1,2
+
 	}
 	return index
 }
 
-// // Assign texture to default model material
-// modelA.Materials.GetMap(rl.MapDiffuse).Texture = texture
-// modelB.Materials.GetMap(rl.MapDiffuse).Texture = texture
-// modelC.Materials.GetMap(rl.MapDiffuse).Texture = texture
-func drawOuterDrillroom() {
+func DrawOuterDrillroom() {
 	const maxDrillWallIndex = 2
 	wallScale := rl.NewVector3(1., 1., 1.)
+
 	for i := float32(-maxDrillWallIndex + 1); i < maxDrillWallIndex; i++ {
-		var model rl.Model
-		var y float32
+		var (
+			model rl.Model
+			y     float32
+		)
+
 		model = common.ModelDungeonKit.OBJ.Column
-		// model.Materials.GetMap(rl.MapDiffuse).Texture = common.Texture.CubicmapAtlas
 		model.Materials.GetMap(rl.MapDiffuse).Texture = common.ModelDungeonKit.OBJ.Colormap
 		model.Materials.Shader = common.Shader.Fog
+
 		y = 0.
 		rl.DrawModelEx(model, rl.NewVector3(i, y, maxDrillWallIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
 		rl.DrawModelEx(model, rl.NewVector3(i, y, -maxDrillWallIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
@@ -1003,6 +971,7 @@ func drawOuterDrillroom() {
 		model = common.ModelDungeonKit.OBJ.Wall
 		model.Materials.GetMap(rl.MapDiffuse).Texture = common.ModelDungeonKit.OBJ.Colormap
 		model.Materials.Shader = common.Shader.Fog
+
 		y = 1. + .125*.5
 		rl.DrawModelEx(model, rl.NewVector3(i, y, maxDrillWallIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
 		rl.DrawModelEx(model, rl.NewVector3(i, y, -maxDrillWallIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
@@ -1011,31 +980,12 @@ func drawOuterDrillroom() {
 		model = common.ModelDungeonKit.OBJ.Column
 		model.Materials.GetMap(rl.MapDiffuse).Texture = common.ModelDungeonKit.OBJ.Colormap
 		model.Materials.Shader = common.Shader.Fog
+
 		y = 2. + .125*.5
 		rl.DrawModelEx(model, rl.NewVector3(i, y, maxDrillWallIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
 		rl.DrawModelEx(model, rl.NewVector3(i, y, -maxDrillWallIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
 		rl.DrawModelEx(model, rl.NewVector3(maxDrillWallIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
 		rl.DrawModelEx(model, rl.NewVector3(-maxDrillWallIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
-	}
-
-	// Draw glass wall shell
-	if false {
-		// Outer drill room walls
-		const side = maxDrillWallIndex*2 + 1.0/2 + 0.001
-		outerSize := rl.NewVector3(side, side, side)
-		if true {
-			pos := xFloor.Position
-			pos.Y += outerSize.Y / 2
-			rl.DrawCubeV(pos, outerSize, rl.Fade(rl.DarkGray, 0.25))
-			rl.DrawCubeWiresV(pos, outerSize, rl.Fade(rl.Gray, 0.25))
-		}
-		{
-			startPos := rl.NewVector3(xFloor.Position.X, xFloor.Position.Y+outerSize.Y, xFloor.Position.Z)
-			endPos := startPos
-			endPos.Y += (outerSize.Y / 2) * common.InvPhi
-			startPos.Y -= endPos.Y / 2
-			rl.DrawCylinderEx(startPos, endPos, side/2, (side/1)*common.InvPhi, 12, rl.Fade(rl.DarkGray, 0.3)) // Draw a cylinder with base at startPos and top at endPos
-		}
 	}
 }
 
