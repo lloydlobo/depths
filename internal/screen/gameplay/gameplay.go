@@ -320,10 +320,12 @@ func Update() {
 		// modelA.Transform = rl.MatrixMultiply(modelA.Transform, rl.MatrixRotateX(0.012))
 
 		// Update the light shader with the camera view position
+		cameraPosValue := []float32{camera.Position.X}                                      // FIX: In original example
+		cameraPosValue = []float32{camera.Position.X, camera.Position.Y, camera.Position.Z} // FIXES: Satisfies rl.ShaderUniformDataType
 		rl.SetShaderValue(
 			common.Shader.Fog,
 			common.Shader.Fog.GetLocation(rl.ShaderLocVectorView),
-			[]float32{camera.Position.X},
+			cameraPosValue,
 			rl.ShaderUniformVec3,
 		)
 
