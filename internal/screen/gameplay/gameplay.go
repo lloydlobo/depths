@@ -21,6 +21,7 @@ import (
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
+	"example/depths/internal/archive/light"
 	"example/depths/internal/block"
 	"example/depths/internal/common"
 	"example/depths/internal/currency"
@@ -85,6 +86,11 @@ var (
 	previousMusic rl.Music
 )
 
+var (
+	fogDensity    = float32(0.15) / 7
+	fogDensityLoc int32
+)
+
 func Init() {
 	framesCounter = 0
 	finishScreen = 0
@@ -135,6 +141,22 @@ func Init() {
 		hitCount = 0
 		hitScore = 0
 	}
+
+	// Ambient light level
+	ambientLoc := rl.GetShaderLocation(common.Shader.Fog, "ambient")
+	rl.SetShaderValue(common.Shader.Fog, ambientLoc, []float32{0.2, 0.2, 0.2, 1.0}, rl.ShaderUniformVec4)
+
+	fogDensityLoc = rl.GetShaderLocation(common.Shader.Fog, "fogDensity")
+	rl.SetShaderValue(common.Shader.Fog, fogDensityLoc, []float32{fogDensity}, rl.ShaderUniformFloat)
+
+	// NOTE: All models share the same shader
+	// modelA.Materials.Shader = shader
+	// modelB.Materials.Shader = shader
+	// modelC.Materials.Shader = shader
+
+	// Using just 1 point lights
+	// _ = light.CreateLight(light.PointLight, rl.NewVector3(0, 2, 6), rl.Vector3Zero(), rl.White, 1.0, common.Shader.Fog)
+	_ = light.CreateLight(light.PointLight, rl.NewVector3(0, 5, 0), rl.Vector3Zero(), rl.White, 1.0, common.Shader.Fog)
 
 	const isNewGame = false
 
@@ -263,6 +285,24 @@ func Init() {
 
 func Update() {
 	rl.UpdateMusicStream(currentMusic)
+
+	{
+		fogDensityValue := []float32{fogDensity}
+		rl.SetShaderValue(common.Shader.Fog, fogDensityLoc, fogDensityValue, rl.ShaderUniformFloat)
+
+		// Rotate the torus
+		// modelA.Transform = rl.MatrixMultiply(modelA.Transform, rl.MatrixRotateX(-0.025))
+		// modelA.Transform = rl.MatrixMultiply(modelA.Transform, rl.MatrixRotateX(0.012))
+
+		// Update the light shader with the camera view position
+		rl.SetShaderValue(
+			common.Shader.Fog,
+			common.Shader.Fog.GetLocation(rl.ShaderLocVectorView),
+			[]float32{camera.Position.X},
+			rl.ShaderUniformVec3,
+		)
+
+	}
 
 	// See https://github.com/lloydlobo/tinycreatures/blob/210c4a44ed62fbb08b5f003872e046c99e288bb9/src/main.lua#L624
 	for i := range projectile.MaxProjectiles {
@@ -636,7 +676,7 @@ func Draw() {
 	// 3D World
 	rl.BeginMode3D(camera)
 
-	rl.ClearBackground(rl.ColorBrightness(BabyBlue, -.85))
+	rl.ClearBackground(cmp.Or(rl.ColorBrightness(rl.Gray, -0.4), rl.ColorBrightness(BabyBlue, -.85), rl.DarkGray))
 
 	xFloor.Draw()
 
@@ -941,6 +981,10 @@ func GetClosestMiningBlockIndexOnRayCollision() int {
 	return index
 }
 
+// // Assign texture to default model material
+// modelA.Materials.GetMap(rl.MapDiffuse).Texture = texture
+// modelB.Materials.GetMap(rl.MapDiffuse).Texture = texture
+// modelC.Materials.GetMap(rl.MapDiffuse).Texture = texture
 func drawOuterDrillroom() {
 	const maxDrillWallIndex = 2
 	wallScale := rl.NewVector3(1., 1., 1.)
@@ -948,18 +992,25 @@ func drawOuterDrillroom() {
 		var model rl.Model
 		var y float32
 		model = common.ModelDungeonKit.OBJ.Column
+		// model.Materials.GetMap(rl.MapDiffuse).Texture = common.Texture.CubicmapAtlas
+		model.Materials.GetMap(rl.MapDiffuse).Texture = common.ModelDungeonKit.OBJ.Colormap
+		model.Materials.Shader = common.Shader.Fog
 		y = 0.
 		rl.DrawModelEx(model, rl.NewVector3(i, y, maxDrillWallIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
 		rl.DrawModelEx(model, rl.NewVector3(i, y, -maxDrillWallIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
 		rl.DrawModelEx(model, rl.NewVector3(maxDrillWallIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
 		rl.DrawModelEx(model, rl.NewVector3(-maxDrillWallIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
 		model = common.ModelDungeonKit.OBJ.Wall
+		model.Materials.GetMap(rl.MapDiffuse).Texture = common.ModelDungeonKit.OBJ.Colormap
+		model.Materials.Shader = common.Shader.Fog
 		y = 1. + .125*.5
 		rl.DrawModelEx(model, rl.NewVector3(i, y, maxDrillWallIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
 		rl.DrawModelEx(model, rl.NewVector3(i, y, -maxDrillWallIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
 		rl.DrawModelEx(model, rl.NewVector3(maxDrillWallIndex, y, i), common.YAxis, 90., wallScale, rl.White)   // +X +-Z
 		rl.DrawModelEx(model, rl.NewVector3(-maxDrillWallIndex, y, i), common.YAxis, -90., wallScale, rl.White) // -X +-Z
 		model = common.ModelDungeonKit.OBJ.Column
+		model.Materials.GetMap(rl.MapDiffuse).Texture = common.ModelDungeonKit.OBJ.Colormap
+		model.Materials.Shader = common.Shader.Fog
 		y = 2. + .125*.5
 		rl.DrawModelEx(model, rl.NewVector3(i, y, maxDrillWallIndex), common.YAxis, 0., wallScale, rl.White)    // +-X +Z
 		rl.DrawModelEx(model, rl.NewVector3(i, y, -maxDrillWallIndex), common.YAxis, 180., wallScale, rl.White) // +-X -Z
@@ -968,22 +1019,23 @@ func drawOuterDrillroom() {
 	}
 
 	// Draw glass wall shell
-
-	// Outer drill room walls
-	const side = maxDrillWallIndex*2 + 1.0/2 + 0.001
-	outerSize := rl.NewVector3(side, side, side)
-	if true {
-		pos := xFloor.Position
-		pos.Y += outerSize.Y / 2
-		rl.DrawCubeV(pos, outerSize, rl.Fade(rl.DarkGray, 0.25))
-		rl.DrawCubeWiresV(pos, outerSize, rl.Fade(rl.Gray, 0.25))
-	}
-	{
-		startPos := rl.NewVector3(xFloor.Position.X, xFloor.Position.Y+outerSize.Y, xFloor.Position.Z)
-		endPos := startPos
-		endPos.Y += (outerSize.Y / 2) * common.InvPhi
-		startPos.Y -= endPos.Y / 2
-		rl.DrawCylinderEx(startPos, endPos, side/2, (side/1)*common.InvPhi, 12, rl.Fade(rl.DarkGray, 0.3)) // Draw a cylinder with base at startPos and top at endPos
+	if false {
+		// Outer drill room walls
+		const side = maxDrillWallIndex*2 + 1.0/2 + 0.001
+		outerSize := rl.NewVector3(side, side, side)
+		if true {
+			pos := xFloor.Position
+			pos.Y += outerSize.Y / 2
+			rl.DrawCubeV(pos, outerSize, rl.Fade(rl.DarkGray, 0.25))
+			rl.DrawCubeWiresV(pos, outerSize, rl.Fade(rl.Gray, 0.25))
+		}
+		{
+			startPos := rl.NewVector3(xFloor.Position.X, xFloor.Position.Y+outerSize.Y, xFloor.Position.Z)
+			endPos := startPos
+			endPos.Y += (outerSize.Y / 2) * common.InvPhi
+			startPos.Y -= endPos.Y / 2
+			rl.DrawCylinderEx(startPos, endPos, side/2, (side/1)*common.InvPhi, 12, rl.Fade(rl.DarkGray, 0.3)) // Draw a cylinder with base at startPos and top at endPos
+		}
 	}
 }
 

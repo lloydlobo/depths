@@ -41,6 +41,9 @@ func SetupWallModel(room common.RoomType) {
 	default:
 		panic(fmt.Sprintf("unexpected common.RoomType: %#v", room))
 	}
+
+	wallModel.Materials.GetMap(rl.MapDiffuse).Texture = common.ModelDungeonKit.OBJ.Colormap
+	wallModel.Materials.Shader = common.Shader.Fog
 }
 
 // Use walls to avoid infinite-map generation

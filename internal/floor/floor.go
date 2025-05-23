@@ -45,6 +45,9 @@ func SetupFloorModel() {
 
 	floorTileLargeModel = common.ModelDungeonKit.OBJ.Floor // Floor,FloorDetail
 	rl.SetMaterialTexture(floorTileLargeModel.Materials, rl.MapDiffuse, common.ModelDungeonKit.OBJ.Colormap)
+
+	floorTileLargeModel.Materials.GetMap(rl.MapDiffuse).Texture = common.ModelDungeonKit.OBJ.Colormap
+	floorTileLargeModel.Materials.Shader = common.Shader.Fog
 }
 
 func (fl Floor) Draw() {

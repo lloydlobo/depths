@@ -178,6 +178,14 @@ func SetupPlayerModel() {
 		// boneSocketIndex => initial [-1,-1,-1] => want [3,11,10]
 		panic(fmt.Sprintln("NewPlayer: boneSocketIndex", "got", got, "want", want))
 	}
+
+	for i := range MaxBoneSockets {
+		// equippedModels[i].Materials.GetMap(rl.MapDiffuse).Texture = common.ModelDungeonKit.OBJ.Colormap
+		equippedModels[i].Materials.Shader = common.Shader.Fog
+	}
+
+	// characterModel.Materials.GetMap(rl.MapDiffuse).Texture = common.ModelDungeonKit.OBJ.Colormap
+	characterModel.Materials.Shader = common.Shader.Fog
 }
 
 func (p *Player) Update(camera rl.Camera3D, flr floor.Floor) {
