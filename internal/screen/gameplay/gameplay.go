@@ -13,7 +13,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"strconv"
 
 	"sync"
 
@@ -174,20 +173,27 @@ func Init() {
 	// ========================================================================
 	// Core data
 	if !isNewGame {
-		if data, err := loadGameEntityData(); err == nil { // OK
-			finishScreen = 0
-			framesCounter = 0
-			camera = data.Camera
-			xFloor = data.XFloor
-			xPlayer = data.XPlayer
-			if true {
-				hasPlayerLeftDrillBase = data.HasPlayerLeftDrillBase // If save game when far from drill and exit -> this will tell the reality
-			} else {
-				hasPlayerLeftDrillBase = false // How do we know?
+		dataI, err := loadGameData(storage.EntityGDT)
+		if dataI != nil {
+			data := dataI.(*storage.GameEntityData)
+			if err == nil { // OK
+				finishScreen = 0
+				framesCounter = 0
+				camera = data.Camera
+				xFloor = data.XFloor
+				xPlayer = data.XPlayer
+				if true {
+					hasPlayerLeftDrillBase = data.HasPlayerLeftDrillBase // If save game when far from drill and exit -> this will tell the reality
+				} else {
+					hasPlayerLeftDrillBase = false // How do we know?
+				}
+				xPlayer.IsPlayerWallCollision = false
+				// saveGameEntityData() // Save ASAP
+				_ = saveGameData(storage.EntityGDT)
+			} else { // ERR
+				slog.Warn(err.Error())
+				loadNewEntityData()
 			}
-			xPlayer.IsPlayerWallCollision = false
-			// saveGameEntityData() // Save ASAP
-			saveGameData(storage.EntityGDT)
 		} else { // ERR
 			slog.Warn(err.Error())
 			loadNewEntityData()
@@ -203,17 +209,23 @@ func Init() {
 	// ========================================================================
 	// Additional data
 	if !isNewGame {
-		additionalGameData, err := loadAdditionalGameData()
-		if err == nil { // OK
-			xBlocks = make([]block.Block, len(additionalGameData.Blocks))
-			copiedBlockCount := copy(xBlocks, additionalGameData.Blocks)
-			if copiedBlockCount != 0 {
-				log.Printf("blocks copied: %v", copiedBlockCount)
-			} else {
-				log.Panic("Incorrect saved file. Please delete it")
+		dataI, err := loadGameData(storage.AdditionalGDT)
+		if dataI != nil {
+			additionalGameData := dataI.(*storage.GameAdditionalData)
+			if err == nil { // OK
+				xBlocks = make([]block.Block, len(additionalGameData.Blocks))
+				copiedBlockCount := copy(xBlocks, additionalGameData.Blocks)
+				if copiedBlockCount != 0 {
+					log.Printf("blocks copied: %v", copiedBlockCount)
+				} else {
+					log.Panic("Incorrect saved file. Please delete it")
+				}
+				// saveGameAdditionalData() // Save ASAP
+				saveGameData(storage.AdditionalGDT)
+			} else { // ERR
+				slog.Warn(err.Error())
+				loadNewAdditionalData()
 			}
-			// saveGameAdditionalData() // Save ASAP
-			saveGameData(storage.AdditionalGDT)
 		} else { // ERR
 			slog.Warn(err.Error())
 			loadNewAdditionalData()
@@ -225,13 +237,20 @@ func Init() {
 	// ========================================================================
 	// Logic Data
 	if !isNewGame {
-		if data, err := loadGameLogicData(); err == nil { // ok
-			money = data.Money
-			experience = data.Experience
-			hitCount = data.HitCount
-			hitScore = data.HitScore
-			// saveGameLogicData() // Save ASAP
-			saveGameData(storage.LogicGDT)
+		dataI, err := loadGameData(storage.LogicGDT)
+		if dataI != nil {
+			data := dataI.(*storage.GameLogicData)
+			if err == nil { // ok
+				money = data.Money
+				experience = data.Experience
+				hitCount = data.HitCount
+				hitScore = data.HitScore
+				// saveGameLogicData() // Save ASAP
+				saveGameData(storage.LogicGDT)
+			} else { // error
+				slog.Warn(err.Error())
+				loadNewLogicData()
+			}
 		} else { // error
 			slog.Warn(err.Error())
 			loadNewLogicData()
@@ -989,14 +1008,11 @@ func DrawOuterDrillroom() {
 	}
 }
 
-const (
-	entityGameDataVersionSuffix     = "entity"
-	additionalGameDataVersionSuffix = "additional"
-	logicGameDataVersionSuffix      = "logic"
-)
-
-func saveGameData(dataType storage.GameDataType) {
+func saveGameData(dataType storage.GameDataType) error {
 	dataTypeStr := storage.GameDataTypeToStringMap[dataType]
+	var b []byte
+	bb := bytes.NewBuffer(b)
+	enc := json.NewEncoder(bb)
 	switch dataType {
 	case storage.EntityGDT:
 		input := storage.GameEntityData{
@@ -1008,25 +1024,19 @@ func saveGameData(dataType storage.GameDataType) {
 			XPlayer:                xPlayer,
 			HasPlayerLeftDrillBase: hasPlayerLeftDrillBase,
 		}
-		var b []byte
-		bb := bytes.NewBuffer(b)
-		enc := json.NewEncoder(bb)
 		if err := enc.Encode(input); err != nil {
-			panic(fmt.Errorf("encode game %s level data: %w", dataTypeStr, err))
+			return fmt.Errorf("encode game %s level data: %w", dataTypeStr, err)
 		}
 		dataJSON := storage.GameStorageLevelJSON{
 			Version: "0.0.0" + "-" + dataTypeStr,
 			LevelID: levelID,
 			Data:    bb.Bytes(),
 		}
-		storage.SaveStorageLevelEx(dataJSON, dataTypeStr)
+		return storage.SaveStorageLevelEx(dataJSON, dataTypeStr)
 	case storage.AdditionalGDT:
 		input := storage.GameAdditionalData{
 			Blocks: xBlocks,
 		}
-		var b []byte
-		bb := bytes.NewBuffer(b)
-		enc := json.NewEncoder(bb)
 		if err := enc.Encode(input); err != nil {
 			panic(fmt.Errorf("encode game %s level data: %w", dataTypeStr, err))
 		}
@@ -1035,7 +1045,7 @@ func saveGameData(dataType storage.GameDataType) {
 			LevelID: levelID,
 			Data:    bb.Bytes(),
 		}
-		storage.SaveStorageLevelEx(data, dataTypeStr)
+		return storage.SaveStorageLevelEx(data, dataTypeStr)
 	case storage.LogicGDT:
 		input := storage.GameLogicData{
 			LevelID:    levelID,
@@ -1044,125 +1054,63 @@ func saveGameData(dataType storage.GameDataType) {
 			HitScore:   hitScore,
 			HitCount:   hitCount,
 		}
-		var b []byte
-		bb := bytes.NewBuffer(b)
-		enc := json.NewEncoder(bb)
 		if err := enc.Encode(input); err != nil {
 			panic(fmt.Errorf("encode game %s level data: %w", dataTypeStr, err))
 		}
-		dataJSON := storage.GameStorageLevelJSON{
+		data := storage.GameStorageLevelJSON{
 			Version: "0.0.0" + "-" + dataTypeStr,
 			LevelID: levelID,
 			Data:    bb.Bytes(),
 		}
 		currency.SaveCurrencyItems(currencyItems)
-		storage.SaveStorageLevelEx(dataJSON, dataTypeStr)
+		return storage.SaveStorageLevelEx(data, dataTypeStr)
 	default:
 		panic(fmt.Sprintf("unexpected gameplay.GameDataType: %#v", dataType))
 	}
 }
 
-func loadGameLogicData() (*storage.GameLogicData, error) {
-	const suffix = logicGameDataVersionSuffix
-
+// On success, returns either of `*storage.GameLogicData`, `*storage.GameEntityData`, `*storage.GameAdditionalData`.
+func loadGameData(dataType storage.GameDataType) (any, error) {
+	typstr := storage.GameDataTypeToStringMap[dataType]
 	cwd, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("get working directory: %w", err)
 	}
-
 	saveDir := filepath.Join(cwd, "storage")
-	name := filepath.Join(saveDir, "level_"+strconv.Itoa(int(levelID))+"_"+suffix+".json")
-
+	name := filepath.Join(saveDir, fmt.Sprintf("level_%d_%s.json", levelID, typstr))
 	f, err := os.OpenFile(name, os.O_RDONLY, 0644)
 	if err != nil {
 		return nil, fmt.Errorf("create %q: %w", name, err)
 	}
-
-	dest := &storage.GameStorageLevelJSON{}
+	var dest *storage.GameStorageLevelJSON
 	dec := json.NewDecoder(f)
 	if err := dec.Decode(&dest); err != nil {
 		return nil, fmt.Errorf("decode level: %w", err)
 	}
-
-	switch version := dest.Version; version {
-	case "0.0.0" + "-" + suffix:
-		var v *storage.GameLogicData
-		if err := json.Unmarshal(dest.Data, &v); err != nil {
-			return nil, err
-		}
-		currency.LoadCurrencyItems(&currencyItems)
-		return v, nil
-	default:
-		return nil, fmt.Errorf("invalid game %s data version %q", suffix, version)
-	}
-
-}
-func loadGameEntityData() (*storage.GameEntityData, error) {
-	const suffix = entityGameDataVersionSuffix
-
-	cwd, err := os.Getwd()
-	if err != nil {
-		return nil, fmt.Errorf("get working directory: %w", err)
-	}
-
-	saveDir := filepath.Join(cwd, "storage")
-	name := filepath.Join(saveDir, "level_"+strconv.Itoa(int(levelID))+"_"+suffix+".json")
-
-	f, err := os.OpenFile(name, os.O_RDONLY, 0644)
-	if err != nil {
-		return nil, fmt.Errorf("create %q: %w", name, err)
-	}
-
-	dest := &storage.GameStorageLevelJSON{}
-	dec := json.NewDecoder(f)
-	if err := dec.Decode(&dest); err != nil {
-		return nil, fmt.Errorf("decode level: %w", err)
-	}
-	// return dest,nil // => Upto here.. same as storage.LoadStorageLevel
-
-	switch version := dest.Version; version {
-	case "0.0.0" + "-" + suffix:
-		var v *storage.GameEntityData
-		err := json.Unmarshal(dest.Data, &v)
-		return v, err
-	default:
-		return nil, fmt.Errorf("invalid game %s data version %q", suffix, version)
-	}
-}
-func loadAdditionalGameData() (*storage.GameAdditionalData, error) {
-	const suffix = additionalGameDataVersionSuffix
-
-	cwd, err := os.Getwd()
-	if err != nil {
-		return nil, fmt.Errorf("get working directory: %w", err)
-	}
-
-	saveDir := filepath.Join(cwd, "storage")
-	name := filepath.Join(saveDir, "level_"+strconv.Itoa(int(levelID))+"_"+suffix+".json")
-
-	f, err := os.OpenFile(name, os.O_RDONLY, 0644)
-	if err != nil {
-		return nil, fmt.Errorf("create %q: %w", name, err)
-	}
-
-	dest := &storage.GameStorageLevelJSON{}
-	dec := json.NewDecoder(f)
-	if err := dec.Decode(&dest); err != nil {
-		return nil, fmt.Errorf("decode level: %w", err)
-	}
-
-	switch version := dest.Version; version {
-	case "0.0.0" + "-" + suffix:
+	switch dataType {
+	case storage.AdditionalGDT:
 		var v *storage.GameAdditionalData
 		if err := json.Unmarshal(dest.Data, &v); err != nil {
 			return nil, err
 		}
 		return v, nil
+	case storage.EntityGDT:
+		var v *storage.GameEntityData
+		err := json.Unmarshal(dest.Data, &v)
+		return v, err
+	case storage.LogicGDT:
+		var v *storage.GameLogicData
+		if err := json.Unmarshal(dest.Data, &v); err != nil {
+			return nil, fmt.Errorf("unmarshal decoded storage data: %w", err)
+		}
+		currency.LoadCurrencyItems(&currencyItems)
+		return v, nil
 	default:
-		return nil, fmt.Errorf("invalid game %s data version %q", suffix, version)
+		panic(fmt.Sprintf("unexpected storage.GameDataType: %#v", dataType))
 	}
 }
 
+// ============================================================================
 // LOGIC
 
 // Conversion rate
