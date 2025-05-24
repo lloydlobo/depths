@@ -54,6 +54,7 @@ var (
 	// Models Resource
 
 	Shader struct {
+		Fog,
 		PBR,
 		Grayscale rl.Shader
 	}

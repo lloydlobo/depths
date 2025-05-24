@@ -10,8 +10,8 @@ import (
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
-	"example/depths/internal/archive/light"
 	"example/depths/internal/common"
+	"example/depths/internal/light"
 	"example/depths/internal/model"
 	"example/depths/internal/screen/drillroom"
 	"example/depths/internal/screen/ending"
@@ -66,6 +66,7 @@ func Run() {
 
 	// Assume user picked slot 1 out of slots 1,2,3
 	common.SavedgameSlotData = *common.Must(common.LoadSavegameSlot(1))
+	fmt.Printf("common.SavedgameSlotData: %v\n", common.SavedgameSlotData)
 
 	// Load common assets once
 	common.Font.RaylibDefault = rl.GetFontDefault()
@@ -197,20 +198,30 @@ func Run() {
 		}
 	}
 
-	// rl.PlaySound(rl.LoadSound(filepath.Join("res", "fx", "kenney_interface-sounds", "Audio", fmt.Sprintf("glitch_00%d.ogg", rl.GetRandomValue(0, 4)))))
-
 	common.ModelDungeonKit.OBJ = model.LoadAssetModelOBJ()
 
-	{
-		common.Model.Dwarf = rl.LoadModel(filepath.Join("res", "model", "obj", "dwarf.obj"))
-		common.Texture.DwarfDiffuse = rl.LoadTexture(filepath.Join("res", "texture", "dwarf_diffuse.png"))
-		shaderDir := filepath.Join("res", "shader")
-		common.Shader.Grayscale = rl.LoadShader(filepath.Join(shaderDir, "glsl330_"+"base.vs"), filepath.Join(shaderDir, "glsl330_"+"grayscale.fs"))
-		rl.SetMaterialTexture(common.Model.Dwarf.Materials, rl.MapDiffuse, common.Texture.DwarfDiffuse)
-		common.Model.Dwarf.Materials.Shader = common.Shader.Grayscale
-	}
+	var (
+		shaderDir string = filepath.Join("res", "shader")
+	)
+	common.Shader.Fog = rl.LoadShader(
+		filepath.Join(shaderDir, "glsl330_"+"lighting.vs"),
+		filepath.Join(shaderDir, "glsl330_"+"fog.fs"),
+	)
+	common.Shader.Fog.UpdateLocation(rl.ShaderLocMatrixModel, rl.GetShaderLocation(common.Shader.Fog, "matModel"))
+	common.Shader.Fog.UpdateLocation(rl.ShaderLocVectorView, rl.GetShaderLocation(common.Shader.Fog, "viewPos"))
 
 	if shouldBeArchived := true; !shouldBeArchived {
+		{
+			common.Model.Dwarf = rl.LoadModel(filepath.Join("res", "model", "obj", "dwarf.obj"))
+			common.Texture.DwarfDiffuse = rl.LoadTexture(filepath.Join("res", "texture", "dwarf_diffuse.png"))
+			common.Shader.Grayscale = rl.LoadShader(
+				filepath.Join(shaderDir, "glsl330_"+"base.vs"),
+				filepath.Join(shaderDir, "glsl330_"+"grayscale.fs"),
+			)
+			rl.SetMaterialTexture(common.Model.Dwarf.Materials, rl.MapDiffuse, common.Texture.DwarfDiffuse)
+			common.Model.Dwarf.Materials.Shader = common.Shader.Grayscale
+		}
+
 		common.Texture.CubicmapAtlas = rl.LoadTexture(filepath.Join("res", "texture", "cubicmap_atlas.png"))
 		/* Load PBR shader and setup all required locations */
 		common.Shader.PBR = rl.LoadShader(

@@ -118,7 +118,13 @@ func SetupBlockModels() {
 		default:
 			panic(fmt.Sprintf("unexpected gameplay.BlockState: %#v", i))
 		}
-		rl.SetMaterialTexture(blockModels[i].Materials, rl.MapDiffuse, common.ModelDungeonKit.OBJ.Colormap)
+		// Which one is idiomatic?
+		if false {
+			rl.SetMaterialTexture(blockModels[i].Materials, rl.MapDiffuse, common.ModelDungeonKit.OBJ.Colormap)
+		} else {
+			blockModels[i].Materials.GetMap(rl.MapDiffuse).Texture = common.ModelDungeonKit.OBJ.Colormap
+		}
+		blockModels[i].Materials.Shader = common.Shader.Fog
 	}
 }
 
