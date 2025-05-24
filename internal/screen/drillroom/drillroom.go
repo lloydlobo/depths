@@ -43,7 +43,6 @@ var (
 var (
 	// NOTE: AVOID using common.SavedgameSlotData.CurrentLevelID as reference
 	// directly.. We must init levelID with it to maintain consistency for now
-	// FIXME: UNUSED <<<---------------------------------------
 	levelID int32
 
 	// WARN: DONT NEED IT HERE
@@ -102,15 +101,30 @@ type TriggerRefuelDrillDataSOA struct {
 var (
 	xTriggerRefuelDrillData = TriggerRefuelDrillDataSOA{
 		Currency: [currency.MaxCurrencyTypes * 2]currency.CurrencyType{
-			currency.Tin, currency.Tin, currency.Bronze,
-			currency.Bronze, currency.Silver, currency.Silver,
-			currency.Ruby, currency.Ruby, currency.Gold, currency.Gold,
-			currency.Diamond, currency.Diamond, currency.Sapphire,
-			currency.Sapphire, currency.Sapphire, currency.Sapphire,
+			currency.Tin, currency.Tin, currency.Tin,
+			currency.Tin, currency.Tin, currency.Tin,
+			currency.Bronze, currency.Bronze, currency.Bronze, currency.Bronze,
+			currency.Bronze, currency.Bronze, currency.Bronze,
+			currency.Silver, currency.Silver, currency.Silver,
 		},
+		// CopperUnitsGoal: [currency.MaxCurrencyTypes * 2]int32{int32(cmp.Or(1, 80)), int32(cmp.Or(2, 90)), 100, 110, 120, 130, 150, 175, 180, 190, 200, 210, 220, 230, 240, 255},
 		CopperUnitsGoal: [currency.MaxCurrencyTypes * 2]int32{
-			int32(cmp.Or(1, 80)), int32(cmp.Or(2, 90)), 100, 110, 120, 130, 150, 175, 180, 190,
-			200, 210, 220, 230, 240, 255,
+			1,
+			2,
+			3,
+			4,
+			5,
+			6,
+			7,
+			8,
+			9,
+			10,
+			11,
+			12,
+			13,
+			14,
+			15,
+			16,
 		},
 	}
 	refuelGoalCurrencyTypes = []currency.CurrencyType{
@@ -663,12 +677,12 @@ func Draw() {
 			rl.DrawTextEx(common.Font.SourGummy, actualText, actualPosition, float32(common.Font.SourGummy.BaseSize), spacing, rl.Fade(availableCol, 0.8))
 
 		case TriggerRefuelDrill:
-			id := xTriggerRefuelDrillData.Currency[levelID]
-			if id > currency.CurrencyType(len(common.SavedgameSlotData.AllLevelIDS)) {
+			currencyAllowedToRefuel := xTriggerRefuelDrillData.Currency[levelID]
+			if currencyAllowedToRefuel > currency.CurrencyType(len(common.SavedgameSlotData.AllLevelIDS)) {
 				panic(fmt.Sprintf("%s", "id > currency.CurrencyType(len(common.SavedgameSlotData.AllLevelIDS))"))
 			}
 
-			refuelGoalCurrencyType := refuelGoalCurrencyTypes[id]
+			refuelGoalCurrencyType := refuelGoalCurrencyTypes[currencyAllowedToRefuel]
 			const multiplier = common.Phi
 			var (
 				pixelSize = float32(screenW) / float32(screenH)
@@ -676,8 +690,8 @@ func Draw() {
 
 				currencyID = currentChangeResourceTriggerType
 
-				refuelGoal    = xTriggerRefuelDrillData.CopperUnitsGoal[id]
-				actualText    = fmt.Sprintln(refuelGoal) // This much is required for 1 of currency to change into
+				refuelGoal    = xTriggerRefuelDrillData.CopperUnitsGoal[cmp.Or(currency.CurrencyType(levelID), currencyAllowedToRefuel)] // HACK: I don't want to limit indexing when main conversion currency for ease of gameplay are the cheaper precious metals
+				actualText    = fmt.Sprintln(refuelGoal)                                                                                 // This much is required for 1 of currency to change into
 				actualStrSize = rl.MeasureTextEx(common.Font.SourGummy, actualText, float32(common.Font.SourGummy.BaseSize), spacing)
 
 				actualPosition     = rl.NewVector2(0+0*pixelSize*5-actualStrSize.X/2, 0-actualStrSize.Y/4)
@@ -691,7 +705,7 @@ func Draw() {
 			// rl.DrawRing(iconPosition, 0, iconSmallRadius, 0, 360, 6, rl.Fade(currency.CurrencyColorMap[refuelGoalCurrencyType], 0.7))
 
 			var availableCol color.RGBA
-			if currencyItems[id].Bank < xTriggerRefuelDrillData.CopperUnitsGoal[levelID] {
+			if currencyItems[currencyAllowedToRefuel].Bank < refuelGoal {
 				availableCol = rl.Purple // Not enough
 			} else {
 				availableCol = rl.White // Is enough
@@ -790,10 +804,10 @@ func saveGameData(dataType storage.GameDataType) {
 	switch dataType {
 	case storage.EntityGDT:
 		input := storage.GameEntityData{
-			LevelID:                levelID,
-			Camera:                 camera,
-			FinishScreen:           finishScreen,
-			FramesCounter:          framesCounter,
+			LevelID:       levelID,
+			Camera:        camera,
+			FinishScreen:  finishScreen,
+			FramesCounter: framesCounter,
 			// FIXME: Floor should be in additional GDT (SINCE FLOOR DIMENSIONS CHANGES BASED ON SCREEN)
 			XFloor:                 xFloor,
 			XPlayer:                xPlayer,
