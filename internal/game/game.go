@@ -10,8 +10,8 @@ import (
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
-	"example/depths/internal/archive/light"
 	"example/depths/internal/common"
+	"example/depths/internal/light"
 	"example/depths/internal/model"
 	"example/depths/internal/screen/drillroom"
 	"example/depths/internal/screen/ending"

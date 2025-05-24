@@ -18,12 +18,12 @@ import (
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
-	"example/depths/internal/archive/light"
 	"example/depths/internal/block"
 	"example/depths/internal/common"
 	"example/depths/internal/currency"
 	"example/depths/internal/floor"
 	"example/depths/internal/hud"
+	"example/depths/internal/light"
 	"example/depths/internal/npc"
 	"example/depths/internal/player"
 	"example/depths/internal/projectile"
@@ -314,10 +314,6 @@ func Update() {
 	{
 		fogDensityValue := []float32{fogDensity}
 		rl.SetShaderValue(common.Shader.Fog, fogDensityLoc, fogDensityValue, rl.ShaderUniformFloat)
-
-		// Rotate the torus
-		// modelA.Transform = rl.MatrixMultiply(modelA.Transform, rl.MatrixRotateX(-0.025))
-		// modelA.Transform = rl.MatrixMultiply(modelA.Transform, rl.MatrixRotateX(0.012))
 
 		// Update the light shader with the camera view position
 		cameraPosValue := []float32{camera.Position.X}                                      // FIX: In original example

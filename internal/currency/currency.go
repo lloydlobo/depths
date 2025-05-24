@@ -144,8 +144,6 @@ func LoadCurrencyItems(output *[MaxCurrencyTypes]CurrencyItem) {
 		}
 	}
 
-	fmt.Printf("temp: %v\n", temp)
-
 	// Transfer data to receiver
 	for i := range output {
 		output[i] = temp[i]
