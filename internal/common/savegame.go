@@ -58,10 +58,14 @@ func SaveSavegameSlot(slotID uint8, data SavedgameSlotDataType) error {
 	if err != nil {
 		return fmt.Errorf("create %q: %w", fname, err)
 	}
-	enc := json.NewEncoder(f)
-	if err := enc.Encode(data); err != nil {
-		return fmt.Errorf("encode level: %w", err)
-	}
+
+	b := Must(json.MarshalIndent(data, "", ""))
+	_ = Must(f.Write(b))
+
+	// enc := json.NewEncoder(f)
+	// if err := enc.Encode(data); err != nil {
+	// 	return fmt.Errorf("encode level: %w", err)
+	// }
 
 	return nil
 }

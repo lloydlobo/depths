@@ -66,6 +66,7 @@ func Run() {
 
 	// Assume user picked slot 1 out of slots 1,2,3
 	common.SavedgameSlotData = *common.Must(common.LoadSavegameSlot(1))
+	fmt.Printf("common.SavedgameSlotData: %v\n", common.SavedgameSlotData)
 
 	// Load common assets once
 	common.Font.RaylibDefault = rl.GetFontDefault()

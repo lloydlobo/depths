@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"image/color"
 	"math"
+	"os"
 	"path/filepath"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -110,7 +111,7 @@ var (
 		// CopperUnitsGoal: [currency.MaxCurrencyTypes * 2]int32{int32(cmp.Or(1, 80)), int32(cmp.Or(2, 90)), 100, 110, 120, 130, 150, 175, 180, 190, 200, 210, 220, 230, 240, 255},
 		CopperUnitsGoal: [currency.MaxCurrencyTypes * 2]int32{
 			1,
-			2,
+			0, // TEMPORARY: DO NOT MINE JUST TO TEST "START DRILL" ACTION
 			3,
 			4,
 			5,
@@ -468,14 +469,12 @@ func HandleTriggerOnPlayerPressF(i TriggerType) {
 			// NOTE: Why does this feel so hacky? ^_^
 			// NOTE: IDs are non-zero (unsigned) integers
 			finalLevelID := uint8(len(common.SavedgameSlotData.AllLevelIDS)) // [1..5] => 5 (non-zero-id)
-			common.SavedgameSlotData.CurrentLevelID = min(finalLevelID, uint8(levelID)+1)
 
 			if uint8(levelID) >= finalLevelID {
 				finishScreen = 1 // => ending (gameover)
 				// Why not unlock this level too????????? = .................................................................
 			} else {
 				finishScreen = 2 // => gameplay (next-level)
-				common.SavedgameSlotData.UnlockedLevelIDS = append(common.SavedgameSlotData.UnlockedLevelIDS, uint8(levelID))
 
 				// Consume fuel / reset flag
 				isDrillRefueled_ThisStateShouldBeSavedToAFileWithLevelID = false
@@ -485,12 +484,15 @@ func HandleTriggerOnPlayerPressF(i TriggerType) {
 
 				currency.HandleWalletToBankTransaction(&currencyItems)
 				currency.SaveCurrencyItems(currencyItems) // (currencyType,Wallet,Bank,...)				250		bytes
-				// saveGameLogicData()                       // (money,experience,hitScore,hitCount,...)	140		bytes
-				// saveGameEntityData()                      // (player,camera,...)						705		bytes
-				// saveGameAdditionalData()                  // (blocks,...)								82871	bytes
 				saveGameData(storage.LogicGDT)
-				// saveGameData(storage.EntityGDT)
-				// saveGameData(storage.AdditionalGDT)
+				tempData := common.SavedgameSlotData
+				fmt.Printf("nextData.CurrentLevelID: %v\n", tempData.CurrentLevelID)
+				fmt.Printf("levelID: %v\n", levelID)
+				tempData.CurrentLevelID = min(finalLevelID, uint8(levelID)+1)
+				tempData.UnlockedLevelIDS = append(tempData.UnlockedLevelIDS, tempData.CurrentLevelID)
+				common.SavedgameSlotData = tempData
+				fmt.Printf("nextData: %v\n", tempData)
+				common.SaveSavegameSlot(common.SavedgameSlotData.SlotID, tempData)
 			}
 		}
 
@@ -803,28 +805,29 @@ func saveGameData(dataType storage.GameDataType) {
 	dataTypeStr := storage.GameDataTypeToStringMap[dataType]
 	switch dataType {
 	case storage.EntityGDT:
-		input := storage.GameEntityData{
-			LevelID:       levelID,
-			Camera:        camera,
-			FinishScreen:  finishScreen,
-			FramesCounter: framesCounter,
-			// FIXME: Floor should be in additional GDT (SINCE FLOOR DIMENSIONS CHANGES BASED ON SCREEN)
-			XFloor:                 xFloor,
-			XPlayer:                xPlayer,
-			HasPlayerLeftDrillBase: hasPlayerLeftDrillBase,
-		}
-		var b []byte
-		bb := bytes.NewBuffer(b)
-		enc := json.NewEncoder(bb)
-		if err := enc.Encode(input); err != nil {
-			panic(fmt.Errorf("encode game %s level data: %w", dataTypeStr, err))
-		}
-		dataJSON := storage.GameStorageLevelJSON{
-			Version: "0.0.0" + "-" + dataTypeStr,
-			LevelID: levelID,
-			Data:    bb.Bytes(),
-		}
-		storage.SaveStorageLevelEx(dataJSON, dataTypeStr)
+		// input := storage.GameEntityData{
+		// 	LevelID:       levelID,
+		// 	Camera:        camera,
+		// 	FinishScreen:  finishScreen,
+		// 	FramesCounter: framesCounter,
+		// 	// FIXME: Floor should be in additional GDT (SINCE FLOOR DIMENSIONS CHANGES BASED ON SCREEN)
+		// 	XFloor:                 xFloor,
+		// 	XPlayer:                xPlayer,
+		// 	HasPlayerLeftDrillBase: hasPlayerLeftDrillBase,
+		// }
+		// var b []byte
+		// bb := bytes.NewBuffer(b)
+		// enc := json.NewEncoder(bb)
+		// if err := enc.Encode(input); err != nil {
+		// 	panic(fmt.Errorf("encode game %s level data: %w", dataTypeStr, err))
+		// }
+		// dataJSON := storage.GameStorageLevelJSON{
+		// 	Version: "0.0.0" + "-" + dataTypeStr,
+		// 	LevelID: levelID,
+		// 	Data:    bb.Bytes(),
+		// }
+		// storage.SaveStorageLevelEx(dataJSON, dataTypeStr)
+		panic("unimplemented")
 	case storage.AdditionalGDT:
 		// input := storage.GameAdditionalData{
 		// 	Blocks: xBlocks,
@@ -841,6 +844,7 @@ func saveGameData(dataType storage.GameDataType) {
 		// 	Data:    bb.Bytes(),
 		// }
 		// storage.SaveStorageLevelEx(data, dataTypeStr)
+		panic("unimplemented")
 	case storage.LogicGDT:
 		input := storage.GameLogicData{
 			LevelID:    levelID,
@@ -864,5 +868,46 @@ func saveGameData(dataType storage.GameDataType) {
 		storage.SaveStorageLevelEx(dataJSON, dataTypeStr)
 	default:
 		panic(fmt.Sprintf("unexpected gameplay.GameDataType: %#v", dataType))
+	}
+}
+
+// On success, returns either of `*storage.GameLogicData`, `*storage.GameEntityData`, `*storage.GameAdditionalData`.
+func loadGameData(dataType storage.GameDataType) (any, error) {
+	typstr := storage.GameDataTypeToStringMap[dataType]
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("get working directory: %w", err)
+	}
+	saveDir := filepath.Join(cwd, "storage")
+	name := filepath.Join(saveDir, fmt.Sprintf("level_%d_%s.json", levelID, typstr))
+	f, err := os.OpenFile(name, os.O_RDONLY, 0644)
+	if err != nil {
+		return nil, fmt.Errorf("create %q: %w", name, err)
+	}
+	var dest *storage.GameStorageLevelJSON
+	dec := json.NewDecoder(f)
+	if err := dec.Decode(&dest); err != nil {
+		return nil, fmt.Errorf("decode level: %w", err)
+	}
+	switch dataType {
+	case storage.AdditionalGDT:
+		var v *storage.GameAdditionalData
+		if err := json.Unmarshal(dest.Data, &v); err != nil {
+			return nil, err
+		}
+		return v, nil
+	case storage.EntityGDT:
+		var v *storage.GameEntityData
+		err := json.Unmarshal(dest.Data, &v)
+		return v, err
+	case storage.LogicGDT:
+		var v *storage.GameLogicData
+		if err := json.Unmarshal(dest.Data, &v); err != nil {
+			return nil, fmt.Errorf("unmarshal decoded storage data: %w", err)
+		}
+		currency.LoadCurrencyItems(&currencyItems)
+		return v, nil
+	default:
+		panic(fmt.Sprintf("unexpected storage.GameDataType: %#v", dataType))
 	}
 }

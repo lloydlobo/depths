@@ -96,7 +96,12 @@ func Init() {
 	// ========================================================================
 	xProjectileSOA.Reset()
 
+	// Load slot data
 	// ========================================================================
+	// NOTE: This is useful when we return to outer world from drill room after a level change
+	// WARN: Drill room mutates common.SavedgameSlotData and also writes updated data to file.. (either use game state or load from file)
+	common.SavedgameSlotData = *common.Must(common.LoadSavegameSlot(common.SavedgameSlotData.SlotID))
+
 	levelID = int32(common.SavedgameSlotData.CurrentLevelID)
 	if levelID == 0 {
 		panic("unexpected levelID")
@@ -209,9 +214,9 @@ func Init() {
 	// ========================================================================
 	// Additional data
 	if !isNewGame {
-		dataI, err := loadGameData(storage.AdditionalGDT)
-		if dataI != nil {
-			additionalGameData := dataI.(*storage.GameAdditionalData)
+		dataPtr, err := loadGameData(storage.AdditionalGDT)
+		if dataPtr != nil {
+			additionalGameData := dataPtr.(*storage.GameAdditionalData)
 			if err == nil { // OK
 				xBlocks = make([]block.Block, len(additionalGameData.Blocks))
 				copiedBlockCount := copy(xBlocks, additionalGameData.Blocks)
@@ -768,6 +773,7 @@ func Draw() {
 
 // DrawDepthMeter draw depth meter indicating current level depth on a scale from first to last level.
 func DrawDepthMeter(screenH int32, screenW int32) {
+	fmt.Printf("levelID: %v\n", levelID)
 	const gapX = 10
 	var (
 		totalLevels = len(common.SavedgameSlotData.AllLevelIDS)
